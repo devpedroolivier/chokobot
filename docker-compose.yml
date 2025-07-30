@@ -1,0 +1,11 @@
+services:
+  chokobot:
+    container_name: chokobot_container
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./dados:/app/dados  # Persistência dos arquivos .txt
+    env_file:
+      - .env
+    restart: unless-stopped

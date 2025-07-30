@@ -13,6 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copia código da aplicação
 COPY app/ app/
 COPY .env .
+COPY dados/ dados/       
+
+# Garante que a pasta dados exista mesmo que vazia
+RUN mkdir -p dados
 
 # Expõe a porta da API
 EXPOSE 8000
