@@ -263,10 +263,17 @@ async def processar_mensagem(mensagem: dict):
             estados_encomenda[telefone]["etapa"] = 3
             await responder_usuario(
                 telefone,
-                "🧁 Agora escolha o *recheio + mousse* no formato:\n"
+                "🍫 *Escolha 1 recheio:*\n"
+                "- Beijinho\n- Brigadeiro\n- Brigadeiro de Nutella\n"
+                "- Brigadeiro Branco\n- Branco Gourmet\n- Branco de Ninho\n"
+                "- Casadinho\n- Doce de Leite\n\n"
+                "📌 *Escolha 1 mousse:*\n"
+                "- Ninho ou Trufa Branca\n- Chocolate ou Trufa Preta\n\n"
+                "📝 Envie os dois juntos no formato:\n"
                 "`Brigadeiro + Ninho`\n\n"
                 "Exemplo: *Brigadeiro + Ninho*"
             )
+
             return
 
         elif etapa == 3:
