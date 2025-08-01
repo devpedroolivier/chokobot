@@ -175,7 +175,7 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(telefone, "⚠️ Nenhuma operação em andamento para cancelar.")
         return
 
-    # Encomendas (Fluxo interativo "Monte seu Bolo")
+   # Encomendas (Fluxo interativo "Monte seu Bolo")
     if telefone in estados_encomenda:
         etapa = estados_encomenda[telefone]["etapa"]
         dados = estados_encomenda[telefone]["dados"]
@@ -183,7 +183,7 @@ async def processar_mensagem(mensagem: dict):
         if etapa == 1:
             if texto in ["1", "normal", "personalizado"]:
                 estados_encomenda[telefone]["linha"] = "normal"
-                estados_encomenda[telefone]["etapa"] = "massa"
+                estados_encomenda[telefone]["etapa"] = 2
                 await responder_usuario(
                     telefone,
                     "🍰 *Monte seu bolo personalizado!*\n\n"
@@ -248,15 +248,36 @@ async def processar_mensagem(mensagem: dict):
                 )
                 return
 
+        elif etapa == 2:
+            massas_validas = ["branca", "chocolate", "mesclada"]
+            massa = texto.strip().lower()
 
-        if etapa == 2:
+            if massa not in massas_validas:
+                await responder_usuario(
+                    telefone,
+                    "⚠️ Massa inválida. Escolha uma das opções:\n- Branca\n- Chocolate\n- Mesclada"
+                )
+                return
+
+            dados["massa"] = massa.capitalize()
+            estados_encomenda[telefone]["etapa"] = 3
+            await responder_usuario(
+                telefone,
+                "🧁 Agora escolha o *recheio + mousse* no formato:\n"
+                "`Brigadeiro + Ninho`\n\n"
+                "Exemplo: *Brigadeiro + Ninho*"
+            )
+            return
+
+        elif etapa == 3:
             if "+" not in texto:
                 await responder_usuario(telefone, "⚠️ Por favor, envie o recheio e mousse no formato: Brigadeiro + Ninho")
                 return
+
             recheio, mousse = map(str.strip, texto.split("+", 1))
             dados["recheio"] = recheio
             dados["mousse"] = mousse
-            estados_encomenda[telefone]["etapa"] = 3
+            estados_encomenda[telefone]["etapa"] = 4
             await responder_usuario(
                 telefone,
                 "🍓 Deseja adicionar alguma fruta ou noz? (R$ adicional)\n"
@@ -265,9 +286,9 @@ async def processar_mensagem(mensagem: dict):
             )
             return
 
-        if etapa == 3:
-            dados["adicional"] = texto if texto != "não" else "Nenhum"
-            estados_encomenda[telefone]["etapa"] = 4
+        elif etapa == 4:
+            dados["adicional"] = texto if texto.lower() != "não" else "Nenhum"
+            estados_encomenda[telefone]["etapa"] = 5
             await responder_usuario(
                 telefone,
                 "📏 Escolha o tamanho do bolo:\n"
@@ -276,9 +297,9 @@ async def processar_mensagem(mensagem: dict):
             )
             return
 
-        if etapa == 4:
+        elif etapa == 5:
             dados["tamanho"] = texto
-            estados_encomenda[telefone]["etapa"] = 5
+            estados_encomenda[telefone]["etapa"] = 6
             await responder_usuario(
                 telefone,
                 "📆 Para qual data deseja o bolo?\n"
@@ -287,7 +308,7 @@ async def processar_mensagem(mensagem: dict):
             )
             return
 
-        if etapa == 5:
+        elif etapa == 6:
             if "pronta entrega" in texto:
                 await responder_usuario(
                     telefone,
@@ -305,17 +326,17 @@ async def processar_mensagem(mensagem: dict):
                 estados_encomenda.pop(telefone)
                 return
 
-        if etapa == "confirmar_pronta":
+        elif etapa == "confirmar_pronta":
             dados["pronta_entrega"] = texto
             salvar_encomenda(telefone, dados, nome_cliente)
             await responder_usuario(telefone, "✅ Pronta entrega registrada! Em breve confirmaremos com você 🎉")
             estados_encomenda.pop(telefone)
             return
 
-        if etapa == "gourmet":
+        elif etapa == "gourmet":
             dados["linha"] = estados_encomenda[telefone]["linha"]
             dados["gourmet"] = texto  # armazena o nome do bolo
-            estados_encomenda[telefone]["etapa"] = 5
+            estados_encomenda[telefone]["etapa"] = 6
             await responder_usuario(
                 telefone,
                 "📆 Para qual data deseja o bolo?\n"
@@ -323,6 +344,7 @@ async def processar_mensagem(mensagem: dict):
                 "Ou digite *pronta entrega* para ver sabores disponíveis hoje."
             )
             return
+
 
 
 
