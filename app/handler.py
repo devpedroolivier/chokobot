@@ -356,29 +356,32 @@ async def processar_mensagem(mensagem: dict):
 
 
     # Pedido cafeteria
-    if telefone in estados_cafeteria and estados_cafeteria[telefone].get("itens"):
-        pedido = texto
+    if telefone in estados_cafeteria:
         estado = estados_cafeteria[telefone]
-        nome = estado["nome"]
+        nome = estado.get("nome", "Nome não informado")
 
-        if pedido in ["finalizar", "só isso", "obrigado", "obrigada"]:
-            agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-            itens = estado["itens"]
-            linha = f"{agora} - {nome} | {telefone} | Pedido: {', '.join(itens)}\n"
+        if "itens" in estado:
+            pedido = texto
 
-            try:
-                with open("dados/pedidos_cafeteria.txt", "a", encoding="utf-8") as f:
-                    f.write(linha)
-                print("📝 Pedido do café salvo:", linha.strip())
-            except Exception as e:
-                print("❌ Erro ao salvar pedido do café:", e)
+            if pedido.lower() in ["finalizar", "só isso", "obrigado", "obrigada"]:
+                agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                itens = estado["itens"]
+                linha = f"{agora} - {nome} | {telefone} | Pedido: {', '.join(itens)}\n"
 
-            estados_cafeteria.pop(telefone)
-            await responder_usuario(telefone, "☕ Obrigado pelo seu pedido! Em breve confirmaremos com você.")
-        else:
-            estados_cafeteria[telefone]["itens"].append(pedido)
-            await responder_usuario(telefone, "✅ Pedido registrado! Deseja pedir mais alguma coisa? Digite o item ou diga *finalizar*.")
-        return
+                try:
+                    with open("dados/pedidos_cafeteria.txt", "a", encoding="utf-8") as f:
+                        f.write(linha)
+                    print("📝 Pedido do café salvo:", linha.strip())
+                except Exception as e:
+                    print("❌ Erro ao salvar pedido do café:", e)
+
+                estados_cafeteria.pop(telefone)
+                await responder_usuario(telefone, "☕ Obrigado pelo seu pedido! Em breve confirmaremos com você.")
+            else:
+                estado["itens"].append(pedido)
+                await responder_usuario(telefone, "✅ Pedido registrado! Deseja pedir mais alguma coisa? Digite o item ou diga *finalizar*.")
+            return
+
 
     # Entregas
     if telefone in estados_entrega:
