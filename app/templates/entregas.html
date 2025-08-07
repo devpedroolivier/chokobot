@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Entregas - Chokodelícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div class="container mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold mb-6">🚚 Entregas</h1>
+
+    <a href="/painel" class="text-blue-700 hover:underline mb-4 inline-block">← Voltar ao Painel</a>
+
+    <table class="w-full bg-white shadow-md rounded">
+      <thead>
+        <tr class="bg-blue-600 text-white">
+          <th class="p-3 text-left">ID</th>
+          <th class="p-3 text-left">Cliente</th>
+          <th class="p-3 text-left">Status</th>
+          <th class="p-3 text-left">Atualizado em</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entrega in entregas %}
+        <tr class="border-b hover:bg-gray-100">
+          <td class="p-3">{{ entrega.id }}</td>
+          <td class="p-3">{{ entrega.nome }}</td>
+          <td class="p-3">{{ entrega.status }}</td>
+          <td class="p-3">{{ entrega.atualizado_em }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="p-3 text-center">Nenhuma entrega registrada.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

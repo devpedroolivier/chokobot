@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Clientes - Chokodelícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div class="container mx-auto px-6 py-8">
+
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold">👤 Clientes</h1>
+      <a href="/painel" class="text-blue-700 hover:underline">← Voltar ao Painel</a>
+    </div>
+
+    <!-- Botão para Novo Cliente -->
+    <div class="mb-6">
+      <a href="/painel/clientes/novo" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
+        + Novo Cliente
+      </a>
+    </div>
+
+    <!-- Tabela de Clientes -->
+    <table class="w-full bg-white shadow-md rounded text-sm">
+      <thead>
+        <tr class="bg-blue-600 text-white">
+          <th class="p-3 text-left">ID</th>
+          <th class="p-3 text-left">Nome</th>
+          <th class="p-3 text-left">Telefone</th>
+          <th class="p-3 text-left">Criado em</th>
+          <th class="p-3 text-left">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cliente in clientes %}
+        <tr class="border-b hover:bg-gray-100">
+          <td class="p-3">{{ cliente.id }}</td>
+          <td class="p-3">{{ cliente.nome }}</td>
+          <td class="p-3">{{ cliente.telefone }}</td>
+          <td class="p-3">{{ cliente.criado_em }}</td>
+          <td class="p-3 space-x-2">
+            <a href="/painel/clientes/{{ cliente.id }}/editar" class="text-blue-600 hover:underline">Editar</a>
+            <form method="post" action="/painel/clientes/{{ cliente.id }}/excluir" class="inline">
+              <button type="submit" class="text-red-600 hover:underline" onclick="return confirm('Deseja excluir este cliente?')">
+                Excluir
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="p-3 text-center">Nenhum cliente encontrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

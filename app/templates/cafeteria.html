@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Cafeteria - Chokodelícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div class="container mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold mb-6">☕ Pedidos da Cafeteria</h1>
+
+    <a href="/painel" class="text-blue-700 hover:underline mb-4 inline-block">← Voltar ao Painel</a>
+
+    <table class="w-full bg-white shadow-md rounded">
+      <thead>
+        <tr class="bg-blue-600 text-white">
+          <th class="p-3 text-left">ID</th>
+          <th class="p-3 text-left">Cliente</th>
+          <th class="p-3 text-left">Pedido</th>
+          <th class="p-3 text-left">Criado em</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pedido in pedidos %}
+        <tr class="border-b hover:bg-gray-100">
+          <td class="p-3">{{ pedido.id }}</td>
+          <td class="p-3">{{ pedido.nome }}</td>
+          <td class="p-3">{{ pedido.itens }}</td>
+          <td class="p-3">{{ pedido.criado_em }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="p-3 text-center">Nenhum pedido registrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

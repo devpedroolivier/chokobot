@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ 'Editar' if encomenda else 'Nova' }} Encomenda - Chokodelícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+
+  <div class="max-w-lg mx-auto bg-white shadow-md rounded-lg p-8 mt-10">
+    
+    <!-- Botão de Voltar -->
+    <a href="/painel/encomendas" class="inline-flex items-center text-sm text-blue-600 hover:underline mb-6">
+      ← Voltar à lista de encomendas
+    </a>
+
+    <!-- Título -->
+    <h2 class="text-2xl font-bold text-gray-800 mb-6">
+      {{ 'Editar Encomenda' if encomenda else 'Nova Encomenda' }}
+    </h2>
+
+    <!-- Formulário -->
+    <form method="POST" action="{{ '/painel/encomendas/' + (encomenda.id | string) + '/editar' if encomenda else '/painel/encomendas/novo' }}">
+      
+      <!-- Nome -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Nome do Cliente</label>
+        <input name="nome" required value="{{ encomenda['nome'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Telefone -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Telefone</label>
+        <input name="telefone" required value="{{ encomenda['telefone'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Linha -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Linha</label>
+        <select name="linha" required class="w-full border border-gray-300 rounded px-3 py-2">
+          <option value="">Selecione</option>
+          <option value="normal" {% if encomenda and encomenda['linha'] == 'normal' %}selected{% endif %}>Normal</option>
+          <option value="gourmet" {% if encomenda and encomenda['linha'] == 'gourmet' %}selected{% endif %}>Gourmet</option>
+        </select>
+      </div>
+
+      <!-- Massa -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Massa</label>
+        <input name="massa" required value="{{ encomenda['massa'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Recheio + Mousse -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Recheio</label>
+        <input name="recheio" required value="{{ encomenda['recheio'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Mousse</label>
+        <input name="mousse" required value="{{ encomenda['mousse'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Adicional -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Frutas / Nozes (adicional)</label>
+        <input name="adicional" value="{{ encomenda['adicional'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Tamanho -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Tamanho</label>
+        <input name="tamanho" required value="{{ encomenda['tamanho'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Gourmet -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Linha Gourmet?</label>
+        <select name="gourmet" class="w-full border border-gray-300 rounded px-3 py-2">
+          <option value="">Selecione</option>
+          <option value="sim" {% if encomenda and encomenda['gourmet'] == 'sim' %}selected{% endif %}>Sim</option>
+          <option value="nao" {% if encomenda and encomenda['gourmet'] == 'nao' %}selected{% endif %}>Não</option>
+        </select>
+      </div>
+
+      <!-- Entrega -->
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Entrega</label>
+        <input name="entrega" required value="{{ encomenda['entrega'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Data de Entrega -->
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-medium mb-2">Data de Entrega</label>
+        <input name="data_entrega" type="date" required value="{{ encomenda['data_entrega'] if encomenda else '' }}" class="w-full border border-gray-300 rounded px-3 py-2" />
+      </div>
+
+      <!-- Botão -->
+      <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
+        {{ 'Atualizar' if encomenda else 'Salvar' }}
+      </button>
+    </form>
+  </div>
+
+</body>
+</html>
