@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from app.db.database import get_connection
 from app.templates_engine import templates
 
 router = APIRouter()
+templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/painel", response_class=HTMLResponse)
 def painel_principal(request: Request):
