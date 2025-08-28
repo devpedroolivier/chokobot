@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Encomendas - Painel Chokodelícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+  <!-- Header -->
+  <header class="bg-white shadow sticky top-0 z-50">
+    <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold text-pink-600">📦 Encomendas</h1>
+      <a href="/painel" class="text-sm text-blue-600 hover:underline">← Voltar ao painel</a>
+    </div>
+  </header>
+
+  <!-- Conteúdo -->
+  <main class="container mx-auto px-6 py-10">
+    <div class="bg-white rounded-2xl shadow-lg p-6 overflow-x-auto">
+      <table class="min-w-full text-sm border-collapse">
+        <thead class="bg-pink-100 text-pink-700">
+          <tr>
+            <th class="px-4 py-2 text-left">ID</th>
+            <th class="px-4 py-2 text-left">Cliente</th>
+            <th class="px-4 py-2 text-left">Categoria</th>
+            <th class="px-4 py-2 text-left">Tamanho</th>
+            <th class="px-4 py-2 text-left">Descrição</th>
+            <th class="px-4 py-2 text-left">Fruta/Nozes</th>
+            <th class="px-4 py-2 text-left">Data</th>
+            <th class="px-4 py-2 text-left">Hora</th>
+            <th class="px-4 py-2 text-left">Valor</th>
+            <th class="px-4 py-2 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for encomenda in encomendas %}
+          <tr class="hover:bg-pink-50 transition">
+            <td class="px-4 py-2">{{ encomenda.id }}</td>
+            <td class="px-4 py-2">
+              {{ encomenda.cliente_nome }}<br>
+              <span class="text-xs text-gray-500">{{ encomenda.cliente_telefone }}</span>
+            </td>
+            <td class="px-4 py-2">{{ encomenda.categoria }}</td>
+            <td class="px-4 py-2">{{ encomenda.tamanho or "—" }}</td>
+            <td class="px-4 py-2">{{ encomenda.descricao or "—" }}</td>
+            <td class="px-4 py-2">{{ encomenda.fruta_ou_nozes or "Nenhum" }}</td>
+            <td class="px-4 py-2">{{ encomenda.data_entrega }}</td>
+            <td class="px-4 py-2">{{ encomenda.horario_retirada }}</td>
+            <td class="px-4 py-2 font-semibold text-pink-600">
+              R$ {{ "%.2f"|format(encomenda.valor_total) }}
+            </td>
+            <td class="px-4 py-2">
+              {% if encomenda.status == "Retirar na loja" %}
+                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Retirada</span>
+              {% elif encomenda.status == "pendente" %}
+                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">Pendente</span>
+              {% else %}
+                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">{{ encomenda.status }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center py-6 text-gray-400">Nenhuma encomenda registrada.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+
+      </table>
+    </div>
+  </main>
+
+</body>
+</html>

@@ -1,3 +1,4 @@
+# app/handler.py
 from datetime import datetime
 from app.models.clientes import salvar_cliente
 from app.utils.mensagens import responder_usuario, is_saudacao
@@ -5,10 +6,18 @@ from app.services.encomendas import processar_encomenda
 from app.services.cafeteria import processar_cafeteria
 from app.services.entregas import processar_entrega
 from app.services.atendimento import processar_atendimento
-from app.services.estados import estados_encomenda, estados_entrega, estados_cafeteria
-
+from app.services.estados import (
+    estados_encomenda,
+    estados_entrega,
+    estados_cafeteria,
+    estados_atendimento,  # 🔹 novo estado para atendimento humano
+)
+from app.config import CAFETERIA_URL
 
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
+
+# 🔹 Palavras para reativar o bot quando estiver em atendimento humano
+REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot"]
 
 async def processar_mensagem(mensagem: dict):
     texto = mensagem.get("text", {}).get("message", "").lower().strip()
@@ -19,7 +28,25 @@ async def processar_mensagem(mensagem: dict):
         print("❌ Dados incompletos:", mensagem)
         return
 
-    # Cancelar qualquer processo ativo
+    # 🔒 Se está em atendimento humano, o bot fica em silêncio,
+    #     a menos que o cliente peça explicitamente para voltar ao bot.
+    if telefone in estados_atendimento:
+        if texto in REATIVAR_BOT_OPCOES:
+            estados_atendimento.pop(telefone, None)
+            await responder_usuario(
+                telefone,
+                "🤖 Bot reativado. Vamos continuar!\n"
+                "1️⃣ Ver cardápio\n"
+                "2️⃣ Encomendar bolos\n"
+                "3️⃣ Pedidos da cafeteria\n"
+                "4️⃣ Entregas\n"
+                "5️⃣ Falar com atendente"
+            )
+        else:
+            print(f"👤 {telefone} em atendimento humano — bot silencioso.")
+        return
+
+    # Cancelar qualquer processo ativo (apenas quando bot está ativo)
     if texto in CANCELAR_OPCOES:
         if telefone in estados_encomenda:
             estados_encomenda.pop(telefone)
@@ -34,11 +61,14 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(telefone, "⚠️ Nenhuma operação em andamento para cancelar.")
         return
 
-       # Entregas — DEVE vir primeiro
+    # Entregas — DEVE vir primeiro
     if telefone in estados_entrega:
         resultado = await processar_entrega(telefone, texto, estados_entrega[telefone])
         if resultado == "finalizar":
-            estados_entrega.pop(telefone)
+            # limpa os dois estados para garantir que não fique preso em encomenda
+            estados_entrega.pop(telefone, None)
+            estados_encomenda.pop(telefone, None)
+            print(f"✅ DEBUG: Estados limpos para {telefone} após finalizar entrega")
         return
 
     # Encomendas
@@ -65,7 +95,6 @@ async def processar_mensagem(mensagem: dict):
         elif resultado == "finalizar":
             estados_cafeteria.pop(telefone)
         return
-
 
     # Saudações ou entrada no menu
     salvar_cliente(telefone, nome_cliente)
@@ -102,7 +131,7 @@ async def processar_mensagem(mensagem: dict):
             telefone,
             "🎂 *Vamos começar sua encomenda!*\n\n"
             "Qual linha de bolo você deseja?\n"
-            "1️⃣ Montar bolo personalizado\n"
+            "1️⃣ Monte seu bolo\n"
             "2️⃣ Linha Gourmet\n"
             "3️⃣ Bolos Redondos (P6)\n"
             "4️⃣ Tortas\n"
@@ -110,15 +139,13 @@ async def processar_mensagem(mensagem: dict):
             "📷 Para ver fotos e preços, consulte nosso cardápio: https://keepo.io/boloschoko/"
         )
 
-
     elif texto in ["3", "pedido", "cafeteria"]:
-        estados_cafeteria[telefone] = {"itens": [], "nome": nome_cliente}
         await responder_usuario(
             telefone,
-            "☕ Vamos anotar seu pedido!\n"
-            "Digite o que você deseja da cafeteria (ex: cappuccino, pão de queijo).\n"
-            "Digite *finalizar* quando terminar seu pedido."
+            f"☕ Os pedidos da *cafeteria* são feitos pelo nosso link oficial: {CAFETERIA_URL}\n"
+            "Qualquer dúvida, me chame aqui. 😉"
         )
+        return
 
     elif texto in ["4", "entrega", "informações de entrega"]:
         await responder_usuario(
@@ -128,9 +155,10 @@ async def processar_mensagem(mensagem: dict):
             "Horário de entregas: 10h às 18h."
         )
 
-
     elif texto in ["5", "atendente", "humano"]:
+        # Liga o modo humano (silencia o bot para este telefone)
         await processar_atendimento(telefone, nome_cliente)
+        return
 
     else:
         await responder_usuario(

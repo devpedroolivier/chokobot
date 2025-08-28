@@ -1,10 +1,9 @@
 from fastapi import APIRouter
-from .encomendas import router as encomendas_router
-from .web import router as web_router
-from .webhook import router as webhook_router  # ← adiciona aqui
+from .painel import router as painel_router
+from .clientes import router as clientes_router
+from .webhook import router as webhook_router
 
 router = APIRouter()
-
-router.include_router(encomendas_router)
-router.include_router(web_router)
-router.include_router(webhook_router)  # ← inclui aqui
+router.include_router(painel_router)
+router.include_router(clientes_router)
+router.include_router(webhook_router)

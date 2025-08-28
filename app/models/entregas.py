@@ -23,7 +23,6 @@ def criar_tabela_entregas(conn: Connection):
     """)
     conn.commit()
 
-
 # 💾 Salvar entrega no banco SQLite
 def salvar_entrega(
     encomenda_id: int,
@@ -44,7 +43,6 @@ def salvar_entrega(
     conn.close()
     print(f"📦 Entrega registrada no banco - Tipo: {tipo}, Status: {status}")
 
-
 # 📂 Redundância no .txt
 def salvar_entrega_txt(telefone, nome, dados):
     agora = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -57,7 +55,6 @@ def salvar_entrega_txt(telefone, nome, dados):
         print("📝 Entrega registrada no .txt:", linha.strip())
     except Exception as e:
         print("❌ Erro ao salvar entrega:", e)
-
 
 # 🤖 Processar fluxo de entrega
 async def processar_entrega(telefone, texto, estado):

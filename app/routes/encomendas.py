@@ -2,40 +2,50 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.db.database import get_connection
-
+from fastapi.responses import HTMLResponse
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory="templates")
 templates.env.filters["str"] = str  # permite usar |str no Jinja
 
 # 🟦 LISTAGEM VISUAL
-@router.get("/painel/encomendas")
-def painel_encomendas(request: Request):
+@router.get("/painel/encomendas", response_class=HTMLResponse)
+async def listar_encomendas(request: Request):
     conn = get_connection()
     cursor = conn.cursor()
+
     cursor.execute("""
-        SELECT
+        SELECT 
             e.id,
-            c.nome,
-            c.telefone,
-            e.linha,
-            e.massa,
-            e.recheio,
-            e.mousse,
-            e.adicional,
+            c.nome AS cliente_nome,
+            c.telefone AS cliente_telefone,
+            e.categoria,
+            e.produto,
+            e.descricao,
             e.tamanho,
-            e.gourmet,
-            e.entrega,
-            e.criado_em
+            e.fruta_ou_nozes,
+            e.valor_total,       -- 👈 valor total garantido
+            e.data_entrega,
+            e.horario_retirada,
+            d.status
         FROM encomendas e
-        JOIN clientes c ON c.id = e.cliente_id
+        JOIN clientes c ON e.cliente_id = c.id
+        LEFT JOIN entregas d ON d.encomenda_id = e.id
         ORDER BY e.id DESC
     """)
-    encomendas = cursor.fetchall()
+
+    rows = cursor.fetchall()
+    colunas = [desc[0] for desc in cursor.description]
+    encomendas = [dict(zip(colunas, row)) for row in rows]
+
     conn.close()
-    return templates.TemplateResponse("encomendas.html", {
-        "request": request,
-        "encomendas": encomendas
-    })
+
+    return templates.TemplateResponse(
+        "encomendas.html",
+        {
+            "request": request,
+            "encomendas": encomendas
+        }
+    )
 
 
 # 🟩 NOVA ENCOMENDA - FORMULÁRIO

@@ -1,3 +1,16 @@
 07/08/2025 11:24 - Pedro Gabriel | 5511989107142 | Endereço: rua exemplo 123 | Referência: não tem
 07/08/2025 13:28 - Pedro Gabriel | 5511989107142 | Endereço: rua exemplo 123 | Referência: perto da china
 07/08/2025 13:53 - Pedro Gabriel | 5511989107142 | Endereço: rue exemplo 123 | Referência: n
+19/08/2025 21:36 - ~ | 5511989107142 | Endereço: rua teste 123 | Referência: portaria
+19/08/2025 22:16 - ~ | 5511989107142 | Endereço: rua teste | Referência: não
+20/08/2025 21:43 - ~ | 5511989107142 | Endereço: rua teste | Referência: não
+20/08/2025 21:58 - ~ | 5511989107142 | Endereço: rua teste | Referência: não
+21/08/2025 13:13 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+21/08/2025 16:04 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+23/08/2025 19:07 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+23/08/2025 19:07 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+23/08/2025 19:20 - ~ | 5511989107142 | Endereço: rua teste | Referência: perto do lar
+25/08/2025 12:26 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+25/08/2025 12:41 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+25/08/2025 12:48 - ~ | 5511989107142 | Endereço: rua teste | Referência: no
+25/08/2025 18:11 - ~ | 5511989107142 | Endereço: rua teste | Referência: no

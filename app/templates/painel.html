@@ -17,69 +17,55 @@
     }
   </script>
 </head>
-<body class="bg-gray-50 text-gray-800 h-full flex flex-col">
+<body class="bg-gradient-to-br from-pink-50 via-white to-pink-100 text-gray-800 h-full flex flex-col">
 
   <!-- Header -->
-  <header class="bg-white shadow-sm">
+  <header class="bg-white/80 backdrop-blur shadow-sm sticky top-0 z-50">
     <div class="container mx-auto px-6 py-4 flex items-center justify-between">
-      <h1 class="text-2xl sm:text-3xl font-bold text-chokobrown">
-        🍫 Painel Administrativo - <span class="text-chokopink">Chokodelícia</span>
+      <h1 class="text-2xl sm:text-3xl font-bold text-chokobrown flex items-center gap-2">
+        <span>🍫</span> Painel - <span class="text-chokopink">Chokodelícia</span>
       </h1>
-      <span class="text-sm text-gray-500">v1.0</span>
+      <span class="text-xs sm:text-sm text-gray-500">v1.1</span>
     </div>
   </header>
 
   <!-- Main Grid -->
-  <main class="container mx-auto px-6 py-10 flex-grow">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      
-      <!-- Card -->
-      <a href="/painel/encomendas" class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-chokopink transition-all duration-200">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-chokobrown group-hover:text-chokopink">📦 Encomendas</h2>
-          <span class="text-xs text-gray-400">Pedidos</span>
+  <main class="container mx-auto px-6 py-14 flex-grow">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+
+      <!-- Card Clientes -->
+      <a href="/painel/clientes" class="group relative bg-white border border-gray-200 rounded-2xl p-8 shadow-md hover:shadow-xl hover:border-transparent hover:bg-gradient-to-r hover:from-chokopink hover:to-chokobrown transition-all duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-chokobrown group-hover:text-white">👤 Clientes</h2>
+          <span class="text-xs text-gray-400 group-hover:text-gray-200">Base</span>
         </div>
-        <p class="text-sm text-gray-600">Visualize e gerencie todos os pedidos de bolos.</p>
+        <p class="text-sm text-gray-600 group-hover:text-gray-100">Acesse a lista completa de clientes cadastrados.</p>
       </a>
 
-      <a href="/painel/clientes" class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-chokopink transition-all duration-200">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-chokobrown group-hover:text-chokopink">👤 Clientes</h2>
-          <span class="text-xs text-gray-400">Base</span>
+      <!-- Card Encomendas -->
+      <a href="/painel/encomendas" class="group relative bg-white border border-gray-200 rounded-2xl p-8 shadow-md hover:shadow-xl hover:border-transparent hover:bg-gradient-to-r hover:from-chokobrown hover:to-chokopink transition-all duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-chokobrown group-hover:text-white">📦 Encomendas</h2>
+          <span class="text-xs text-gray-400 group-hover:text-gray-200">Pedidos</span>
         </div>
-        <p class="text-sm text-gray-600">Acesse a lista completa de clientes cadastrados.</p>
+        <p class="text-sm text-gray-600 group-hover:text-gray-100">Visualize e gerencie todas as encomendas realizadas.</p>
       </a>
 
-      <a href="/painel/entregas" class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-chokopink transition-all duration-200">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-chokobrown group-hover:text-chokopink">🚚 Entregas</h2>
-          <span class="text-xs text-gray-400">Status</span>
+      <!-- Card Entregas -->
+      <a href="/painel/entregas" class="group relative bg-white border border-gray-200 rounded-2xl p-8 shadow-md hover:shadow-xl hover:border-transparent hover:bg-gradient-to-r hover:from-chokopink hover:to-chokobrown transition-all duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-chokobrown group-hover:text-white">🚚 Entregas</h2>
+          <span class="text-xs text-gray-400 group-hover:text-gray-200">Status</span>
         </div>
-        <p class="text-sm text-gray-600">Monitore o andamento das entregas dos pedidos.</p>
-      </a>
-
-      <a href="/painel/cafeteria" class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-chokopink transition-all duration-200">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-chokobrown group-hover:text-chokopink">☕ Cafeteria</h2>
-          <span class="text-xs text-gray-400">Consumo</span>
-        </div>
-        <p class="text-sm text-gray-600">Acompanhe os pedidos realizados na cafeteria.</p>
-      </a>
-
-      <a href="/painel/atendimentos" class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-chokopink transition-all duration-200">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-chokobrown group-hover:text-chokopink">💬 Atendimentos</h2>
-          <span class="text-xs text-gray-400">Chat</span>
-        </div>
-        <p class="text-sm text-gray-600">Veja o histórico de interações com seus clientes.</p>
+        <p class="text-sm text-gray-600 group-hover:text-gray-100">Monitore o andamento e o status das entregas.</p>
       </a>
 
     </div>
   </main>
 
   <!-- Footer -->
-  <footer class="text-center text-xs text-gray-400 py-6">
-    &copy; {{ now().year if now else '2025' }} Chokodelícia. Desenvolvido por POST 🚀
+  <footer class="text-center text-xs text-gray-500 py-6">
+    &copy; 2025 Chokodelícia. Desenvolvido por POST 🚀
   </footer>
 
 </body>

@@ -11,38 +11,6 @@ templates = Jinja2Templates(directory="app/templates")
 def painel_principal(request: Request):
     return templates.TemplateResponse("painel.html", {"request": request})
 
-@router.get("/painel/encomendas", response_class=HTMLResponse)
-def painel_encomendas(request: Request):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT 
-            e.id,
-            c.nome,
-            c.telefone,
-            e.linha,
-            e.massa,
-            e.recheio,
-            e.mousse,
-            e.adicional,
-            e.tamanho,
-            e.gourmet,
-            e.data_entrega,
-            e.criado_em
-        FROM encomendas e
-        JOIN clientes c ON c.id = e.cliente_id
-        ORDER BY e.criado_em DESC
-    """)
-    encomendas = cursor.fetchall()
-    conn.close()
-
-    return templates.TemplateResponse("encomendas.html", {
-        "request": request,
-        "encomendas": encomendas
-    })
-
-
 @router.get("/painel/clientes", response_class=HTMLResponse)
 def painel_clientes(request: Request):
     conn = get_connection()

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Painel • Encomenda #{{ encomenda.id }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-4xl mx-auto p-6 space-y-6">
+    <a href="/painel/encomendas" class="text-sm text-blue-600 hover:underline">← Voltar</a>
+
+    <h1 class="text-2xl font-bold">Encomenda #{{ encomenda.id }}</h1>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-2">Cliente</h2>
+        <p>{{ encomenda.cliente_nome }} • <span class="text-slate-600">{{ encomenda.telefone }}</span></p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-2">Agendamento</h2>
+        <p>Data: {{ encomenda.data_entrega or "-" }}</p>
+        <p>Hora: {{ encomenda.horario_retirada or "-" }}</p>
+        <p>Criado em: {{ encomenda.criado_em }}</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-2">Pedido</h2>
+        <p>Categoria: {{ encomenda.categoria }}</p>
+        <p>Produto: {{ encomenda.produto or "-" }}</p>
+        <p>Tamanho: {{ encomenda.tamanho or "-" }}</p>
+        <p>Descrição: {{ encomenda.descricao or "-" }}</p>
+        <p>Fruta/Nozes: {{ encomenda.fruta_ou_nozes or "-" }}</p>
+        <p>Kit Festou: {{ "Sim" if encomenda.kit_festou else "Não" }}</p>
+        <p>Quantidade: {{ encomenda.quantidade or 1 }}</p>
+        <p>Serve pessoas: {{ encomenda.serve_pessoas or "-" }}</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="font-semibold mb-2">Valores</h2>
+        <p class="text-lg font-semibold">Total do Bolo: R$ {{ "%.2f"|format((encomenda.valor_total or 0.0)) }}</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow p-4">
+      <h2 class="font-semibold mb-3">Doces</h2>
+      {% if doces and doces|length > 0 %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">Nome</th>
+              <th class="px-3 py-2 text-left">Qtd</th>
+              <th class="px-3 py-2 text-left">Unit</th>
+              <th class="px-3 py-2 text-left">Preço</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for d in doces %}
+            <tr class="border-b last:border-0">
+              <td class="px-3 py-2">{{ d.nome }}</td>
+              <td class="px-3 py-2">{{ d.qtd }}</td>
+              <td class="px-3 py-2">{% if d.unit is not none %}R$ {{ "%.2f"|format(d.unit) }}{% else %}-{% endif %}</td>
+              <td class="px-3 py-2">{% if d.preco is not none %}R$ {{ "%.2f"|format(d.preco) }}{% else %}-{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="text-slate-500">Sem doces neste pedido.</p>
+      {% endif %}
+    </div>
+
+    <div class="bg-white rounded-2xl shadow p-4">
+      <h2 class="font-semibold mb-3">Entrega</h2>
+      {% if entrega %}
+        <p>Tipo: {{ entrega.tipo or "-" }}</p>
+        <p>Endereço: {{ entrega.endereco or "-" }}</p>
+        <p>Status: {{ entrega.status or "-" }}</p>
+        <p>Data agendada: {{ entrega.data_agendada or "-" }}</p>
+        <p>Atualizado em: {{ entrega.atualizado_em or "-" }}</p>
+      {% else %}
+        <p class="text-slate-500">Sem informação de entrega para esta encomenda.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
