@@ -92,8 +92,14 @@ async def processar_entrega(telefone, texto, estado):
             # garante que o fluxo termine
             estados_entrega.pop(telefone, None)
 
-            await responder_usuario(telefone, "✅ Pedido confirmado com sucesso!")
+            await responder_usuario(
+                telefone,
+                "Pedido confirmado com sucesso ✅\n"
+                "Obrigada por encomendar com a *Choko* ❤\n"
+                "✨ Se registrar o momento nas redes sociais, lembre de nos marcar @chokodelicia"
+            )
             return "finalizar"
+
 
 
         if opc in ["2", "corrigir", "endereco", "endereço", "ajustar", "editar"]:
