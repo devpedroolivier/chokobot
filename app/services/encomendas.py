@@ -495,7 +495,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         return
 
     if etapa == "pronta_hora":
-        if not _valida_hora(texto):
+        if not _parse_hora(texto):
             await responder_usuario(telefone, "⚠️ Hora inválida. Use o formato *HH:MM* (24h).")
             return
         dados["horario_retirada"] = (texto or "").strip()
