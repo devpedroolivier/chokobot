@@ -428,7 +428,10 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== DOCES — captura ======
     if etapa == "doces_captura":
-        itens, total_doces = parse_doces_input_flex(texto)
+        # agora usamos a função de preços, que aplica o valor unitário correto
+        from app.services.precos import parse_doces_input
+
+        itens, total_doces = parse_doces_input(texto)
         dados["doces_itens"] = itens
         dados["doces_total"] = total_doces
         estado["etapa"] = "doces_forminha"
@@ -440,6 +443,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "- Laranja, Lilás, Preto ou Branco"
         )
         return
+
 
     # ====== DOCES — forminha ======
     if etapa == "doces_forminha":
