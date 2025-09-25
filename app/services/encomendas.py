@@ -6,6 +6,8 @@ from app.utils.banco import salvar_encomenda_sqlite
 from app.services.estados import estados_entrega
 from app.config import DOCES_URL  # mantido por compatibilidade
 from app.services.precos import calcular_total, montar_resumo, parse_doces_input
+import re
+from datetime import datetime
 
 # === ALIASES DE PRODUTO (evita KeyError por variações de digitação) ===
 TORTAS_ALIASES = {
@@ -44,7 +46,6 @@ GOURMET_ALIASES = {
     "red velvet": "Red Velvet",
 }
 
-
 def _normaliza_produto(linha: str, nome: str) -> str | None:
     """
     Normaliza o nome do produto de acordo com a linha escolhida.
@@ -59,14 +60,12 @@ def _normaliza_produto(linha: str, nome: str) -> str | None:
         return GOURMET_ALIASES.get(key)
     return None
 
-
 TAMANHO_MAP = {
     "b3": "B3", "mini": "B3", "15": "B3", "3": "B3",
     "b4": "B4", "pequeno": "B4", "30": "B4", "4": "B4",
     "b6": "B6", "medio": "B6", "médio": "B6", "50": "B6", "6": "B6",
     "b7": "B7", "grande": "B7", "80": "B7", "7": "B7",
 }
-
 
 def _valida_data(txt: str) -> bool:
     try:
@@ -75,9 +74,41 @@ def _valida_data(txt: str) -> bool:
     except Exception:
         return False
 
+def parse_doces_input_flex(texto: str):
+    """
+    Interpreta a lista de doces enviada pelo cliente.
+    Aceita:
+      - Brigadeiro de Ninho x25
+      - Brigadeiro de Ninho 25
+      - Itens separados por ';' ou por Enter
+    Retorna lista compatível com o resumo (nome, qtd).
+    """
+    itens = []
+    total = 0
 
-import re
-from datetime import datetime
+    # Divide por ponto e vírgula OU quebra de linha (\r\n ou \n)
+    linhas = re.split(r"[;\r\n]+", texto or "")
+    for linha in linhas:
+        t = (linha or "").strip()
+        if not t:
+            continue
+
+        # "Produto x25"
+        m = re.match(r"^(.*)\s+x(\d+)$", t, re.IGNORECASE)
+        if m:
+            nome, qtd = m.group(1).strip(), int(m.group(2))
+        else:
+            # "Produto 25"
+            m2 = re.match(r"^(.*)\s+(\d+)$", t)
+            if m2:
+                nome, qtd = m2.group(1).strip(), int(m2.group(2))
+            else:
+                nome, qtd = t, 1  # fallback
+
+        itens.append({"nome": nome, "qtd": qtd})
+        total += qtd
+
+    return itens, total
 
 def _parse_hora(txt: str) -> str | None:
     """
@@ -117,11 +148,9 @@ def _parse_hora(txt: str) -> str | None:
     except:
         return None
 
-
 def _normaliza_tamanho(txt: str) -> str:
     t = (txt or "").strip().lower()
     return TAMANHO_MAP.get(t, t.upper())
-
 
 def _monta_pedido_final(dados: dict) -> dict:
     """
@@ -176,7 +205,6 @@ def _monta_pedido_final(dados: dict) -> dict:
         }
     )
     return base
-
 
 async def processar_encomenda(telefone, texto, estado, nome_cliente):
     """
@@ -315,12 +343,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         await responder_usuario(
             telefone,
             "📏 *Escolha o tamanho* (digite):\n"
-            "- B3 (serve até 15) — R$120\n"
-            "- B4 (serve até 30) — R$180\n"
-            "- B6 (serve até 50) — R$300\n"
-            "- B7 (serve até 80) — R$380",
+            "- B3 (serve até 15 pessoas) — R$120\n"
+            "- B4 (serve até 30 pessoas) — R$180\n"
+            "- B6 (serve até 50 pessoas) — R$300\n"
+            "- B7 (serve até 80 pessoas) — R$380",
         )
         return
+
 
     # ====== ETAPA 5 – TAMANHO → DATA → HORA ======
     if etapa == 5:
@@ -399,18 +428,45 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== DOCES — captura ======
     if etapa == "doces_captura":
-        itens, total_doces = parse_doces_input(texto)
+        itens, total_doces = parse_doces_input_flex(texto)
         dados["doces_itens"] = itens
         dados["doces_total"] = total_doces
+        estado["etapa"] = "doces_forminha"
+        await responder_usuario(
+            telefone,
+            "🎨 Escolha a *cor da forminha* dos doces:\n"
+            "- Marrom, Amarelo, Azul Claro, Azul Escuro\n"
+            "- Verde Claro, Verde Escuro, Rosa Claro, Pink\n"
+            "- Laranja, Lilás, Preto ou Branco"
+        )
+        return
+
+    # ====== DOCES — forminha ======
+    if etapa == "doces_forminha":
+        cor = (texto or "").strip().title()
+        cores_validas = [
+            "Marrom", "Amarelo", "Azul Claro", "Azul Escuro",
+            "Verde Claro", "Verde Escuro", "Rosa Claro", "Pink",
+            "Laranja", "Lilás", "Preto", "Branco"
+        ]
+        if cor not in cores_validas:
+            await responder_usuario(
+                telefone,
+                "⚠️ Cor inválida. Escolha entre:\n"
+                + ", ".join(cores_validas)
+            )
+            return
+        dados["doces_forminha"] = cor
         estado["etapa"] = 6
         await responder_usuario(
             telefone,
-            "✅ Doces adicionados!\n"
+            "✅ Doces adicionados com forminha escolhida!\n"
             "Agora, escolha a forma de receber:\n"
             "1️⃣ Retirar na loja\n"
             "2️⃣ Receber em casa (taxa de entrega: R$ 10,00)",
         )
         return
+
 
     # ====== ETAPA 6 – RETIRADA OU ENTREGA ======
     if etapa == 6:

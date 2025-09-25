@@ -11,9 +11,12 @@ async def processar_cafeteria(telefone, texto, estado):
         if texto == "1":
             msg = "📋 Cardápio *Cafeteria*:\nhttp://bit.ly/44ZlKlZ\n"
         elif texto == "2":
-            msg = "📋 Cardápio *Bolos*:\nhttps://keepo.io/boloschoko/\n"
+            msg = "📋 Cardápio *Bolos & Tortas*:\nhttps://keepo.io/boloschoko/\n"
         elif texto == "3":
-            msg = "📋 Cardápio *Doces*:\nhttps://bit.ly/cardapiodoceschoko\n"
+            msg = (
+                "📋 Cardápio *Doces*:\n"
+                "👉 Cardápio Doces atualizado: https://bit.ly/cardapiodoceschoko\n"
+            )
         elif texto == "4":
             msg = "📋 Cardápio *Sazonais*:\nhttps://drive.google.com/file/d/1HkfUa5fiIJ2_CmUwFiCSp1RToaJfvu6T/view\n"
         else:
@@ -36,9 +39,9 @@ async def processar_cafeteria(telefone, texto, estado):
                 telefone,
                 "📋 Qual cardápio você deseja ver?\n"
                 "1️⃣ Cardápio Cafeteria\n"
-                "2️⃣ Cardápio Bolos\n"
-                "3️⃣ Cardápio Doces\n"
-                "4️⃣ Cardápio Sazonais"
+                "2️⃣ Cardápio Bolos & Tortas\n"
+                "3️⃣ Cardápio Doces"
+                
             )
         elif texto == "2":
             return "voltar_menu"

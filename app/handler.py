@@ -135,8 +135,8 @@ async def processar_mensagem(mensagem: dict):
             "📋 Qual cardápio você deseja ver?\n"
             "1️⃣ Cardápio Cafeteria\n"
             "2️⃣ Cardápio Bolos & Tortas\n"
-            "3️⃣ Cardápio Doces\n\n"
-            "👉 Cardápio Doces atualizado: https://bit.ly/cardapiodoceschoko"
+            "3️⃣ Cardápio Doces"
+            
         )
 
     elif texto in ["2", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
