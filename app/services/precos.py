@@ -56,7 +56,6 @@ TORTAS = {
     "Limão": {"preco": 150.0, "serve": 16},
 }
 
-# inclui Cereja nos aliases também
 ALIAS_ADICIONAIS = {
     "morango": "Morango",
     "cereja": "Cereja",
@@ -82,20 +81,6 @@ def preco_tradicional(tamanho: str, fruta_ou_nozes: str | None) -> Tuple[float, 
     return preco, serve
 
 def calcular_total(pedido: dict) -> Tuple[float, int]:
-    """
-    pedido:
-    {
-      'categoria': 'tradicional'|'embrulhado'|'ingles'|'redondo'|'torta',
-      'tamanho': 'B3'|'B4'|'B6'|'B7',              # tradicional
-      'fruta_ou_nozes': 'Morango'|...|None,        # tradicional
-      'pedacos': '24'|'48',                        # embrulhado
-      'produto': <str>,                            # inglês/redondo/torta
-      'kit_festou': bool,
-      'quantidade': int,
-      'data_entrega': 'DD/MM/AAAA',
-      'horario_retirada': 'HH:MM'
-    }
-    """
     categoria = pedido.get("categoria")
     total = 0.0
     serve = 0
@@ -128,14 +113,11 @@ def calcular_total(pedido: dict) -> Tuple[float, int]:
 
     return round(total, 2), serve
 
-
 # =========================
 #  PREÇOS - DOCES
 # =========================
 
-# Tabela canônica: nome -> preço unitário (R$)
 DOCES_UNITARIOS: Dict[str, float] = {
-    # Tradicionais
     "Brigadeiro Escama": 1.50,
     "Brigadeiro De Ninho": 1.50,
     "Brigadeiro Power": 1.50,
@@ -155,8 +137,6 @@ DOCES_UNITARIOS: Dict[str, float] = {
     "Olho De Sogra": 2.00,
     "Brigadeiro Romeu E Julieta": 2.00,
     "Brigadeiro De Pistache": 4.00,
-
-    # Finos
     "Damasco": 4.20,
     "Bombom Cookies Brigadeiro De Nutella": 3.30,
     "Bombom Abacaxi": 3.00,
@@ -164,7 +144,6 @@ DOCES_UNITARIOS: Dict[str, float] = {
     "Bombom Maracuja": 3.00,
     "Bombom Prestigio": 3.00,
     "Mini Cestinha De Cereja": 4.00,
-
     "Bombom Uva Verde": 3.20,
     "Bombom Preto E Branco": 3.00,
     "Bombom Tradicional": 3.00,
@@ -180,23 +159,41 @@ DOCES_UNITARIOS: Dict[str, float] = {
     "Pirulito De Chocolate": 5.50,
 }
 
-# Aliases para variações de digitação e acentos
 DOCES_ALIASES: Dict[str, str] = {
-    # normalizações de nutella/nuttela
     "brigadeiro de ninho com nuttela": "Brigadeiro De Ninho Com Nutella",
+    "brigadeiro de ninho com nutella": "Brigadeiro De Ninho Com Nutella",
+    "ninho com nutella": "Brigadeiro De Ninho Com Nutella",
+    "brigadeiro ninho nutella": "Brigadeiro De Ninho Com Nutella",
     "bombom cookies brigadeiro de nuttela": "Bombom Cookies Brigadeiro De Nutella",
     "coracao branco brigadeiro de nuttela": "Coracao Branco Brigadeiro De Nutella",
     "coracao dourado brigadeiro de nuttela": "Coracao Dourado Brigadeiro De Nutella",
-
-    # sem acentos / variações
+    "brigadeiro de ninho": "Brigadeiro De Ninho",
+    "brigadeiro ninho": "Brigadeiro De Ninho",
+    "ninho": "Brigadeiro De Ninho",
+    "brigadeiro escama": "Brigadeiro Escama",
+    "escama": "Brigadeiro Escama",
+    "brigadeiro power": "Brigadeiro Power",
     "brigadeiro creme brulee": "Brigadeiro De Creme Brulee",
+    "creme brulee": "Brigadeiro De Creme Brulee",
     "brigadeiro granule melken ao leite": "Brigadeiro Granule Melken Ao Leite",
+    "granule ao leite": "Brigadeiro Granule Melken Ao Leite",
     "brigadeiro granule melken amargo": "Brigadeiro Granule Melken Amargo",
-    "brigadeiro torta de limao": "Brigadeiro Torta De Limao",
-    "brigadeiro de limao": "Brigadeiro De Limao",
-    "olho de sogra": "Olho De Sogra",
-    "romeu e julieta": "Brigadeiro Romeu E Julieta",
+    "granule amargo": "Brigadeiro Granule Melken Amargo",
+    "brigadeiro belga ao leite": "Brigadeiro Belga Callebaut Ao Leite",
+    "belga ao leite": "Brigadeiro Belga Callebaut Ao Leite",
+    "brigadeiro belga amargo": "Brigadeiro Belga Callebaut Amargo",
+    "belga amargo": "Brigadeiro Belga Callebaut Amargo",
+    "brigadeiro de amendoim": "Brigadeiro De Amendoim",
+    "amendoim": "Brigadeiro De Amendoim",
+    "brigadeiro de pacoca": "Brigadeiro De Pacoca",
+    "brigadeiro pacoca": "Brigadeiro De Pacoca",
+    "paçoca": "Brigadeiro De Pacoca",
     "pacoca": "Brigadeiro De Pacoca",
+    "brigadeiro de limao": "Brigadeiro De Limao",
+    "brigadeiro torta de limao": "Brigadeiro Torta De Limao",
+    "limao": "Brigadeiro De Limao",
+    "romeu e julieta": "Brigadeiro Romeu E Julieta",
+    "olho de sogra": "Olho De Sogra",
     "prestigio": "Bombom Prestigio",
     "maracuja": "Bombom Maracuja",
     "preto e branco": "Bombom Preto E Branco",
@@ -229,41 +226,25 @@ def _norm(s: str) -> str:
     return _strip_accents(s).lower().strip()
 
 def _canonical_doce(nome: str) -> str | None:
-    """
-    Tenta mapear um nome qualquer para o nome canônico da tabela de preços.
-    """
     if not nome:
         return None
     base = _norm(nome)
-    # mapeia por alias
     if base in DOCES_ALIASES:
         return DOCES_ALIASES[base]
-    # tenta bater com chaves canônicas normalizadas
     for can in DOCES_UNITARIOS.keys():
         if _norm(can) == base:
             return can
     return None
 
 def parse_doces_input(texto: str):
-    """
-    Aceita vários itens separados por ';' ou quebra de linha.
-    Formatos por item:
-      - "Brigadeiro de Ninho x25"
-      - "Bombom Prestígio x30 = 90,00"  (override de preço total do item)
-    Retorna: (itens, total_doces)
-      itens = [{"nome": str, "qtd": int, "preco": float|None, "unit": float|None}, ...]
-      total_doces = soma dos 'preco' (auto ou override)
-    """
     itens: List[Dict[str, Any]] = []
     total = 0.0
-
     partes = re.split(r"[;\n]+", texto)
     for p in partes:
         p = p.strip()
         if not p:
             continue
 
-        # Grupos NOME, QTD e PRECO nomeados (evita confundir quantidade com preço)
         m = re.match(
             r"^\s*(?P<nome>.+?)\s*x\s*(?P<qtd>\d+)(?:\s*=\s*(?P<preco>[\d\.,]+))?\s*$",
             p,
@@ -275,7 +256,6 @@ def parse_doces_input(texto: str):
             qtd = int(m.group("qtd"))
             preco_override = _to_float_brl(m.group("preco")) if m.group("preco") else None
         else:
-            # fallback: só o nome -> 1 unidade, sem override
             nome_raw = p
             qtd = 1
             preco_override = None
@@ -288,7 +268,7 @@ def parse_doces_input(texto: str):
         elif unit is not None:
             preco_item = round(unit * qtd, 2)
         else:
-            preco_item = None  # mantém item no resumo mas sem somar
+            preco_item = None
 
         if preco_item is not None:
             total += preco_item
@@ -302,7 +282,6 @@ def parse_doces_input(texto: str):
 
     return itens, round(total, 2)
 
-
 # =========================
 #  RESUMO (com doces)
 # =========================
@@ -315,12 +294,12 @@ def _doces_bloco(pedido: dict) -> tuple[str, float]:
 
     linhas = ["", "🍬 *Doces*:"]
     for d in itens:
-        preco_txt = ""
-        if d.get("preco") not in (None, ""):
-            preco_txt = f" — R${float(d['preco']):.2f}"
-        elif d.get("unit") not in (None, ""):
-            preco_txt = f" — R${float(d['unit']):.2f}/un"
-        linhas.append(f"- {d['nome']} x{d['qtd']}{preco_txt}")
+        if d.get("unit") and d.get("preco"):
+            linhas.append(f"- {d['nome']} x{d['qtd']} (R${d['unit']:.2f}/un) = R${d['preco']:.2f}")
+        elif d.get("preco"):
+            linhas.append(f"- {d['nome']} x{d['qtd']} = R${d['preco']:.2f}")
+        else:
+            linhas.append(f"- {d['nome']} x{d['qtd']}")
 
     return "\n".join(linhas), total_doces
 
@@ -350,7 +329,6 @@ def montar_resumo(pedido: dict, total_bolo: float) -> str:
         linhas[-1] = linhas[-1] + f"  x{q}"
 
     itens_txt = "\n".join(linhas)
-
     doces_txt, total_doces = _doces_bloco(pedido)
     total_geral = total_bolo + total_doces
 
