@@ -5,7 +5,7 @@ from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_encomenda_sqlite
 from app.services.estados import estados_entrega
 from app.config import DOCES_URL  # mantido por compatibilidade
-from app.services.precos import calcular_total, montar_resumo, parse_doces_input
+from app.services.precos import TRADICIONAL_BASE, _alias_fruta, calcular_total, montar_resumo, parse_doces_input, TRADICIONAL_ADICIONAIS
 import re
 from datetime import datetime
 
@@ -235,9 +235,9 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "✨ *Linha Gourmet:*\n"
-                "- Belga, Floresta Negra, Língua de Gato, Ninho com Morango,\n"
-                "- Nozes com Doce de Leite, Olho de Sogra, Red Velvet\n"
+                "✨ *LINHA GOURMET INGLÊS (SERVE 10 PESSOAS)*\n"
+                " Belga, Floresta Negra, Língua de Gato, Ninho com Morango,\n"
+                " Nozes com Doce de Leite, Olho de Sogra, Red Velvet\n"
                 "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
                 "📝 Digite o *nome do bolo* desejado:",
             )
@@ -311,14 +311,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             telefone,
             "🍫 *Escolha 1 recheio:*\n"
             "- Beijinho\n- Brigadeiro\n- Brigadeiro de Nutella\n"
-            "- Brigadeiro Branco\n- Branco Gourmet\n- Branco de Ninho\n"
+            "- Brigadeiro Branco Gourmet\n- Brigadeiro Branco de Ninho\n"
             "- Casadinho\n- Doce de Leite\n\n"
             "📌 *Escolha 1 mousse:*\n"
-            "- Ninho (Trufa Branca) ou Chocolate (Trufa Preta)\n\n"
+            "- Ninho\n- Trufa Branca\n- Chocolate\n- Trufa Preta\n\n"
             "📝 Envie juntos no formato: *Brigadeiro + Ninho*",
         )
+
         return
 
+  
     # ====== ETAPA 3 – RECHEIO + MOUSSE ======
     if etapa == 3:
         if "+" not in (texto or ""):
@@ -330,15 +332,36 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         estado["etapa"] = 4
         await responder_usuario(
             telefone,
-            "🍓 Deseja adicionar *fruta ou noz*? (tem adicional)\n"
-            "- Morango | Abacaxi | Ameixa | Nozes | Cereja\n"
-            "Ou digite *não* para pular.",
+            "🍓 Deseja adicionar *fruta ou nozes*? (tem adicional)\n\n"
+            "- Morango | Ameixa | Nozes | Cereja | Abacaxi\n"
+            "💡 Digite *valores* para consultar a tabela de preços por tamanho.\n\n"
+            "Ou digite *não* para pular."
         )
-        return
+
 
     # ====== ETAPA 4 – ADICIONAL ======
     if etapa == 4:
-        dados["adicional"] = texto if (texto or "").strip().lower() != "não" else "Nenhum"
+        adicional_txt = (texto or "").strip().lower()
+
+        # novo: consulta de valores (somente o acréscimo)
+        if adicional_txt in ["valores", "consultar", "consultar valores", "tabela"]:
+            msg = ["💰 *Valores de adicionais (acréscimos sobre o bolo):*", ""]
+            for tam, opcoes in TRADICIONAL_ADICIONAIS.items():
+                preco_base = TRADICIONAL_BASE[tam]["preco"]
+                msg.append(f"📏 {tam}")
+                for fruta, preco_total in opcoes.items():
+                    adicional = preco_total - preco_base
+                    msg.append(f"- {fruta} +R${adicional:.2f}")
+                msg.append("")  # quebra de linha entre tamanhos
+            await responder_usuario(telefone, "\n".join(msg).strip())
+            # mantém na mesma etapa para o cliente escolher depois
+            return
+
+        if adicional_txt in ["", "nenhum", "nao", "não"]:
+            dados["adicional"] = None
+        else:
+            dados["adicional"] = _alias_fruta(texto)  # normaliza para "Morango", "Nozes", etc.
+
         estado["etapa"] = 5
         await responder_usuario(
             telefone,
@@ -349,6 +372,9 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "- B7 (serve até 80 pessoas) — R$380",
         )
         return
+
+
+
 
 
     # ====== ETAPA 5 – TAMANHO → DATA → HORA ======
@@ -411,11 +437,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         if (texto or "").strip().lower() in ["sim", "s", "yes"]:
             estado["etapa"] = "doces_captura"
             await responder_usuario(
-                telefone,
-                "Envie os doces (pode mandar vários itens separando por ';' ou pulando linha).\n"
-                "Ex.: *Brigadeiro de Ninho x25; Bombom Prestígio x30*",
-            )
-            return
+            telefone,
+            "Envie os doces (pode mandar vários itens em linhas separadas).\n"
+            "Ex.:\n"
+            "Brigadeiro de Ninho x25\n"
+            "Bombom Prestígio x30"
+        )
+
         else:
             estado["etapa"] = 6
             await responder_usuario(
@@ -447,29 +475,48 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== DOCES — forminha ======
     if etapa == "doces_forminha":
-        cor = (texto or "").strip().title()
+        entrada = (texto or "").strip()
         cores_validas = [
             "Marrom", "Amarelo", "Azul Claro", "Azul Escuro",
             "Verde Claro", "Verde Escuro", "Rosa Claro", "Pink",
             "Laranja", "Lilás", "Preto", "Branco"
         ]
-        if cor not in cores_validas:
+
+        # divide por vírgula ou quebra de linha
+        cores_escolhidas = [
+            c.strip().title()
+            for c in re.split(r"(?:,|\n| e )", entrada, flags=re.IGNORECASE)
+            if c.strip()
+        ]
+
+
+        # valida cada cor
+        invalidas = [c for c in cores_escolhidas if c not in cores_validas]
+        if invalidas:
             await responder_usuario(
                 telefone,
-                "⚠️ Cor inválida. Escolha entre:\n"
-                + ", ".join(cores_validas)
+                f"⚠️ Cor inválida: {', '.join(invalidas)}\n"
+                "Escolha entre: " + ", ".join(cores_validas)
             )
             return
-        dados["doces_forminha"] = cor
+
+        # limita a 4 cores
+        if len(cores_escolhidas) > 4:
+            cores_escolhidas = cores_escolhidas[:4]
+
+        dados["doces_forminha"] = cores_escolhidas
         estado["etapa"] = 6
+
         await responder_usuario(
             telefone,
-            "✅ Doces adicionados com forminha escolhida!\n"
+            f"✅ Doces adicionados com forminha escolhida!\n"
+            f"Cores escolhidas: {', '.join(cores_escolhidas)}\n\n"
             "Agora, escolha a forma de receber:\n"
             "1️⃣ Retirar na loja\n"
             "2️⃣ Receber em casa (taxa de entrega: R$ 10,00)",
         )
         return
+
 
 
     # ====== ETAPA 6 – RETIRADA OU ENTREGA ======
@@ -478,6 +525,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
         if t in ["1", "retirada", "retirar", "loja", "r"]:
             pedido = _monta_pedido_final(dados)
+            pedido["doces_forminha"] = dados.get("doces_forminha", [])
             total, serve = calcular_total(pedido)
             pedido["valor_total"] = total
             pedido["serve_pessoas"] = serve
@@ -493,11 +541,17 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
         if t in ["2", "entregar", "entrega", "receber", "e"]:
             pedido = _monta_pedido_final(dados)
+            pedido["doces_forminha"] = dados.get("doces_forminha", [])
             total, serve = calcular_total(pedido)
             total += 10.0
             pedido["valor_total"] = total
             pedido["serve_pessoas"] = serve
+            
             dados.update(pedido)
+            pedido["modo_recebimento"] = "entrega"
+            pedido["endereco"] = dados.get("endereco", "")
+            pedido["referencia"] = dados.get("referencia", "")
+
 
             # Persiste a encomenda e inicia fluxo de endereço para entrega
             encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente)

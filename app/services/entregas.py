@@ -43,6 +43,8 @@ async def processar_entrega(telefone, texto, estado):
         dados["referencia"] = texto.strip()
 
         pedido = dados.get("pedido") or {}
+        pedido["endereco"] = dados.get("endereco", "")  # 🔹 garante endereço no resumo
+        pedido["referencia"] = dados.get("referencia", "")
         try:
             total = float(pedido.get("valor_total", 0))
             # Usa o valor total já com a taxa de entrega aplicada

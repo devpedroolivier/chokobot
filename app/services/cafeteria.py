@@ -15,7 +15,7 @@ async def processar_cafeteria(telefone, texto, estado):
         elif texto == "3":
             msg = (
                 "📋 Cardápio *Doces*:\n"
-                "👉 Cardápio Doces atualizado: https://bit.ly/cardapiodoceschoko\n"
+                "👉 Cardápio Doces: https://bit.ly/doceschoko\n"
             )
         elif texto == "4":
             msg = "📋 Cardápio *Sazonais*:\nhttps://drive.google.com/file/d/1HkfUa5fiIJ2_CmUwFiCSp1RToaJfvu6T/view\n"

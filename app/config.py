@@ -14,4 +14,4 @@ ZAPI_ENDPOINT_IMAGE = f"{ZAPI_BASE}/send-image"
 
 CAFETERIA_URL = os.getenv("CAFETERIA_URL", "http://bit.ly/44ZlKlZ")  # ajuste o link oficial se for outro
 # no topo do arquivo já deve ter: import os
-DOCES_URL = os.getenv("DOCES_URL", "https://keepo.io/boloschoko/")  # ajuste se tiver link específico de doces
+DOCES_URL = os.getenv("DOCES_URL", "https://bit.ly/doceschoko")  # ajuste se tiver link específico de doces
