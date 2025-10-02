@@ -164,10 +164,13 @@ async def processar_mensagem(mensagem: dict):
     elif texto in ["4", "entrega", "informações de entrega", "delivery"]:
         await responder_usuario(
             telefone,
-            "🚚 Entregamos na cidade toda (taxa R$10).\n"
+            "🚚 Entregamos em *Pitangueiras-SP* (taxa R$10) *exceto zona rural*.\n"
+            "Ibitiuva, zona rural ou Usina: combinar valor especial.\n"
             "Para outras regiões, o valor depende da distância (via Uber).\n"
             "Horário de entregas: 10h às 18h."
         )
+
+            
 
     elif texto in ["5", "atendente", "humano", "falar"]:
         await processar_atendimento(telefone, nome_cliente)

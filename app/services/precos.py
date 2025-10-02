@@ -289,11 +289,11 @@ def parse_doces_input(texto: str):
     """
     Aceita vários itens separados por ';' ou quebra de linha.
     Formatos por item:
-      - "Brigadeiro de Ninho x25"
+      - "Brigadeiro Belga Callebaut Ao Leite x25"
       - "Bombom Prestígio x30 = 90,00"  (override de preço total do item)
     Retorna: (itens, total_doces)
-      itens = [{"nome": str, "qtd": int, "preco": float|None, "unit": float|None}, ...]
-      total_doces = soma dos 'preco' (auto ou override)
+      itens = [{"nome": str, "qtd": int, "preco": float, "unit": float}, ...]
+      total_doces = soma dos 'preco'
     """
     itens: List[Dict[str, Any]] = []
     total = 0.0
@@ -304,7 +304,7 @@ def parse_doces_input(texto: str):
         if not p:
             continue
 
-        # Grupos NOME, QTD e PRECO nomeados (evita confundir quantidade com preço)
+        # Regex: Nome, Quantidade, Preço (opcional)
         m = re.match(
             r"^\s*(?P<nome>.+?)\s*x\s*(?P<qtd>\d+)(?:\s*=\s*(?P<preco>[\d\.,]+))?\s*$",
             p,
@@ -316,32 +316,37 @@ def parse_doces_input(texto: str):
             qtd = int(m.group("qtd"))
             preco_override = _to_float_brl(m.group("preco")) if m.group("preco") else None
         else:
-            # fallback: só o nome -> 1 unidade, sem override
-            nome_raw = p
+            nome_raw = p.strip()
             qtd = 1
             preco_override = None
 
-        can = _canonical_doce(nome_raw)
-        unit = DOCES_UNITARIOS.get(can) if can else None
+        # normaliza o nome do cliente (remove acentos, espaços invisíveis, casefold)
+        nome_norm = _norm(nome_raw)
 
-        if preco_override is not None:
-            preco_item = preco_override
-        elif unit is not None:
-            preco_item = round(unit * qtd, 2)
-        else:
-            preco_item = None  # mantém item no resumo mas sem somar
+        # procura correspondência exata no cardápio (normalizado)
+        matches = [k for k in DOCES_UNITARIOS.keys() if _norm(k) == nome_norm]
 
-        if preco_item is not None:
-            total += preco_item
+        if not matches:
+            raise ValueError(
+                f"⚠️ Doce não reconhecido: {nome_raw}. "
+                "Digite exatamente como está no cardápio."
+            )
+
+        can = matches[0]  # nome canônico
+        unit = DOCES_UNITARIOS[can]
+        preco_item = preco_override if preco_override is not None else round(unit * qtd, 2)
+        total += preco_item
 
         itens.append({
-            "nome": can if can else nome_raw.title(),
+            "nome": can,
             "qtd": qtd,
             "preco": preco_item,
             "unit": unit
         })
 
     return itens, round(total, 2)
+
+
 
 
 # =========================
@@ -381,10 +386,12 @@ def montar_resumo(pedido: dict, total_bolo: float) -> str:
         linhas.append(f'- Bolo embrulhado ({ped} pedaços)')
     else:
         if pedido.get("produto"):
-            linhas.append(f'- {pedido["produto"]}')
+            cat_nome = pedido.get("categoria", "").capitalize()
+            linhas.append(f'- {cat_nome} {pedido["produto"]}')
+
 
     if pedido.get("kit_festou"):
-        linhas.append(f"+ Kit Festou — R${KIT_FESTOU_PRECO:.0f}")
+        linhas.append(f"+ Kit Festou (25 brigadeiros + 1 Balão 🎈 personalizado) — R${KIT_FESTOU_PRECO:.0f}")
 
     q = int(pedido.get("quantidade", 1))
     if q > 1 and linhas:

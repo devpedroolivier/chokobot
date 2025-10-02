@@ -249,7 +249,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "🍥 *Bolos Redondos P6 (serve 20):*\n"
+                "🍥 *Bolos Redondos P6 (serve 20 pessoas):*\n"
                 "- Língua de Gato de Chocolate\n"
                 "- Língua de Gato de Chocolate Branco\n"
                 "- Branco Camafeu\n"
@@ -265,7 +265,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "🥧 *Tortas (serve 16):* Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão\n"
+                "🥧 *Tortas (serve 16 fatias):* Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão\n"
                 "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
                 "📝 Digite o *nome da torta* desejada:",
             )
@@ -278,11 +278,12 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             await responder_usuario(
                 telefone,
                 "📦 *Pronta entrega de hoje:*\n\n"
+                " *Mesclado de Brigadeiro com Ninho*\n\n"
                 "🎂 B3 (até 15 pessoas) — R$120\n"
                 "🎂 B4 (até 30 pessoas) — R$180\n\n"
                 "Adicione +R$35 e leve o *Kit Festou* 🎉\n"
                 "25 brigadeiros + 1 Balão 🎈 personalizado\n\n"
-                "📝 Digite *B3* ou *B4* (pode mandar só 3 / 4):",
+                "📝 Digite *B3* ou *B4*",
             )
             return
 
@@ -332,18 +333,34 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         estado["etapa"] = 4
         await responder_usuario(
             telefone,
+            "📏 *Escolha o tamanho* (digite):\n"
+            "- B3 (serve até 15 pessoas) — R$120\n"
+            "- B4 (serve até 30 pessoas) — R$180\n"
+            "- B6 (serve até 50 pessoas) — R$300\n"
+            "- B7 (serve até 80 pessoas) — R$380",
+        )
+        return
+
+
+
+    # ====== ETAPA 4 – TAMANHO ======
+    if etapa == 4:
+        dados["tamanho"] = _normaliza_tamanho(texto)
+        estado["etapa"] = 5
+        await responder_usuario(
+            telefone,
             "🍓 Deseja adicionar *fruta ou nozes*? (tem adicional)\n\n"
             "- Morango | Ameixa | Nozes | Cereja | Abacaxi\n"
             "💡 Digite *valores* para consultar a tabela de preços por tamanho.\n\n"
             "Ou digite *não* para pular."
         )
-
-
-    # ====== ETAPA 4 – ADICIONAL ======
-    if etapa == 4:
+        return
+    
+    # ====== ETAPA 5 – ADICIONAL ======
+    if etapa == 5:
         adicional_txt = (texto or "").strip().lower()
 
-        # novo: consulta de valores (somente o acréscimo)
+        # consulta de valores (somente o acréscimo)
         if adicional_txt in ["valores", "consultar", "consultar valores", "tabela"]:
             msg = ["💰 *Valores de adicionais (acréscimos sobre o bolo):*", ""]
             for tam, opcoes in TRADICIONAL_ADICIONAIS.items():
@@ -352,9 +369,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 for fruta, preco_total in opcoes.items():
                     adicional = preco_total - preco_base
                     msg.append(f"- {fruta} +R${adicional:.2f}")
-                msg.append("")  # quebra de linha entre tamanhos
+                msg.append("")
             await responder_usuario(telefone, "\n".join(msg).strip())
-            # mantém na mesma etapa para o cliente escolher depois
             return
 
         if adicional_txt in ["", "nenhum", "nao", "não"]:
@@ -362,16 +378,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         else:
             dados["adicional"] = _alias_fruta(texto)  # normaliza para "Morango", "Nozes", etc.
 
-        estado["etapa"] = 5
+        estado["etapa"] = "data_entrega"
         await responder_usuario(
             telefone,
-            "📏 *Escolha o tamanho* (digite):\n"
-            "- B3 (serve até 15 pessoas) — R$120\n"
-            "- B4 (serve até 30 pessoas) — R$180\n"
-            "- B6 (serve até 50 pessoas) — R$300\n"
-            "- B7 (serve até 80 pessoas) — R$380",
+            "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
         )
         return
+
 
 
 
@@ -416,7 +429,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             return
         dados["data_entrega"] = (texto or "").strip()
         estado["etapa"] = "hora_retirada"
-        await responder_usuario(telefone, "⏰ Informe o *horário de retirada* (HH:MM 24h):")
+        await responder_usuario(telefone, "⏰ Informe o *horário de retirada/entrega* (HH:MM ou 24h):")
         return
 
     if etapa == "hora_retirada":
@@ -456,10 +469,15 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== DOCES — captura ======
     if etapa == "doces_captura":
-        # agora usamos a função de preços, que aplica o valor unitário correto
         from app.services.precos import parse_doces_input
 
-        itens, total_doces = parse_doces_input(texto)
+        try:
+            itens, total_doces = parse_doces_input(texto)
+        except ValueError as e:
+            # se o nome não for reconhecido, avisa o cliente e mantém na mesma etapa
+            await responder_usuario(telefone, str(e))
+            return
+
         dados["doces_itens"] = itens
         dados["doces_total"] = total_doces
         estado["etapa"] = "doces_forminha"
@@ -471,6 +489,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "- Laranja, Lilás, Preto ou Branco"
         )
         return
+
 
 
     # ====== DOCES — forminha ======
