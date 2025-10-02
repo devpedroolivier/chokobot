@@ -624,7 +624,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             return
         dados["data_entrega"] = (texto or "").strip()
         estado["etapa"] = "pronta_hora"
-        await responder_usuario(telefone, "⏰ Informe o *horário de retirada* (HH:MM 24h):")
+        await responder_usuario(telefone, "⏰ Informe o *horário de retirada/entrega* (HH:MM ou 24h):")
         return
 
     if etapa == "pronta_hora":
