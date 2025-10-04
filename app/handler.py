@@ -26,6 +26,11 @@ REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot"]
 # 🔹 Histórico limitado de mensagens processadas (evita duplicações da Z-API)
 mensagens_processadas = deque(maxlen=2000)
 
+from datetime import datetime, timedelta
+
+# Histórico de mensagens recentes por telefone (para evitar reprocessamento com IDs diferentes)
+ultimas_mensagens = {}
+
 
 # ==============================================================
 # FUNÇÃO PRINCIPAL
@@ -52,15 +57,24 @@ async def processar_mensagem(mensagem: dict):
         print("❌ Dados incompletos:", mensagem)
         return
 
+        # ==============================================================
+    # ANTI-DUPLICAÇÃO DE WEBHOOKS Z-API (com verificação de conteúdo e tempo)
     # ==============================================================
-    # ANTI-DUPLICAÇÃO DE WEBHOOKS Z-API
-    # ==============================================================
+    agora = datetime.now()
 
     if msg_id and msg_id in mensagens_processadas:
         print(f"⚠️ Ignorado webhook duplicado ({msg_id}) de {telefone}")
         return
     if msg_id:
         mensagens_processadas.append(msg_id)
+
+    # 🔹 Filtro adicional: mensagem idêntica recebida há menos de 2 segundos
+    ultima = ultimas_mensagens.get(telefone)
+    if ultima and ultima["texto"] == texto and (agora - ultima["hora"]) < timedelta(seconds=2):
+        print(f"⚠️ Ignorado duplicado por conteúdo de {telefone}: '{texto}'")
+        return
+    ultimas_mensagens[telefone] = {"texto": texto, "hora": agora}
+
 
     # ==============================================================
     # ATENDIMENTO HUMANO
