@@ -261,19 +261,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-                # 4️⃣ Linha Mesversário ou Revelação
+                
+        # 4️⃣ Linha Mesversário ou Revelação
         if t in ["4", "mesversario", "mesversário", "revelacao", "revelação"]:
             estado["linha"] = "mesversario"
             dados["linha"] = "mesversario"
-            estado["etapa"] = "mesversario"  # 🔹 aponta para o novo fluxo personalizado
-            await responder_usuario(
-                telefone,
-                "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
-                "🎂 P6 Redondo — Serve 20 pessoas — R$165\n"
-                "🎂 P4 Redondo — Serve 8 pessoas — R$120\n\n"
-                "📝 Digite *P6* ou *P4* para escolher o tamanho."
-            )
-            return
+            estado["etapa"] = "mesversario"
+            dados["subetapa"] = "tamanho"   # define já aqui
+            return await processar_encomenda(telefone, "", estado, nome_cliente)
+
+              
 
         # 5️⃣ Linha Individual Baby Cake
         if t in ["5", "individual", "baby cake", "babycake"]:
