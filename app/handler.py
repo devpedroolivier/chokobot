@@ -38,7 +38,7 @@ async def processar_mensagem(mensagem: dict):
                 "1️⃣ Ver cardápios\n"
                 "2️⃣ Encomendar bolos ou tortas\n"
                 "3️⃣ Pedidos Delivery Cafeteria\n"
-                "4️⃣ Entregas 🚚\n"
+                "4️⃣ Entregas 🚚"
                 
             )
         else:
@@ -71,7 +71,7 @@ async def processar_mensagem(mensagem: dict):
             "1️⃣ Ver cardápios\n"
             "2️⃣ Encomendar bolos ou tortas\n"
             "3️⃣ Pedidos Delivery Cafeteria\n"
-            "4️⃣ Entregas 🚚\n"
+            "4️⃣ Entregas 🚚"
             
         )
         return
@@ -103,7 +103,7 @@ async def processar_mensagem(mensagem: dict):
                 "1️⃣ Ver cardápios\n"
                 "2️⃣ Encomendar bolos ou tortas\n"
                 "3️⃣ Pedidos Delivery Cafeteria\n"
-                "4️⃣ Entregas 🚚\n"
+                "4️⃣ Entregas 🚚"
                 
             )
         elif resultado == "finalizar":
@@ -122,7 +122,7 @@ async def processar_mensagem(mensagem: dict):
             "1️⃣ Ver cardápios\n"
             "2️⃣ Encomendar bolos ou tortas\n"
             "3️⃣ Pedidos Delivery Cafeteria\n"
-            "4️⃣ Entregas 🚚\n"
+            "4️⃣ Entregas 🚚"
             
         )
         return
@@ -184,6 +184,6 @@ async def processar_mensagem(mensagem: dict):
             "1️⃣ Ver cardápios\n"
             "2️⃣ Encomendar bolos ou tortas\n"
             "3️⃣ Pedidos Delivery Cafeteria\n"
-            "4️⃣ Entregas 🚚\n"
+            "4️⃣ Entregas 🚚"
             
         )
