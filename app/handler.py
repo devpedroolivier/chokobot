@@ -145,13 +145,15 @@ async def processar_mensagem(mensagem: dict):
             telefone,
             "🎂 *Vamos começar sua encomenda!*\n\n"
             "Qual linha você deseja?\n"
-            "1️⃣ Monte seu bolo\n"
-            "2️⃣ Linha Gourmet\n"
-            "3️⃣ Bolos Redondos (P6)\n"
-            "4️⃣ Tortas\n"
-            "5️⃣ Pronta Entrega — sabores disponíveis hoje\n\n"
+            "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+            "2️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
+            "3️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
+            "4️⃣ Linha Mesversário ou Revelação\n"
+            "5️⃣ Linha Individual Baby Cake\n"
+            "6️⃣ Tortas\n\n"
             "📷 Fotos e preços: https://keepo.io/boloschoko/"
         )
+
 
     elif texto in ["3", "pedido", "cafeteria", "delivery"]:
         await responder_usuario(

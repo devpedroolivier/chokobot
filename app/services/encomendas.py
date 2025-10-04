@@ -218,7 +218,24 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     if etapa == 1:
         t = (texto or "").strip().lower()
 
-        if t in ["1", "normal", "personalizado", "montar", "monte seu bolo"]:
+        # 1️⃣ Pronta Entrega
+        if t in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
+            estado["linha"] = "pronta_entrega"
+            dados["linha"] = "pronta_entrega"
+            estado["etapa"] = "pronta_item"
+            await responder_usuario(
+                telefone,
+                "📦 *Pronta entrega de hoje:*\n\n"
+                "🎂 Mesclado de Brigadeiro com Ninho\n\n"
+                "B3 (até 15 pessoas) — R$120\n"
+                "B4 (até 30 pessoas) — R$180\n\n"
+                "Adicione +R$35 e leve o *Kit Festou* 🎉 (25 brigadeiros + 1 Balão personalizado)\n\n"
+                "📝 Digite *B3* ou *B4*"
+            )
+            return
+
+        # 2️⃣ Monte seu bolo
+        if t in ["2", "monte seu bolo", "normal", "personalizado"]:
             estado["linha"] = "normal"
             dados["linha"] = "normal"
             estado["etapa"] = 2
@@ -229,61 +246,58 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        if t in ["2", "gourmet"]:
+        # 3️⃣ Linha Gourmet (Inglês e Redondo)
+        if t in ["3", "gourmet", "ingles", "redondo", "p6"]:
             estado["linha"] = "gourmet"
             dados["linha"] = "gourmet"
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "✨ *LINHA GOURMET INGLÊS (SERVE 10 PESSOAS)*\n"
-                " Belga, Floresta Negra, Língua de Gato, Ninho com Morango,\n"
-                " Nozes com Doce de Leite, Olho de Sogra, Red Velvet\n"
+                "✨ *LINHA GOURMET (INGLÊS E REDONDO P6)*\n"
+                "- Belga, Floresta Negra, Língua de Gato, Ninho com Morango,\n"
+                "Nozes com Doce de Leite, Olho de Sogra, Red Velvet\n"
                 "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *nome do bolo* desejado:",
+                "📝 Digite o *nome do bolo* desejado:"
             )
             return
 
-        if t in ["3", "p6", "redondo", "bolo redondo"]:
-            estado["linha"] = "redondo"
-            dados["linha"] = "redondo"
+        # 4️⃣ Linha Mesversário ou Revelação
+        if t in ["4", "mesversario", "mesversário", "revelacao", "revelação"]:
+            estado["linha"] = "mesversario"
+            dados["linha"] = "mesversario"
+            estado["etapa"] = 2
+            await responder_usuario(
+                telefone,
+                "🎉 *Linha Mesversário ou Revelação*\n\n"
+                "Perfeita para comemorações temáticas!\n"
+                "📝 Escolha a *massa*: Branca | Chocolate | Mesclada"
+            )
+            return
+
+        # 5️⃣ Linha Individual Baby Cake
+        if t in ["5", "individual", "baby cake", "babycake"]:
+            estado["linha"] = "individual"
+            dados["linha"] = "individual"
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "🍥 *Bolos Redondos P6 (serve 20 pessoas):*\n"
-                "- Língua de Gato de Chocolate\n"
-                "- Língua de Gato de Chocolate Branco\n"
-                "- Branco Camafeu\n"
-                "- Belga\n- Naked Cake\n- Red Velvet\n\n"
-                "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *nome do bolo* desejado:",
+                "🧁 *Linha Individual Baby Cake*\n\n"
+                "Mini bolos personalizados — perfeitos para presentes e lembranças!\n"
+                "📷 Veja fotos e valores: https://keepo.io/boloschoko/\n\n"
+                "📝 Digite o *sabor desejado*:"
             )
             return
 
-        if t in ["4", "torta", "tortas"]:
+        # 6️⃣ Tortas
+        if t in ["6", "torta", "tortas"]:
             estado["linha"] = "torta"
             dados["linha"] = "torta"
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "🥧 *Tortas (serve 16 fatias):* Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão\n"
+                "🥧 *Tortas (serve 16 fatias)*: Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão\n"
                 "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *nome da torta* desejada:",
-            )
-            return
-
-        if t in ["5", "pronta entrega", "pronta", "pronta-entrega"]:
-            estado["linha"] = "pronta_entrega"
-            dados["linha"] = "pronta_entrega"
-            estado["etapa"] = "pronta_item"
-            await responder_usuario(
-                telefone,
-                "📦 *Pronta entrega de hoje:*\n\n"
-                " *Mesclado de Brigadeiro com Ninho*\n\n"
-                "🎂 B3 (até 15 pessoas) — R$120\n"
-                "🎂 B4 (até 30 pessoas) — R$180\n\n"
-                "Adicione +R$35 e leve o *Kit Festou* 🎉\n"
-                "25 brigadeiros + 1 Balão 🎈 personalizado\n\n"
-                "📝 Digite *B3* ou *B4*",
+                "📝 Digite o *nome da torta* desejada:"
             )
             return
 
@@ -291,13 +305,15 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         await responder_usuario(
             telefone,
             "🎂 *Escolha uma linha para começar:*\n"
-            "1️⃣ Monte seu bolo\n"
-            "2️⃣ Linha Gourmet\n"
-            "3️⃣ Bolos Redondos (P6)\n"
-            "4️⃣ Tortas\n"
-            "5️⃣ Pronta Entrega",
+            "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+            "2️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
+            "3️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
+            "4️⃣ Linha Mesversário ou Revelação\n"
+            "5️⃣ Linha Individual Baby Cake\n"
+            "6️⃣ Tortas"
         )
         return
+
 
     # ====== ETAPA 2 – MASSA ======
     if etapa == 2:
@@ -313,7 +329,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "🍫 *Escolha 1 recheio:*\n"
             "- Beijinho\n- Brigadeiro\n- Brigadeiro de Nutella\n"
             "- Brigadeiro Branco Gourmet\n- Brigadeiro Branco de Ninho\n"
-            "- Casadinho\n- Doce de Leite\n\n"
+            "- Casadinho (Brigadeiro Branco + Brigadeiro Preto)\n- Doce de Leite\n\n"
             "📌 *Escolha 1 mousse:*\n"
             "- Ninho\n- Trufa Branca\n- Chocolate\n- Trufa Preta\n\n"
             "📝 Envie juntos no formato: *Brigadeiro + Ninho*",
@@ -621,7 +637,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         estado["etapa"] = "pronta_kit"
         await responder_usuario(
             telefone,
-            "🎉 Deseja adicionar o *Kit Festou* (+R$35)?\n"
+            "🎉 Deseja adicionar o *Kit Festou(25 brigadeiros + 1 Balão 🎈 personalizado)* (+R$35)?\n"
             "1️⃣ Sim\n2️⃣ Não"
         )
         return
