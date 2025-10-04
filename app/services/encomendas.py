@@ -445,18 +445,18 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
-    # ====== DOCES — oferta ======
+        # ====== DOCES — oferta ======
     if etapa == "doces_oferta":
         if (texto or "").strip().lower() in ["sim", "s", "yes"]:
             estado["etapa"] = "doces_captura"
             await responder_usuario(
-            telefone,
-            "Envie os doces (pode mandar vários itens em linhas separadas).\n"
-            "Ex.:\n"
-            "Brigadeiro de Ninho x25\n"
-            "Bombom Prestígio x30"
-        )
-
+                telefone,
+                "Envie os doces (pode mandar vários itens em linhas separadas).\n"
+                "Ex.:\n"
+                "Brigadeiro de Ninho x25\n"
+                "Bombom Prestígio x30"
+            )
+            return
         else:
             estado["etapa"] = 6
             await responder_usuario(
@@ -480,6 +480,24 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
         dados["doces_itens"] = itens
         dados["doces_total"] = total_doces
+        estado["etapa"] = "doces_tipo_forminha"
+        await responder_usuario(
+            telefone,
+            "🎀 Deseja forminha *Tradicional* ou *Pétala*?"
+        )
+        return
+
+    # ====== DOCES — tipo de forminha ======
+    if etapa == "doces_tipo_forminha":
+        tipo = (texto or "").strip().lower()
+        if tipo not in ["tradicional", "pétala", "petala"]:
+            await responder_usuario(
+                telefone,
+                "⚠️ Tipo inválido. Escolha: *Tradicional* ou *Pétala*."
+            )
+            return
+
+        dados["doces_tipo_forminha"] = "Pétala" if "p" in tipo else "Tradicional"
         estado["etapa"] = "doces_forminha"
         await responder_usuario(
             telefone,
@@ -489,8 +507,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "- Laranja, Lilás, Preto ou Branco"
         )
         return
-
-
 
     # ====== DOCES — forminha ======
     if etapa == "doces_forminha":
@@ -507,7 +523,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             for c in re.split(r"(?:,|\n| e )", entrada, flags=re.IGNORECASE)
             if c.strip()
         ]
-
 
         # valida cada cor
         invalidas = [c for c in cores_escolhidas if c not in cores_validas]
@@ -529,12 +544,14 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         await responder_usuario(
             telefone,
             f"✅ Doces adicionados com forminha escolhida!\n"
+            f"Tipo: {dados.get('doces_tipo_forminha', 'Tradicional')}\n"
             f"Cores escolhidas: {', '.join(cores_escolhidas)}\n\n"
             "Agora, escolha a forma de receber:\n"
             "1️⃣ Retirar na loja\n"
             "2️⃣ Receber em casa (taxa de entrega: R$ 10,00)",
         )
         return
+
 
 
 
