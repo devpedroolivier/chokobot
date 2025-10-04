@@ -682,6 +682,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         return
 
     # ====== CONFIRMAÇÃO DO PEDIDO (retirada e pronta-entrega) ======
+    # ====== CONFIRMAÇÃO DO PEDIDO (retirada e pronta-entrega) ======
     if etapa == "confirmar_pedido":
         opc = (texto or "").strip().lower()
 
@@ -730,15 +731,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        if opc in ["3", "atendente", "humano", "falar", "ajuda"]:
-            await responder_usuario(telefone, "Certo! Vou acionar um atendente. 👩‍🍳")
-            return "finalizar"
-
         await responder_usuario(
             telefone,
             "Responda com:\n"
             "1️⃣ Confirmar pedido\n"
-            "2️⃣ Corrigir\n"
-            "3️⃣ Falar com atendente"
+            "2️⃣ Corrigir"
         )
         return
+

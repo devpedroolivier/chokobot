@@ -39,7 +39,7 @@ async def processar_mensagem(mensagem: dict):
                 "2️⃣ Encomendar bolos ou tortas\n"
                 "3️⃣ Pedidos Delivery Cafeteria\n"
                 "4️⃣ Entregas 🚚\n"
-                "5️⃣ Falar com atendente"
+                
             )
         else:
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
@@ -72,7 +72,7 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Encomendar bolos ou tortas\n"
             "3️⃣ Pedidos Delivery Cafeteria\n"
             "4️⃣ Entregas 🚚\n"
-            "5️⃣ Falar com atendente"
+            
         )
         return
 
@@ -104,7 +104,7 @@ async def processar_mensagem(mensagem: dict):
                 "2️⃣ Encomendar bolos ou tortas\n"
                 "3️⃣ Pedidos Delivery Cafeteria\n"
                 "4️⃣ Entregas 🚚\n"
-                "5️⃣ Falar com atendente"
+                
             )
         elif resultado == "finalizar":
             estados_cafeteria.pop(telefone, None)
@@ -123,7 +123,7 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Encomendar bolos ou tortas\n"
             "3️⃣ Pedidos Delivery Cafeteria\n"
             "4️⃣ Entregas 🚚\n"
-            "5️⃣ Falar com atendente"
+            
         )
         return
 
@@ -185,5 +185,5 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Encomendar bolos ou tortas\n"
             "3️⃣ Pedidos Delivery Cafeteria\n"
             "4️⃣ Entregas 🚚\n"
-            "5️⃣ Falar com atendente"
+            
         )

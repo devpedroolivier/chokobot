@@ -67,6 +67,7 @@ async def processar_entrega(telefone, texto, estado):
         return
 
     # ETAPA 3 — confirmação final (agora sim salva)
+    # ETAPA 3 — confirmação final (agora sim salva)
     if etapa == "confirmar_entrega":
         opc = texto.strip().lower()
 
@@ -91,9 +92,7 @@ async def processar_entrega(telefone, texto, estado):
             except Exception as e:
                 print(f"❌ ERRO ao salvar entrega: {e}")
 
-            # garante que o fluxo termine
             estados_entrega.pop(telefone, None)
-
             await responder_usuario(
                 telefone,
                 "Pedido confirmado com sucesso ✅\n"
@@ -102,23 +101,16 @@ async def processar_entrega(telefone, texto, estado):
             )
             return "finalizar"
 
-
-
         if opc in ["2", "corrigir", "endereco", "endereço", "ajustar", "editar"]:
             estado["etapa"] = 1
             await responder_usuario(telefone, "Sem problema! Envie novamente o *endereço completo*:")
             return
 
-        if opc in ["3", "atendente", "humano", "falar", "ajuda"]:
-            estados_entrega.pop(telefone, None)
-            await responder_usuario(telefone, "Vou te conectar com um atendente. 👩‍🍳")
-            return "finalizar"
-
         await responder_usuario(
             telefone,
             "Escolha uma opção:\n"
             "1️⃣ Confirmar pedido\n"
-            "2️⃣ Corrigir endereço\n"
-            "3️⃣ Falar com atendente"
+            "2️⃣ Corrigir endereço"
         )
         return
+
