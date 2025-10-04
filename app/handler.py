@@ -86,11 +86,15 @@ async def processar_mensagem(mensagem: dict):
         return
 
     # Encomendas
+    # Encomendas
     if telefone in estados_encomenda:
-        resultado = await processar_encomenda(telefone, texto, estados_encomenda[telefone], nome_cliente)
+        estado = estados_encomenda[telefone]
+        resultado = await processar_encomenda(telefone, texto, estado, nome_cliente)
+        estados_encomenda[telefone] = estado  # 🔹 commit seguro após cada interação
         if resultado == "finalizar":
             estados_encomenda.pop(telefone, None)
         return
+
 
     # Cafeteria
     if telefone in estados_cafeteria:
