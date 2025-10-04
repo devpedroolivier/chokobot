@@ -56,6 +56,11 @@ TORTAS = {
     "Limão": {"preco": 150.0, "serve": 16},
 }
 
+MESVERSARIO = {
+    "P4": {"preco": 120.0, "serve": 8},
+    "P6": {"preco": 165.0, "serve": 20},
+}
+
 # inclui Cereja nos aliases também
 ALIAS_ADICIONAIS = {
     "morango": "Morango",
@@ -111,6 +116,9 @@ def calcular_total(pedido: dict) -> Tuple[float, int]:
         total += item["preco"]; serve = item["serve"]
     elif categoria == "redondo":
         item = REDONDOS_P6[pedido["produto"]]
+        total += item["preco"]; serve = item["serve"]
+    elif categoria == "mesversario":
+        item = MESVERSARIO[pedido["tamanho"]]
         total += item["preco"]; serve = item["serve"]
     elif categoria == "torta":
         item = TORTAS[pedido["produto"]]
