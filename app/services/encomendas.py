@@ -458,13 +458,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # Escolha de tamanho
+          # Escolha de tamanho
         if subetapa == "tamanho":
-            tam = (texto or "").strip().upper()
+            tam = (texto or "").strip().upper()  # 🔹 normaliza input
             if tam not in ["P4", "P6"]:
                 await responder_usuario(telefone, "⚠️ Tamanho inválido. Digite *P4* ou *P6*.")
                 return
+
             dados["tamanho"] = tam
+            dados["preco_base"] = 165.0 if tam == "P6" else 120.0
+            dados["serve_pessoas"] = 20 if tam == "P6" else 8
             dados["subetapa"] = "massa"
             await responder_usuario(
                 telefone,
