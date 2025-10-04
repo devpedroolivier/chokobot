@@ -261,32 +261,36 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # 4️⃣ Linha Mesversário ou Revelação
+                # 4️⃣ Linha Mesversário ou Revelação
         if t in ["4", "mesversario", "mesversário", "revelacao", "revelação"]:
             estado["linha"] = "mesversario"
             dados["linha"] = "mesversario"
-            estado["etapa"] = 2
+            estado["etapa"] = "mesversario"  # 🔹 aponta para o novo fluxo personalizado
             await responder_usuario(
                 telefone,
-                "🎉 *Linha Mesversário ou Revelação*\n\n"
-                "Perfeita para comemorações temáticas!\n"
-                "📝 Escolha a *massa*: Branca | Chocolate | Mesclada"
+                "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
+                "🎂 P6 Redondo — Serve 20 pessoas — R$165\n"
+                "🎂 P4 Redondo — Serve 8 pessoas — R$120\n\n"
+                "📝 Digite *P6* ou *P4* para escolher o tamanho."
             )
             return
 
         # 5️⃣ Linha Individual Baby Cake
         if t in ["5", "individual", "baby cake", "babycake"]:
-            estado["linha"] = "individual"
-            dados["linha"] = "individual"
-            estado["etapa"] = "gourmet"
+            estado["linha"] = "babycake"
+            dados["linha"] = "babycake"
+            estado["etapa"] = "babycake"  # 🔹 novo fluxo independente
             await responder_usuario(
                 telefone,
                 "🧁 *Linha Individual Baby Cake*\n\n"
-                "Mini bolos personalizados — perfeitos para presentes e lembranças!\n"
-                "📷 Veja fotos e valores: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *sabor desejado*:"
+                "📏 Tamanho individual (~300g)\n\n"
+                "Opções de sabores:\n"
+                "1️⃣ Branco com Doce de Leite e Creme Mágico (chocolate branco)\n"
+                "2️⃣ Branco com Belga e Creme Mágico (chocolate branco)\n\n"
+                "📝 Digite *1* ou *2* para escolher o sabor."
             )
             return
+
 
         # 6️⃣ Tortas
         if t in ["6", "torta", "tortas"]:
@@ -437,6 +441,147 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         estado["etapa"] = "data_entrega"
         await responder_usuario(telefone, "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):")
         return
+    
+    # ====== ETAPA MESVERSÁRIO / REVELAÇÃO ======
+    if etapa == "mesversario":
+        subetapa = dados.get("subetapa")
+
+        # Primeira entrada: mostrar tamanhos e sabores
+        if not subetapa:
+            dados["subetapa"] = "tamanho"
+            await responder_usuario(
+                telefone,
+                "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
+                "🎂 P6 Redondo — Serve 20 pessoas — R$165\n"
+                "🎂 P4 Redondo — Serve 8 pessoas — R$120\n\n"
+                "📝 Digite *P6* ou *P4* para escolher o tamanho."
+            )
+            return
+
+        # Escolha de tamanho
+        if subetapa == "tamanho":
+            tam = (texto or "").strip().upper()
+            if tam not in ["P4", "P6"]:
+                await responder_usuario(telefone, "⚠️ Tamanho inválido. Digite *P4* ou *P6*.")
+                return
+            dados["tamanho"] = tam
+            dados["subetapa"] = "massa"
+            await responder_usuario(
+                telefone,
+                "🍰 *Escolha a massa:*\n- Branca\n- Chocolate"
+            )
+            return
+
+        # Escolha de massa
+        if subetapa == "massa":
+            massa = (texto or "").strip().lower()
+            if massa not in ["branca", "chocolate"]:
+                await responder_usuario(telefone, "⚠️ Massa inválida. Escolha: Branca | Chocolate")
+                return
+            dados["massa"] = massa.capitalize()
+            dados["subetapa"] = "recheio"
+            await responder_usuario(
+                telefone,
+                "🍫 *Escolha o recheio (envie o nome completo):*\n"
+                "- Brigadeiro com Ninho\n"
+                "- Brigadeiro de Nutella com Ninho\n"
+                "- Brigadeiro e Beijinho\n"
+                "- Brigadeiro Branco com Brigadeiro Preto (Casadinho)\n"
+                "- Brigadeiro Branco Gourmet com Ninho\n"
+                "- Brigadeiro Branco de Ninho com Ninho\n"
+                "- Beijinho com Ninho\n"
+                "- Doce de Leite e Brigadeiro\n"
+                "- Doce de Leite com Ninho"
+            )
+            return
+
+        # Escolha de recheio
+        if subetapa == "recheio":
+            recheio = (texto or "").strip()
+            dados["recheio"] = recheio
+            dados["subetapa"] = "mousse"
+            await responder_usuario(
+                telefone,
+                "🍫 Deseja trocar o *Ninho por Mousse de Chocolate*?\n"
+                "Digite *sim* ou *não*."
+            )
+            return
+
+        # Troca de mousse
+        if subetapa == "mousse":
+            if (texto or "").strip().lower() in ["sim", "s"]:
+                dados["mousse"] = "Chocolate"
+            else:
+                dados["mousse"] = "Ninho"
+            dados["subetapa"] = None
+            estado["etapa"] = "data_entrega"
+            await responder_usuario(telefone, "📆 Informe a *data da festa* (DD/MM/AAAA):")
+            return
+
+    # ====== ETAPA BABY CAKE ======
+    if etapa == "babycake":
+        subetapa = dados.get("subetapa")
+
+        # Primeira entrada
+        if not subetapa:
+            dados["subetapa"] = "sabor"
+            await responder_usuario(
+                telefone,
+                "🧁 *Linha Individual Baby Cake*\n\n"
+                "📏 Tamanho individual (~300g)\n\n"
+                "Opções de sabores:\n"
+                "1️⃣ Branco com Doce de Leite e Creme Mágico (chocolate branco)\n"
+                "2️⃣ Branco com Belga e Creme Mágico (chocolate branco)\n\n"
+                "📝 Digite *1* ou *2* para escolher o sabor."
+            )
+            return
+
+        # Escolha de sabor
+        if subetapa == "sabor":
+            s = (texto or "").strip()
+            if s not in ["1", "2"]:
+                await responder_usuario(telefone, "⚠️ Opção inválida. Digite *1* ou *2*.")
+                return
+            sabor = (
+                "Branco com Doce de Leite e Creme Mágico"
+                if s == "1"
+                else "Branco com Belga e Creme Mágico"
+            )
+            dados["sabor"] = sabor
+            dados["subetapa"] = "frase"
+            await responder_usuario(
+                telefone,
+                "✍️ Deseja adicionar uma *frase personalizada* no bolo?\n"
+                "Exemplo: 'Feliz Aniversário!' ou 'Te amo, mãe!'\n"
+                "Se não quiser, digite *não*."
+            )
+            return
+
+        # Frase personalizada
+        if subetapa == "frase":
+            frase = (texto or "").strip()
+            if frase.lower() not in ["", "não", "nao", "sem frase"]:
+                dados["frase"] = frase
+            else:
+                dados["frase"] = None
+            dados["subetapa"] = "modelo"
+            await responder_usuario(
+                telefone,
+                "📸 Se possível, envie uma *foto de modelo* (opcional) ou digite *pular*."
+            )
+            return
+
+        # Modelo / foto
+        if subetapa == "modelo":
+            if texto.strip().lower() != "pular":
+                dados["modelo"] = texto.strip()
+            estado["etapa"] = "data_entrega"
+            dados["subetapa"] = None
+            await responder_usuario(
+                telefone,
+                "📆 Informe a *data de entrega* (DD/MM/AAAA):"
+            )
+            return
 
     # ====== DATA / HORA (compartilhado) ======
     if etapa == "data_entrega":
