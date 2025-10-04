@@ -3,7 +3,7 @@ from datetime import datetime
 from app.models.entregas import salvar_entrega
 from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_encomenda_sqlite
-from app.services.estados import estados_entrega
+from app.services.estados import estados_entrega, estados_encomenda
 from app.config import DOCES_URL  # mantido por compatibilidade
 from app.services.precos import TRADICIONAL_BASE, _alias_fruta, calcular_total, montar_resumo, parse_doces_input, TRADICIONAL_ADICIONAIS
 import re
@@ -446,11 +446,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     if etapa == "mesversario":
         subetapa = dados.get("subetapa")
 
-        # Primeira entrada: mostrar tamanhos e sabores
+        # Primeira entrada
         if not subetapa:
-            # define primeiro o estado antes de enviar a mensagem
             dados["subetapa"] = "tamanho"
             estado["etapa"] = "mesversario"
+            estados_encomenda[telefone] = estado  # 🔹 commit do estado
             await responder_usuario(
                 telefone,
                 "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
@@ -460,10 +460,9 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-
-          # Escolha de tamanho
+        # Escolha de tamanho
         if subetapa == "tamanho":
-            tam = (texto or "").strip().upper()  # 🔹 normaliza input
+            tam = (texto or "").strip().upper()
             if tam not in ["P4", "P6"]:
                 await responder_usuario(telefone, "⚠️ Tamanho inválido. Digite *P4* ou *P6*.")
                 return
@@ -472,10 +471,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             dados["preco_base"] = 165.0 if tam == "P6" else 120.0
             dados["serve_pessoas"] = 20 if tam == "P6" else 8
             dados["subetapa"] = "massa"
-            await responder_usuario(
-                telefone,
-                "🍰 *Escolha a massa:*\n- Branca\n- Chocolate"
-            )
+            estados_encomenda[telefone] = estado  # 🔹 commit do estado
+            await responder_usuario(telefone, "🍰 *Escolha a massa:* Branca ou Chocolate")
             return
 
         # Escolha de massa
@@ -484,36 +481,32 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             if massa not in ["branca", "chocolate"]:
                 await responder_usuario(telefone, "⚠️ Massa inválida. Escolha: Branca | Chocolate")
                 return
+
             dados["massa"] = massa.capitalize()
             dados["subetapa"] = "recheio"
+            estados_encomenda[telefone] = estado  # 🔹 commit do estado
             await responder_usuario(
                 telefone,
-                "🍫 *Escolha o recheio (envie o nome completo):*\n"
-                "- Brigadeiro com Ninho\n"
-                "- Brigadeiro de Nutella com Ninho\n"
-                "- Brigadeiro e Beijinho\n"
-                "- Brigadeiro Branco com Brigadeiro Preto (Casadinho)\n"
-                "- Brigadeiro Branco Gourmet com Ninho\n"
-                "- Brigadeiro Branco de Ninho com Ninho\n"
-                "- Beijinho com Ninho\n"
-                "- Doce de Leite e Brigadeiro\n"
-                "- Doce de Leite com Ninho"
+                "🍫 *Escolha o recheio:*\n"
+                "- Brigadeiro com Ninho\n- Brigadeiro de Nutella com Ninho\n"
+                "- Brigadeiro e Beijinho\n- Brigadeiro Branco com Brigadeiro Preto (Casadinho)\n"
+                "- Brigadeiro Branco Gourmet com Ninho\n- Brigadeiro Branco de Ninho com Ninho\n"
+                "- Beijinho com Ninho\n- Doce de Leite e Brigadeiro\n- Doce de Leite com Ninho"
             )
             return
 
         # Escolha de recheio
         if subetapa == "recheio":
-            recheio = (texto or "").strip()
-            dados["recheio"] = recheio
+            dados["recheio"] = (texto or "").strip()
             dados["subetapa"] = "mousse"
+            estados_encomenda[telefone] = estado  # 🔹 commit do estado
             await responder_usuario(
                 telefone,
-                "🍫 Deseja trocar o *Ninho por Mousse de Chocolate*?\n"
-                "Digite *sim* ou *não*."
+                "🍫 Deseja trocar o *Ninho por Mousse de Chocolate*?\nDigite *sim* ou *não*."
             )
             return
 
-        # Troca de mousse
+        # Escolha de mousse
         if subetapa == "mousse":
             if (texto or "").strip().lower() in ["sim", "s"]:
                 dados["mousse"] = "Chocolate"
@@ -521,6 +514,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 dados["mousse"] = "Ninho"
             dados["subetapa"] = None
             estado["etapa"] = "data_entrega"
+            estados_encomenda[telefone] = estado  # 🔹 commit do estado
             await responder_usuario(telefone, "📆 Informe a *data da festa* (DD/MM/AAAA):")
             return
 
