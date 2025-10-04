@@ -448,15 +448,18 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
         # Primeira entrada: mostrar tamanhos e sabores
         if not subetapa:
+            # define primeiro o estado antes de enviar a mensagem
             dados["subetapa"] = "tamanho"
+            estado["etapa"] = "mesversario"
             await responder_usuario(
                 telefone,
                 "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
-                "🎂 P6 Redondo — Serve 20 pessoas — R$165\n"
-                "🎂 P4 Redondo — Serve 8 pessoas — R$120\n\n"
+                "🎂 P6 Redondo — Serve 20 pessoas — *R$165*\n"
+                "🎂 P4 Redondo — Serve 8 pessoas — *R$120*\n\n"
                 "📝 Digite *P6* ou *P4* para escolher o tamanho."
             )
             return
+
 
           # Escolha de tamanho
         if subetapa == "tamanho":
