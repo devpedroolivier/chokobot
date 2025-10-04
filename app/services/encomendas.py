@@ -443,22 +443,23 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         return
     
     # ====== ETAPA MESVERSÁRIO / REVELAÇÃO ======
+    # ====== ETAPA MESVERSÁRIO / REVELAÇÃO ======
     if etapa == "mesversario":
         subetapa = dados.get("subetapa")
 
-        # Primeira entrada
+        # Primeira entrada: mostrar tamanhos e sabores
         if not subetapa:
-            dados["subetapa"] = "tamanho"
-            estado["etapa"] = "mesversario"
-            estados_encomenda[telefone] = estado  # 🔹 commit do estado
+            dados["subetapa"] = "tamanho"  # 🔹 define antes do envio
+            estado["dados"] = dados         # 🔹 salva no estado antes de responder
             await responder_usuario(
                 telefone,
                 "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
-                "🎂 P6 Redondo — Serve 20 pessoas — *R$165*\n"
-                "🎂 P4 Redondo — Serve 8 pessoas — *R$120*\n\n"
+                "🎂 P6 Redondo — Serve 20 pessoas — R$165\n"
+                "🎂 P4 Redondo — Serve 8 pessoas — R$120\n\n"
                 "📝 Digite *P6* ou *P4* para escolher o tamanho."
             )
             return
+
 
         # Escolha de tamanho
         if subetapa == "tamanho":
