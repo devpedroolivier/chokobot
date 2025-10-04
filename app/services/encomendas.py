@@ -585,6 +585,36 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 "📆 Informe a *data de entrega* (DD/MM/AAAA):"
             )
             return
+    # ====== MONTA PEDIDO FINAL MESVERSÁRIO ======
+    if dados.get("linha") == "mesversario" and etapa == 6:
+        pedido = {
+            "categoria": "mesversario",
+            "tamanho": dados.get("tamanho"),
+            "massa": dados.get("massa"),
+            "recheio": dados.get("recheio"),
+            "mousse": dados.get("mousse"),
+            "quantidade": 1,
+            "data_entrega": dados.get("data_entrega"),
+            "horario_retirada": dados.get("horario_retirada"),
+        }
+
+        # cálculo manual (sem depender do TRADICIONAL_BASE)
+        preco_base = 165.0 if pedido["tamanho"] == "P6" else 120.0
+        serve = 20 if pedido["tamanho"] == "P6" else 8
+        total = preco_base
+
+        pedido["valor_total"] = total
+        pedido["serve_pessoas"] = serve
+        dados["pedido_preview"] = pedido
+        estado["modo_recebimento"] = "retirada"
+        estado["etapa"] = "confirmar_pedido"
+
+        await responder_usuario(telefone, montar_resumo(pedido, total))
+        await responder_usuario(
+            telefone,
+            "Está tudo correto?\n1️⃣ Confirmar pedido\n2️⃣ Corrigir"
+        )
+        return
 
     # ====== DATA / HORA (compartilhado) ======
     if etapa == "data_entrega":
