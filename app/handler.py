@@ -80,10 +80,11 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(
                 telefone,
                 "🤖 Bot reativado. Vamos continuar!\n"
-                "1️⃣ Ver cardápios\n"
-                "2️⃣ Encomendar bolos ou tortas\n"
-                "3️⃣ Pedidos Delivery Cafeteria\n"
-                "4️⃣ Entregas 🚚"
+                "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+                "2️⃣ Ver cardápios\n"
+                "3️⃣ Encomendar bolos ou tortas\n"
+                "4️⃣ Pedidos Delivery Cafeteria\n"
+                "5️⃣ Entregas 🚚"
             )
         else:
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
@@ -116,10 +117,11 @@ async def processar_mensagem(mensagem: dict):
         await responder_usuario(
             telefone,
             "🍫 *Menu Principal*\n"
-            "1️⃣ Ver cardápios\n"
-            "2️⃣ Encomendar bolos ou tortas\n"
-            "3️⃣ Pedidos Delivery Cafeteria\n"
-            "4️⃣ Entregas 🚚"
+            "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+            "2️⃣ Ver cardápios\n"
+            "3️⃣ Encomendar bolos ou tortas\n"
+            "4️⃣ Pedidos Delivery Cafeteria\n"
+            "5️⃣ Entregas 🚚"
         )
         return
 
@@ -166,10 +168,11 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(
                 telefone,
                 "🍫 Olá novamente! Escolha uma opção:\n"
-                "1️⃣ Ver cardápios\n"
-                "2️⃣ Encomendar bolos ou tortas\n"
-                "3️⃣ Pedidos Delivery Cafeteria\n"
-                "4️⃣ Entregas 🚚"
+                "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+                "2️⃣ Ver cardápios\n"
+                "3️⃣ Encomendar bolos ou tortas\n"
+                "4️⃣ Pedidos Delivery Cafeteria\n"
+                "5️⃣ Entregas 🚚"
             )
         elif resultado == "finalizar":
             estados_cafeteria.pop(telefone, None)
@@ -186,17 +189,34 @@ async def processar_mensagem(mensagem: dict):
             "🍫 Olá! Bem-vindo(a) à *Chokodelícia* 🍫\n"
             "Sou a *Trufinha* 🍬, assistente virtual da nossa Cafeteria e Doceria!\n\n"
             "Escolha uma opção:\n"
-            "1️⃣ Ver cardápios\n"
-            "2️⃣ Encomendar bolos ou tortas\n"
-            "3️⃣ Pedidos Delivery Cafeteria\n"
-            "4️⃣ Entregas 🚚"
+            "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+            "2️⃣ Ver cardápios\n"
+            "3️⃣ Encomendar bolos ou tortas\n"
+            "4️⃣ Pedidos Delivery Cafeteria\n"
+            "5️⃣ Entregas 🚚"
         )
         return
 
     # ============================================================== #
     # MENU PRINCIPAL (ENTRADA INICIAL)
     # ============================================================== #
-    if texto in ["1", "cardápio", "cardapio", "cardapios"]:
+    if texto in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
+        estados_encomenda[telefone] = {
+            "etapa": "pronta_item",
+            "dados": {"linha": "pronta_entrega"},
+        }
+        await responder_usuario(
+            telefone,
+            "📦 *Pronta entrega de hoje:*\n\n"
+            "🎂 Mesclado de Brigadeiro com Ninho\n\n"
+            "B3 (até 15 pessoas) — R$120\n"
+            "B4 (até 30 pessoas) — R$180\n\n"
+            "Adicione +R$35 e leve o *Kit Festou* 🎉 (25 brigadeiros + 1 Balão personalizado)\n\n"
+            "📝 Digite *B3* ou *B4*"
+        )
+        return
+
+    elif texto in ["2", "cardápio", "cardapio", "cardapios"]:
         estados_cafeteria[telefone] = {"subetapa": "aguardando_cardapio"}
         await responder_usuario(
             telefone,
@@ -207,23 +227,22 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["2", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
+    elif texto in ["3", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
         estados_encomenda[telefone] = {"etapa": 1, "dados": {}}
         await responder_usuario(
             telefone,
             "🎂 *Vamos começar sua encomenda!*\n\n"
             "Qual linha você deseja?\n"
-            "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
-            "2️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
-            "3️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
-            "4️⃣ Linha Mesversário ou Revelação\n"
-            "5️⃣ Linha Individual Baby Cake\n"
-            "6️⃣ Tortas\n\n"
+            "1️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
+            "2️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
+            "3️⃣ Linha Mesversário ou Revelação\n"
+            "4️⃣ Linha Individual Baby Cake\n"
+            "5️⃣ Tortas\n\n"
             "📷 Fotos e preços: https://keepo.io/boloschoko/"
         )
         return
 
-    elif texto in ["3", "pedido", "cafeteria", "delivery"]:
+    elif texto in ["4", "pedido", "cafeteria", "delivery"]:
         await responder_usuario(
             telefone,
             f"☕ Os pedidos da *cafeteria* são feitos pelo nosso link oficial: {CAFETERIA_URL}\n"
@@ -231,7 +250,7 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["4", "entrega", "informações de entrega", "delivery"]:
+    elif texto in ["5", "entrega", "informações de entrega", "delivery"]:
         await responder_usuario(
             telefone,
             "🚚 Entregamos em *Pitangueiras-SP* (taxa R$10) *exceto zona rural*.\n"
@@ -241,7 +260,7 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["5", "atendente", "humano", "falar"]:
+    elif texto in ["6", "atendente", "humano", "falar"]:
         await processar_atendimento(telefone, nome_cliente)
         return
 
@@ -252,8 +271,9 @@ async def processar_mensagem(mensagem: dict):
         telefone,
         "Desculpe, não entendi sua mensagem 😕\n"
         "Digite uma das opções abaixo:\n"
-        "1️⃣ Ver cardápios\n"
-        "2️⃣ Encomendar bolos ou tortas\n"
-        "3️⃣ Pedidos Delivery Cafeteria\n"
-        "4️⃣ Entregas 🚚"
+        "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+        "2️⃣ Ver cardápios\n"
+        "3️⃣ Encomendar bolos ou tortas\n"
+        "4️⃣ Pedidos Delivery Cafeteria\n"
+        "5️⃣ Entregas 🚚"
     )
