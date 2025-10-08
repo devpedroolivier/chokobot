@@ -513,13 +513,14 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== ETAPA BABY CAKE ======
         # ====== ETAPA BABY CAKE ======
+        # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
 
-        # Primeira entrada
+        # 🔹 Primeira entrada
         if not subetapa:
             dados["subetapa"] = "sabor"
-            estado["dados"] = dados  # ✅ salva a etapa no estado global
+            estado["dados"] = dados
             await responder_usuario(
                 telefone,
                 "🧁 *Linha Individual Baby Cake*\n\n"
@@ -531,7 +532,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # Escolha de sabor
+        # 🔹 Escolha de sabor
         if subetapa == "sabor":
             s = (texto or "").strip()
             if s not in ["1", "2"]:
@@ -543,9 +544,10 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 if s == "1"
                 else "Branco com Belga e Creme Mágico"
             )
+
             dados["sabor"] = sabor
             dados["subetapa"] = "frase"
-            estado["dados"] = dados  # ✅ salva antes de retornar
+            estado["dados"] = dados
             await responder_usuario(
                 telefone,
                 "✍️ Deseja adicionar uma *frase personalizada* no bolo?\n"
@@ -554,28 +556,18 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # Frase personalizada
+        # 🔹 Frase personalizada → vai direto para data
         if subetapa == "frase":
             frase = (texto or "").strip()
             if frase.lower() not in ["", "não", "nao", "sem frase"]:
                 dados["frase"] = frase
             else:
                 dados["frase"] = None
-            dados["subetapa"] = "modelo"
-            estado["dados"] = dados  # ✅ salva antes de enviar
-            await responder_usuario(
-                telefone,
-                "📸 Se possível, envie uma *foto de modelo* (opcional) ou digite *pular*."
-            )
-            return
 
-        # Modelo / foto
-        if subetapa == "modelo":
-            if texto.strip().lower() != "pular":
-                dados["modelo"] = texto.strip()
-            estado["etapa"] = "data_entrega"
+            # avança direto para data
             dados["subetapa"] = None
-            estado["dados"] = dados  # ✅ salva antes de avançar
+            estado["dados"] = dados
+            estado["etapa"] = "data_entrega"
             await responder_usuario(
                 telefone,
                 "📆 Informe a *data de entrega* (DD/MM/AAAA):"
