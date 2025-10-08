@@ -15,14 +15,32 @@ from app.services.estados import (
 )
 from app.config import CAFETERIA_URL
 
+# ============================================================== #
+# CONFIGURAÇÕES E OPÇÕES GLOBAIS
+# ============================================================== #
+
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
 MENU_OPCOES = ["menu", "voltar", "inicio", "principal", "bot"]
 REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot"]
 
+# 🔹 Histórico limitado de mensagens processadas (evita duplicações da Z-API)
 mensagens_processadas = deque(maxlen=2000)
 ultimas_mensagens = {}
 
+
+# ============================================================== #
+# FUNÇÃO PRINCIPAL
+# ============================================================== #
 async def processar_mensagem(mensagem: dict):
+    """
+    Processa mensagens recebidas via webhook da Z-API.
+    Inclui:
+      - Filtro anti-duplicação (ID + texto)
+      - Controle de estados (encomendas, cafeteria, entregas)
+      - Comandos globais (menu, cancelar, atendimento)
+    """
+
+    # 🔹 Extrai dados principais
     texto = (mensagem.get("text", {}) or {}).get("message", "")
     if texto:
         texto = texto.lower().strip()
@@ -34,36 +52,46 @@ async def processar_mensagem(mensagem: dict):
         print("❌ Dados incompletos:", mensagem)
         return
 
+    # ============================================================== #
+    # ANTI-DUPLICAÇÃO DE WEBHOOKS Z-API (verificação de conteúdo e tempo)
+    # ============================================================== #
     agora = datetime.now()
 
+    # 🔸 Evita reprocessar o mesmo messageId
     if msg_id and msg_id in mensagens_processadas:
         print(f"⚠️ Ignorado webhook duplicado ({msg_id}) de {telefone}")
         return
     if msg_id:
         mensagens_processadas.append(msg_id)
 
+    # 🔸 Evita reprocessar o mesmo texto em menos de 2 segundos
     ultima = ultimas_mensagens.get(telefone)
     if ultima and ultima["texto"] == texto and (agora - ultima["hora"]) < timedelta(seconds=2):
         print(f"⚠️ Ignorado duplicado por conteúdo de {telefone}: '{texto}'")
         return
     ultimas_mensagens[telefone] = {"texto": texto, "hora": agora}
 
+    # ============================================================== #
+    # ATENDIMENTO HUMANO
+    # ============================================================== #
     if telefone in estados_atendimento:
         if texto in REATIVAR_BOT_OPCOES:
             estados_atendimento.pop(telefone, None)
             await responder_usuario(
                 telefone,
                 "🤖 Bot reativado. Vamos continuar!\n"
-                "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-                "2️⃣ Ver cardápios\n"
-                "3️⃣ Encomendar bolos ou tortas\n"
-                "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Entregas 🚚"
+                "1️⃣ Ver cardápios\n"
+                "2️⃣ Encomendar bolos ou tortas\n"
+                "3️⃣ Pedidos Delivery Cafeteria\n"
+                "4️⃣ Entregas 🚚"
             )
         else:
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
         return
 
+    # ============================================================== #
+    # CANCELAR GLOBAL
+    # ============================================================== #
     if texto in CANCELAR_OPCOES:
         if telefone in estados_encomenda:
             estados_encomenda.pop(telefone)
@@ -78,6 +106,9 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(telefone, "⚠️ Nenhuma operação em andamento para cancelar.")
         return
 
+    # ============================================================== #
+    # MENU GLOBAL
+    # ============================================================== #
     if texto in MENU_OPCOES:
         estados_encomenda.pop(telefone, None)
         estados_cafeteria.pop(telefone, None)
@@ -85,18 +116,39 @@ async def processar_mensagem(mensagem: dict):
         await responder_usuario(
             telefone,
             "🍫 *Menu Principal*\n"
-            "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-            "2️⃣ Ver cardápios\n"
-            "3️⃣ Encomendar bolos ou tortas\n"
-            "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚"
+            "1️⃣ Ver cardápios\n"
+            "2️⃣ Encomendar bolos ou tortas\n"
+            "3️⃣ Pedidos Delivery Cafeteria\n"
+            "4️⃣ Entregas 🚚"
         )
         return
 
-     # ⚙️ Evita reiniciar o fluxo de encomenda se o cliente já estiver em andamento
+    # ============================================================== #
+    # FLUXOS ATIVOS (ROTEAMENTO POR ESTADO)
+    # ============================================================== #
+
+    # 🔹 Entregas
+    if telefone in estados_entrega:
+        estado = estados_entrega[telefone]
+        resultado = await processar_entrega(telefone, texto, estado)
+        estados_entrega[telefone] = estado
+        if resultado == "finalizar":
+            estados_entrega.pop(telefone, None)
+            estados_encomenda.pop(telefone, None)
+            print(f"✅ Estados limpos para {telefone} após finalizar entrega")
+        return
+
+    # 🔹 Encomendas
     if telefone in estados_encomenda:
         estado_atual = estados_encomenda[telefone]
         etapa_atual = estado_atual.get("etapa")
+
+        # trava adicional: ignora repetição imediata do mesmo texto na mesma etapa
+        ultima = ultimas_mensagens.get(telefone)
+        if ultima and ultima["texto"] == texto and (agora - ultima["hora"]) < timedelta(seconds=3):
+            print(f"⚠️ Ignorado reenvio em etapa {etapa_atual} ({telefone})")
+            return
+
         print(f"⚙️ Fluxo ativo detectado para {telefone}: etapa {etapa_atual}")
         resultado = await processar_encomenda(telefone, texto, estado_atual, nome_cliente)
         estados_encomenda[telefone] = estado_atual
@@ -104,6 +156,7 @@ async def processar_mensagem(mensagem: dict):
             estados_encomenda.pop(telefone, None)
         return
 
+    # 🔹 Cafeteria
     if telefone in estados_cafeteria:
         estado = estados_cafeteria[telefone]
         resultado = await processar_cafeteria(telefone, texto, estado)
@@ -113,16 +166,18 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(
                 telefone,
                 "🍫 Olá novamente! Escolha uma opção:\n"
-                "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-                "2️⃣ Ver cardápios\n"
-                "3️⃣ Encomendar bolos ou tortas\n"
-                "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Entregas 🚚"
+                "1️⃣ Ver cardápios\n"
+                "2️⃣ Encomendar bolos ou tortas\n"
+                "3️⃣ Pedidos Delivery Cafeteria\n"
+                "4️⃣ Entregas 🚚"
             )
         elif resultado == "finalizar":
             estados_cafeteria.pop(telefone, None)
         return
 
+    # ============================================================== #
+    # SAUDAÇÃO / PRIMEIRO CONTATO
+    # ============================================================== #
     salvar_cliente(telefone, nome_cliente)
 
     if is_saudacao(texto):
@@ -131,32 +186,17 @@ async def processar_mensagem(mensagem: dict):
             "🍫 Olá! Bem-vindo(a) à *Chokodelícia* 🍫\n"
             "Sou a *Trufinha* 🍬, assistente virtual da nossa Cafeteria e Doceria!\n\n"
             "Escolha uma opção:\n"
-            "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-            "2️⃣ Ver cardápios\n"
-            "3️⃣ Encomendar bolos ou tortas\n"
-            "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚"
+            "1️⃣ Ver cardápios\n"
+            "2️⃣ Encomendar bolos ou tortas\n"
+            "3️⃣ Pedidos Delivery Cafeteria\n"
+            "4️⃣ Entregas 🚚"
         )
         return
 
-    elif texto in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
-        estados_encomenda[telefone] = {
-            "etapa": "pronta_item",
-            "dados": {"linha": "pronta_entrega"}
-        }
-        await responder_usuario(
-            telefone,
-            "📦 *Pronta entrega de hoje:*\n\n"
-            "🎂 Mesclado de Brigadeiro com Ninho\n\n"
-            "B3 (até 15 pessoas) — R$120\n"
-            "B4 (até 30 pessoas) — R$180\n\n"
-            "Adicione +R$35 e leve o *Kit Festou* 🎉 (25 brigadeiros + 1 Balão personalizado)\n\n"
-            "📝 Digite *B3* ou *B4*"
-        )
-        return
-
-
-    elif texto in ["2", "cardápio", "cardapio", "cardapios"]:
+    # ============================================================== #
+    # MENU PRINCIPAL (ENTRADA INICIAL)
+    # ============================================================== #
+    if texto in ["1", "cardápio", "cardapio", "cardapios"]:
         estados_cafeteria[telefone] = {"subetapa": "aguardando_cardapio"}
         await responder_usuario(
             telefone,
@@ -166,25 +206,24 @@ async def processar_mensagem(mensagem: dict):
             "3️⃣ Cardápio Doces"
         )
         return
-    
-    
-    
-    elif texto in ["3", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
+
+    elif texto in ["2", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
         estados_encomenda[telefone] = {"etapa": 1, "dados": {}}
         await responder_usuario(
             telefone,
             "🎂 *Vamos começar sua encomenda!*\n\n"
             "Qual linha você deseja?\n"
-            "1️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
-            "2️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
-            "3️⃣ Linha Mesversário ou Revelação\n"
-            "4️⃣ Linha Individual Baby Cake\n"
-            "5️⃣ Tortas\n\n"
+            "1️⃣ Pronta Entrega — sabores disponíveis hoje\n"
+            "2️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
+            "3️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
+            "4️⃣ Linha Mesversário ou Revelação\n"
+            "5️⃣ Linha Individual Baby Cake\n"
+            "6️⃣ Tortas\n\n"
             "📷 Fotos e preços: https://keepo.io/boloschoko/"
         )
         return
 
-    elif texto in ["4", "pedido", "cafeteria", "delivery"]:
+    elif texto in ["3", "pedido", "cafeteria", "delivery"]:
         await responder_usuario(
             telefone,
             f"☕ Os pedidos da *cafeteria* são feitos pelo nosso link oficial: {CAFETERIA_URL}\n"
@@ -192,7 +231,7 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["5", "entrega", "informações de entrega", "delivery"]:
+    elif texto in ["4", "entrega", "informações de entrega", "delivery"]:
         await responder_usuario(
             telefone,
             "🚚 Entregamos em *Pitangueiras-SP* (taxa R$10) *exceto zona rural*.\n"
@@ -202,18 +241,19 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["6", "atendente", "humano", "falar"]:
+    elif texto in ["5", "atendente", "humano", "falar"]:
         await processar_atendimento(telefone, nome_cliente)
         return
 
-    else:
-        await responder_usuario(
-            telefone,
-            "Desculpe, não entendi sua mensagem 😕\n"
-            "Digite uma das opções abaixo:\n"
-            "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-            "2️⃣ Ver cardápios\n"
-            "3️⃣ Encomendar bolos ou tortas\n"
-            "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚"
-        )
+    # ============================================================== #
+    # MENSAGEM PADRÃO (FALLBACK)
+    # ============================================================== #
+    await responder_usuario(
+        telefone,
+        "Desculpe, não entendi sua mensagem 😕\n"
+        "Digite uma das opções abaixo:\n"
+        "1️⃣ Ver cardápios\n"
+        "2️⃣ Encomendar bolos ou tortas\n"
+        "3️⃣ Pedidos Delivery Cafeteria\n"
+        "4️⃣ Entregas 🚚"
+    )

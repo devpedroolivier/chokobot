@@ -513,10 +513,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== ETAPA BABY CAKE ======
         # ====== ETAPA BABY CAKE ======
-        # ====== ETAPA BABY CAKE ======
-        # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
+
+        # evita reenvio duplicado do menu inicial
+        if not subetapa and texto in ["4", "baby", "baby cake", "individual", "babycake"]:
+            print(f"⚠️ Ignorado reenvio duplicado de menu Baby Cake ({telefone})")
+            return
 
         # Primeira entrada
         if not subetapa:
