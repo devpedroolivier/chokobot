@@ -213,6 +213,12 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     """
     etapa = estado["etapa"]
     dados = estado.setdefault("dados", {})
+    # ====== ANTI-DUPLICAÇÃO DE MENSAGENS ======
+    txt_atual = (texto or "").strip()
+    if estado.get("ultima_mensagem") == txt_atual:
+        print(f"⚠️ Ignorado texto repetido '{txt_atual}' de {telefone}")
+        return
+    estado["ultima_mensagem"] = txt_atual
 
     # ====== ETAPA 1 – ESCOLHA DA LINHA ======
     if etapa == 1:
@@ -265,16 +271,9 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["linha"] = "babycake"
             dados["linha"] = "babycake"
             estado["etapa"] = "babycake"
-            await responder_usuario(
-                telefone,
-                "🧁 *Linha Individual Baby Cake*\n\n"
-                "📏 Tamanho individual (~300g)\n\n"
-                "Opções de sabores:\n"
-                "1️⃣ Branco com Doce de Leite e Creme Mágico (chocolate branco)\n"
-                "2️⃣ Branco com Belga e Creme Mágico (chocolate branco)\n\n"
-                "📝 Digite *1* ou *2* para escolher o sabor."
-            )
-            return
+            estado["dados"] = dados  # persistência
+            return  # 👈 quem envia o menu é a etapa 'babycake'
+
 
         # 5️⃣ Tortas
         if t in ["5", "torta", "tortas"]:
@@ -512,15 +511,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             return
         
     # ====== ETAPA BABY CAKE ======
+    # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
 
-        # Evita reenvio duplicado do menu inicial
-        if not subetapa and texto in ["4", "baby", "baby cake", "individual", "babycake"]:
+        # Ignora reenvio do próprio "4"
+        if not subetapa and txt_atual in ["4", "baby", "baby cake", "individual", "babycake"]:
             print(f"⚠️ Ignorado reenvio duplicado de menu Baby Cake ({telefone})")
             return
 
-        # Primeira entrada — exibe o menu de sabores
+        # Primeira entrada — exibe o menu
         if not subetapa:
             dados["subetapa"] = "sabor"
             estado["dados"] = dados
@@ -537,18 +537,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
         # Escolha do sabor
         if subetapa == "sabor":
-            s = (texto or "").strip()
-            if s not in ["1", "2"]:
+            if txt_atual not in ["1", "2"]:
                 await responder_usuario(telefone, "⚠️ Opção inválida. Digite *1* ou *2*.")
                 return
 
             sabor = (
                 "Branco com Doce de Leite e Creme Mágico (chocolate branco)"
-                if s == "1"
+                if txt_atual == "1"
                 else "Branco com Belga e Creme Mágico (chocolate branco)"
             )
 
-            # Salva e avança
             dados["sabor"] = sabor
             dados["subetapa"] = None
             estado["dados"] = dados
@@ -560,6 +558,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 "Se não quiser, digite *não*."
             )
             return
+
 
 
     # ====== ETAPA BABY CAKE – FRASE ======
