@@ -213,12 +213,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     """
     etapa = estado["etapa"]
     dados = estado.setdefault("dados", {})
-    # ====== ANTI-DUPLICAÇÃO DE MENSAGENS ======
-    txt_atual = (texto or "").strip()
-    if estado.get("ultima_mensagem") == txt_atual:
-        print(f"⚠️ Ignorado texto repetido '{txt_atual}' de {telefone}")
-        return
-    estado["ultima_mensagem"] = txt_atual
 
     # ====== ETAPA 1 – ESCOLHA DA LINHA ======
     if etapa == 1:
