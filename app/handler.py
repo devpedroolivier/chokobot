@@ -172,7 +172,18 @@ async def processar_mensagem(mensagem: dict):
             "3️⃣ Cardápio Doces"
         )
         return
-
+    
+     # ⚙️ Evita reiniciar o fluxo de encomenda se o cliente já estiver em andamento
+    if telefone in estados_encomenda:
+        estado_atual = estados_encomenda[telefone]
+        etapa_atual = estado_atual.get("etapa")
+        print(f"⚙️ Fluxo ativo detectado para {telefone}: etapa {etapa_atual}")
+        resultado = await processar_encomenda(telefone, texto, estado_atual, nome_cliente)
+        estados_encomenda[telefone] = estado_atual
+        if resultado == "finalizar":
+            estados_encomenda.pop(telefone, None)
+        return
+    
     elif texto in ["3", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
         estados_encomenda[telefone] = {"etapa": 1, "dados": {}}
         await responder_usuario(
