@@ -265,6 +265,15 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["linha"] = "babycake"
             dados["linha"] = "babycake"
             estado["etapa"] = "babycake"
+            await responder_usuario(
+                telefone,
+                "🧁 *Linha Individual Baby Cake*\n\n"
+                "📏 Tamanho individual (~300g)\n\n"
+                "Opções de sabores:\n"
+                "1️⃣ Branco com Doce de Leite e Creme Mágico (chocolate branco)\n"
+                "2️⃣ Branco com Belga e Creme Mágico (chocolate branco)\n\n"
+                "📝 Digite *1* ou *2* para escolher o sabor."
+            )
             return
 
         # 5️⃣ Tortas
