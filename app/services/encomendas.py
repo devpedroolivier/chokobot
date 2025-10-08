@@ -355,14 +355,17 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "gourmet_ingles"
             await responder_usuario(
                 telefone,
-                "🇬🇧 *Bolos Gourmet – Linha Inglês*\n\n"
-                "Sabores disponíveis:\n"
-                "- Língua de Gato (Chocolate ou Branco)\n"
-                "- Belga\n"
-                "- Ninho com Morango\n"
-                "- Red Velvet\n\n"
-                "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *nome do bolo inglês* desejado:"
+                "🇬🇧 *Linha Gourmet – Formato Inglês*\n\n"
+                "Sabores e preços (~serve 10 pessoas):\n"
+                "• Belga — R$130\n"
+                "• Floresta Negra — R$140\n"
+                "• Língua de Gato — R$130\n"
+                "• Ninho com Morango — R$140\n"
+                "• Nozes com Doce de Leite — R$140\n"
+                "• Olho de Sogra — R$120\n"
+                "• Red Velvet — R$120\n\n"
+                "📷 Fotos/preços: https://keepo.io/boloschoko/\n"
+                "📝 Digite o *nome do bolo inglês* desejado exatamente como acima."
             )
             return
 
@@ -371,11 +374,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "gourmet_redondo"
             await responder_usuario(
                 telefone,
-                "🎂 *Bolos Gourmet – Linha Redondo P6*\n\n"
-                "Sabores disponíveis:\n"
-                "- Belga\n- Floresta Negra\n- Ninho com Morango\n- Nozes com Doce de Leite\n- Olho de Sogra\n\n"
-                "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *nome do bolo redondo* desejado:"
+                "🎂 *Linha Gourmet – Redondo P6 (~serve 20 pessoas)*\n\n"
+                "Sabores e preços:\n"
+                "• Língua de Gato de Chocolate — R$165\n"
+                "• Língua de Gato de Chocolate Branco — R$165\n"
+                "• Língua de Gato Branco Camafeu — R$175\n"
+                "• Belga — R$180\n"
+                "• Naked Cake — R$175\n"
+                "• Red Velvet — R$220\n\n"
+                "📷 Fotos/preços: https://keepo.io/boloschoko/\n"
+                "📝 Digite o *nome do bolo redondo* desejado exatamente como acima."
             )
             return
 
@@ -437,29 +445,40 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         return
 
     # ====== ETAPA GOURMET/REDONDO/TORTA – CAPTURA PRODUTO ======
-    # ====== ETAPA GOURMET/REDONDO/TORTA – CAPTURA PRODUTO ======
     if etapa in ["gourmet", "gourmet_ingles", "gourmet_redondo"]:
         linha = estado.get("linha")
-        sub_linha = dados.get("sub_linha")  # pode ser ingles ou redondo
+        sub_linha = dados.get("sub_linha")  # ingles ou redondo
         produto = _normaliza_produto(linha, texto)
 
         if not produto:
-            # Mensagem específica conforme o tipo de bolo
             if sub_linha == "ingles":
-                msg_lista = "Língua de Gato, Belga, Ninho com Morango, Red Velvet"
+                msg_lista = (
+                    "Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                    "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
+                )
             elif sub_linha == "redondo":
-                msg_lista = "Belga, Floresta Negra, Ninho com Morango, Nozes com Doce de Leite, Olho de Sogra"
+                msg_lista = (
+                    "Língua de Gato de Chocolate, Língua de Gato de Chocolate Branco, "
+                    "Língua de Gato Branco Camafeu, Belga, Naked Cake, Red Velvet"
+                )
             elif linha == "torta":
-                msg_lista = "Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão"
+                msg_lista = (
+                    "Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão"
+                )
             else:
-                msg_lista = "Belga, Floresta Negra, Língua de Gato, Ninho com Morango, Nozes com Doce de Leite, Red Velvet"
+                msg_lista = (
+                    "Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                    "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
+                )
 
             await responder_usuario(
                 telefone,
-                f"⚠️ Produto não reconhecido. Tente novamente.\nSugestões: {msg_lista}"
+                f"⚠️ Bolo não reconhecido. Tente novamente.\n"
+                f"Sugestões: {msg_lista}"
             )
             return
 
+        # Salva o bolo escolhido e continua o fluxo
         dados["produto"] = produto
         estado["etapa"] = "data_entrega"
         await responder_usuario(
@@ -468,7 +487,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
-    
+
     # ====== ETAPA MESVERSÁRIO / REVELAÇÃO ======
     if etapa == "mesversario":
         # Obter subetapa atual
@@ -783,9 +802,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
-
-
-
     # ====== ETAPA 6 – RETIRADA OU ENTREGA ======
     if etapa == 6:
         t = (texto or "").strip().lower()
@@ -912,7 +928,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
-    # ====== CONFIRMAÇÃO DO PEDIDO (retirada e pronta-entrega) ======
     # ====== CONFIRMAÇÃO DO PEDIDO (retirada e pronta-entrega) ======
     if etapa == "confirmar_pedido":
         opc = (texto or "").strip().lower()
