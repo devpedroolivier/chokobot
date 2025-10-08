@@ -514,10 +514,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     # ====== ETAPA BABY CAKE ======
         # ====== ETAPA BABY CAKE ======
         # ====== ETAPA BABY CAKE ======
+        # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
 
-        # 🔹 Primeira entrada
+        # Primeira entrada
         if not subetapa:
             dados["subetapa"] = "sabor"
             estado["dados"] = dados
@@ -532,7 +533,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # 🔹 Escolha de sabor
+        # Escolha de sabor
         if subetapa == "sabor":
             s = (texto or "").strip()
             if s not in ["1", "2"]:
@@ -546,8 +547,9 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
 
             dados["sabor"] = sabor
-            dados["subetapa"] = "frase"
+            dados["subetapa"] = None
             estado["dados"] = dados
+            estado["etapa"] = "babycake_frase"  # 👈 define nova etapa para não repetir
             await responder_usuario(
                 telefone,
                 "✍️ Deseja adicionar uma *frase personalizada* no bolo?\n"
@@ -556,23 +558,21 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # 🔹 Frase personalizada → vai direto para data
-        if subetapa == "frase":
-            frase = (texto or "").strip()
-            if frase.lower() not in ["", "não", "nao", "sem frase"]:
-                dados["frase"] = frase
-            else:
-                dados["frase"] = None
+    # ====== ETAPA BABY CAKE – FRASE ======
+    if etapa == "babycake_frase":
+        frase = (texto or "").strip()
+        if frase.lower() not in ["", "não", "nao", "sem frase"]:
+            dados["frase"] = frase
+        else:
+            dados["frase"] = None
 
-            # avança direto para data
-            dados["subetapa"] = None
-            estado["dados"] = dados
-            estado["etapa"] = "data_entrega"
-            await responder_usuario(
-                telefone,
-                "📆 Informe a *data de entrega* (DD/MM/AAAA):"
-            )
-            return
+        estado["dados"] = dados
+        estado["etapa"] = "data_entrega"  # 👈 avança direto
+        await responder_usuario(
+            telefone,
+            "📆 Informe a *data de entrega* (DD/MM/AAAA):"
+        )
+        return
 
     # ====== MONTA PEDIDO FINAL MESVERSÁRIO ======
     if dados.get("linha") == "mesversario" and etapa == 6:
