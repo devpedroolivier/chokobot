@@ -261,10 +261,12 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             return
 
         # 4️⃣ Linha Individual Baby Cake
+        # 4️⃣ Linha Individual Baby Cake
         if t in ["4", "individual", "baby cake", "babycake"]:
             estado["linha"] = "babycake"
             dados["linha"] = "babycake"
             estado["etapa"] = "babycake"
+            estado["dados"] = dados  # 👈 apenas muda o estado, sem enviar nada aqui
             await responder_usuario(
                 telefone,
                 "🧁 *Linha Individual Baby Cake*\n\n"
@@ -510,6 +512,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "data_entrega"
             await responder_usuario(telefone, "📆 Informe a *data da festa* (DD/MM/AAAA):")
             return
+        
     # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
