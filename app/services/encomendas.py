@@ -247,51 +247,51 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # ====== ETAPA GOURMET_TIPO ======
-        if etapa == "gourmet_tipo":
-            if texto.strip() == "1":
-                estado["linha"] = "gourmet"
-                dados["linha"] = "gourmet"
-                estado["etapa"] = "gourmet_nome"
-                estado["dados"] = dados
-                await responder_usuario(
-                    telefone,
-                    "✨ *Linha Gourmet – Estilo Inglês (tamanho ~10 fatias)*\n"
-                    "🍫 Belga — R$130\n"
-                    "🍒 Floresta Negra — R$140\n"
-                    "🍫 Língua de Gato — R$130\n"
-                    "🍓 Ninho com Morango — R$140\n"
-                    "🥜 Nozes com Doce de Leite — R$140\n"
-                    "👁️ Olho de Sogra — R$120\n"
-                    "❤️ Red Velvet — R$120\n\n"
-                    "📝 Digite exatamente o nome do bolo desejado:"
-                )
-                return
+            # ====== ETAPA GOURMET_TIPO ======
+            if etapa == "gourmet_tipo":
+                if texto.strip() == "1":
+                    estado["linha"] = "gourmet"
+                    dados["linha"] = "gourmet"
+                    estado["etapa"] = "gourmet_nome"
+                    estado["dados"] = dados
+                    await responder_usuario(
+                        telefone,
+                        "✨ *Linha Gourmet – Estilo Inglês (tamanho ~10 fatias)*\n"
+                        "🍫 Belga — R$130\n"
+                        "🍒 Floresta Negra — R$140\n"
+                        "🍫 Língua de Gato — R$130\n"
+                        "🍓 Ninho com Morango — R$140\n"
+                        "🥜 Nozes com Doce de Leite — R$140\n"
+                        "👁️ Olho de Sogra — R$120\n"
+                        "❤️ Red Velvet — R$120\n\n"
+                        "📝 Digite exatamente o nome do bolo desejado:"
+                    )
+                    return
 
-            elif texto.strip() == "2":
-                estado["linha"] = "redondo"
-                dados["linha"] = "redondo"
-                estado["etapa"] = "gourmet_nome"
-                estado["dados"] = dados
-                await responder_usuario(
-                    telefone,
-                    "🎂 *Linha Redonda (P6 – serve 20 pessoas)*\n"
-                    "🍫 Língua de Gato de Chocolate — R$165\n"
-                    "🍫 Língua de Gato de Chocolate Branco — R$165\n"
-                    "🍫 Branco Camafeu — R$175\n"
-                    "🍫 Belga — R$180\n"
-                    "🍰 Naked Cake — R$175\n"
-                    "❤️ Red Velvet — R$220\n\n"
-                    "📝 Digite exatamente o nome do bolo desejado:"
-                )
-                return
+                elif texto.strip() == "2":
+                    estado["linha"] = "redondo"
+                    dados["linha"] = "redondo"
+                    estado["etapa"] = "gourmet_nome"
+                    estado["dados"] = dados
+                    await responder_usuario(
+                        telefone,
+                        "🎂 *Linha Redonda (P6 – serve 20 pessoas)*\n"
+                        "🍫 Língua de Gato de Chocolate — R$165\n"
+                        "🍫 Língua de Gato de Chocolate Branco — R$165\n"
+                        "🍫 Branco Camafeu — R$175\n"
+                        "🍫 Belga — R$180\n"
+                        "🍰 Naked Cake — R$175\n"
+                        "❤️ Red Velvet — R$220\n\n"
+                        "📝 Digite exatamente o nome do bolo desejado:"
+                    )
+                    return
 
-            else:
-                await responder_usuario(
-                    telefone,
-                    "⚠️ Opção inválida. Digite *1* para Inglês ou *2* para Redondo."
-                )
-                return
+                else:
+                    await responder_usuario(
+                        telefone,
+                        "⚠️ Opção inválida. Digite *1* para Inglês ou *2* para Redondo."
+                    )
+                    return
 
         # ====== ETAPA GOURMET_NOME ======
         if etapa == "gourmet_nome":
