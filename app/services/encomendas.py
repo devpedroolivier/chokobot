@@ -510,17 +510,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             estado["etapa"] = "data_entrega"
             await responder_usuario(telefone, "📆 Informe a *data da festa* (DD/MM/AAAA):")
             return
-
     # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
 
-        # Evita reenvio duplicado do menu (caso o cliente digite 4 novamente)
+        # Evita reenvio duplicado do menu inicial
         if not subetapa and texto in ["4", "baby", "baby cake", "individual", "babycake"]:
             print(f"⚠️ Ignorado reenvio duplicado de menu Baby Cake ({telefone})")
             return
 
-        # Primeira entrada — mostra o menu de sabores
+        # Primeira entrada — exibe o menu de sabores
         if not subetapa:
             dados["subetapa"] = "sabor"
             estado["dados"] = dados
@@ -548,10 +547,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 else "Branco com Belga e Creme Mágico (chocolate branco)"
             )
 
+            # Salva e avança
             dados["sabor"] = sabor
             dados["subetapa"] = None
             estado["dados"] = dados
-            estado["etapa"] = "babycake_frase"  # 👈 próxima etapa
+            estado["etapa"] = "babycake_frase"
             await responder_usuario(
                 telefone,
                 "✍️ Deseja adicionar uma *frase personalizada* no bolo?\n"
@@ -560,31 +560,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-
-        # Escolha de sabor
-        if subetapa == "sabor":
-            s = (texto or "").strip()
-            if s not in ["1", "2"]:
-                await responder_usuario(telefone, "⚠️ Opção inválida. Digite *1* ou *2*.")
-                return
-
-            sabor = (
-                "Branco com Doce de Leite e Creme Mágico"
-                if s == "1"
-                else "Branco com Belga e Creme Mágico"
-            )
-
-            dados["sabor"] = sabor
-            dados["subetapa"] = None
-            estado["dados"] = dados
-            estado["etapa"] = "babycake_frase"  # 👈 define nova etapa para não repetir
-            await responder_usuario(
-                telefone,
-                "✍️ Deseja adicionar uma *frase personalizada* no bolo?\n"
-                "Exemplo: 'Feliz Aniversário!' ou 'Te amo, mãe!'\n"
-                "Se não quiser, digite *não*."
-            )
-            return
 
     # ====== ETAPA BABY CAKE – FRASE ======
     if etapa == "babycake_frase":
