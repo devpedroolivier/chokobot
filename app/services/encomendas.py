@@ -260,14 +260,12 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-       # 4️⃣ Linha Individual Baby Cake
+        # 4️⃣ Linha Individual Baby Cake
         if t in ["4", "individual", "baby cake", "babycake"]:
             estado["linha"] = "babycake"
             dados["linha"] = "babycake"
             estado["etapa"] = "babycake"
-            estado["dados"] = dados  # garante persistência
-            return  # 👈 não envia mensagem aqui — quem envia é a etapa babycake
-
+            return
 
         # 5️⃣ Tortas
         if t in ["5", "torta", "tortas"]:
