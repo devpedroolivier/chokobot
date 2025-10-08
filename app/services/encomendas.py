@@ -512,12 +512,14 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             return
 
     # ====== ETAPA BABY CAKE ======
+        # ====== ETAPA BABY CAKE ======
     if etapa == "babycake":
         subetapa = dados.get("subetapa")
 
         # Primeira entrada
         if not subetapa:
             dados["subetapa"] = "sabor"
+            estado["dados"] = dados  # ✅ salva a etapa no estado global
             await responder_usuario(
                 telefone,
                 "🧁 *Linha Individual Baby Cake*\n\n"
@@ -535,6 +537,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             if s not in ["1", "2"]:
                 await responder_usuario(telefone, "⚠️ Opção inválida. Digite *1* ou *2*.")
                 return
+
             sabor = (
                 "Branco com Doce de Leite e Creme Mágico"
                 if s == "1"
@@ -542,6 +545,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             dados["sabor"] = sabor
             dados["subetapa"] = "frase"
+            estado["dados"] = dados  # ✅ salva antes de retornar
             await responder_usuario(
                 telefone,
                 "✍️ Deseja adicionar uma *frase personalizada* no bolo?\n"
@@ -558,6 +562,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             else:
                 dados["frase"] = None
             dados["subetapa"] = "modelo"
+            estado["dados"] = dados  # ✅ salva antes de enviar
             await responder_usuario(
                 telefone,
                 "📸 Se possível, envie uma *foto de modelo* (opcional) ou digite *pular*."
@@ -570,11 +575,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 dados["modelo"] = texto.strip()
             estado["etapa"] = "data_entrega"
             dados["subetapa"] = None
+            estado["dados"] = dados  # ✅ salva antes de avançar
             await responder_usuario(
                 telefone,
                 "📆 Informe a *data de entrega* (DD/MM/AAAA):"
             )
             return
+
     # ====== MONTA PEDIDO FINAL MESVERSÁRIO ======
     if dados.get("linha") == "mesversario" and etapa == 6:
         pedido = {
