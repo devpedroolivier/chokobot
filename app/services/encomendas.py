@@ -218,7 +218,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     if etapa == 1:
         t = (texto or "").strip().lower()
 
-        # 1️⃣ Monte seu bolo
+              # 1️⃣ Monte seu bolo
         if t in ["1", "monte seu bolo", "normal", "personalizado"]:
             estado["linha"] = "normal"
             dados["linha"] = "normal"
@@ -230,7 +230,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-            # 2️⃣ Linha Gourmet (Inglês e Redondo)
+        # 2️⃣ Linha Gourmet (Inglês e Redondo)
         if t in ["2", "gourmet", "ingles", "redondo", "p6"]:
             estado["linha"] = "gourmet"
             dados["linha"] = "gourmet"
@@ -246,72 +246,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 "📝 Digite *1* para Inglês ou *2* para Redondo."
             )
             return
-
-            # ====== ETAPA GOURMET_TIPO ======
-            if etapa == "gourmet_tipo":
-                if texto.strip() == "1":
-                    estado["linha"] = "gourmet"
-                    dados["linha"] = "gourmet"
-                    estado["etapa"] = "gourmet_nome"
-                    estado["dados"] = dados
-                    await responder_usuario(
-                        telefone,
-                        "✨ *Linha Gourmet – Estilo Inglês (tamanho ~10 fatias)*\n"
-                        "🍫 Belga — R$130\n"
-                        "🍒 Floresta Negra — R$140\n"
-                        "🍫 Língua de Gato — R$130\n"
-                        "🍓 Ninho com Morango — R$140\n"
-                        "🥜 Nozes com Doce de Leite — R$140\n"
-                        "👁️ Olho de Sogra — R$120\n"
-                        "❤️ Red Velvet — R$120\n\n"
-                        "📝 Digite exatamente o nome do bolo desejado:"
-                    )
-                    return
-
-                elif texto.strip() == "2":
-                    estado["linha"] = "redondo"
-                    dados["linha"] = "redondo"
-                    estado["etapa"] = "gourmet_nome"
-                    estado["dados"] = dados
-                    await responder_usuario(
-                        telefone,
-                        "🎂 *Linha Redonda (P6 – serve 20 pessoas)*\n"
-                        "🍫 Língua de Gato de Chocolate — R$165\n"
-                        "🍫 Língua de Gato de Chocolate Branco — R$165\n"
-                        "🍫 Branco Camafeu — R$175\n"
-                        "🍫 Belga — R$180\n"
-                        "🍰 Naked Cake — R$175\n"
-                        "❤️ Red Velvet — R$220\n\n"
-                        "📝 Digite exatamente o nome do bolo desejado:"
-                    )
-                    return
-
-                else:
-                    await responder_usuario(
-                        telefone,
-                        "⚠️ Opção inválida. Digite *1* para Inglês ou *2* para Redondo."
-                    )
-                    return
-
-        # ====== ETAPA GOURMET_NOME ======
-        if etapa == "gourmet_nome":
-            produto = _normaliza_produto(estado.get("linha"), texto)
-            if not produto:
-                await responder_usuario(
-                    telefone,
-                    "⚠️ Não encontrei esse bolo no cardápio. Tente novamente digitando exatamente como aparece no menu."
-                )
-                return
-
-            dados["produto"] = produto
-            estado["etapa"] = "data_entrega"
-            await responder_usuario(
-                telefone,
-                "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
-            )
-            return
-
-
 
         # 3️⃣ Linha Mesversário ou Revelação
         if t in ["3", "mesversario", "mesversário", "revelacao", "revelação"]:
@@ -336,7 +270,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             dados["subetapa"] = "sabor"
             estado["dados"] = dados
 
-            # 🔹 Atualiza o estado global antes de responder
             from app.services.estados import estados_encomenda
             estados_encomenda[telefone] = estado
 
@@ -350,8 +283,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 "📝 Digite *1* ou *2* para escolher o sabor."
             )
             return
-
-
 
         # 5️⃣ Tortas
         if t in ["5", "torta", "tortas"]:
@@ -377,6 +308,71 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "5️⃣ Tortas"
         )
         return
+
+    # ====== ETAPA GOURMET_TIPO ======
+    if etapa == "gourmet_tipo":
+        if texto.strip() == "1":
+            estado["linha"] = "gourmet"
+            dados["linha"] = "gourmet"
+            estado["etapa"] = "gourmet_nome"
+            estado["dados"] = dados
+            await responder_usuario(
+                telefone,
+                "✨ *Linha Gourmet – Estilo Inglês (tamanho ~10 fatias)*\n"
+                "🍫 Belga — R$130\n"
+                "🍒 Floresta Negra — R$140\n"
+                "🍫 Língua de Gato — R$130\n"
+                "🍓 Ninho com Morango — R$140\n"
+                "🥜 Nozes com Doce de Leite — R$140\n"
+                "👁️ Olho de Sogra — R$120\n"
+                "❤️ Red Velvet — R$120\n\n"
+                "📝 Digite exatamente o nome do bolo desejado:"
+            )
+            return
+
+        elif texto.strip() == "2":
+            estado["linha"] = "redondo"
+            dados["linha"] = "redondo"
+            estado["etapa"] = "gourmet_nome"
+            estado["dados"] = dados
+            await responder_usuario(
+                telefone,
+                "🎂 *Linha Redonda (P6 – serve 20 pessoas)*\n"
+                "🍫 Língua de Gato de Chocolate — R$165\n"
+                "🍫 Língua de Gato de Chocolate Branco — R$165\n"
+                "🍫 Branco Camafeu — R$175\n"
+                "🍫 Belga — R$180\n"
+                "🍰 Naked Cake — R$175\n"
+                "❤️ Red Velvet — R$220\n\n"
+                "📝 Digite exatamente o nome do bolo desejado:"
+            )
+            return
+
+        else:
+            await responder_usuario(
+                telefone,
+                "⚠️ Opção inválida. Digite *1* para Inglês ou *2* para Redondo."
+            )
+            return
+
+    # ====== ETAPA GOURMET_NOME ======
+    if etapa == "gourmet_nome":
+        produto = _normaliza_produto(estado.get("linha"), texto)
+        if not produto:
+            await responder_usuario(
+                telefone,
+                "⚠️ Não encontrei esse bolo no cardápio. Tente novamente digitando exatamente como aparece no menu."
+            )
+            return
+
+        dados["produto"] = produto
+        estado["etapa"] = "data_entrega"
+        await responder_usuario(
+            telefone,
+            "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
+        )
+        return
+
 
 
     # ====== ETAPA 2 – MASSA ======
