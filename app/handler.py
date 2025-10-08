@@ -145,8 +145,11 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    if texto in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
-        estados_encomenda[telefone] = {"etapa": 1, "dados": {}}
+    elif texto in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
+        estados_encomenda[telefone] = {
+            "etapa": "pronta_item",
+            "dados": {"linha": "pronta_entrega"}
+        }
         await responder_usuario(
             telefone,
             "📦 *Pronta entrega de hoje:*\n\n"
@@ -157,6 +160,7 @@ async def processar_mensagem(mensagem: dict):
             "📝 Digite *B3* ou *B4*"
         )
         return
+
 
     elif texto in ["2", "cardápio", "cardapio", "cardapios"]:
         estados_cafeteria[telefone] = {"subetapa": "aguardando_cardapio"}
