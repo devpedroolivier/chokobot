@@ -218,24 +218,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     if etapa == 1:
         t = (texto or "").strip().lower()
 
-        # 1️⃣ Pronta Entrega
-        if t in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
-            estado["linha"] = "pronta_entrega"
-            dados["linha"] = "pronta_entrega"
-            estado["etapa"] = "pronta_item"
-            await responder_usuario(
-                telefone,
-                "📦 *Pronta entrega de hoje:*\n\n"
-                "🎂 Mesclado de Brigadeiro com Ninho\n\n"
-                "B3 (até 15 pessoas) — R$120\n"
-                "B4 (até 30 pessoas) — R$180\n\n"
-                "Adicione +R$35 e leve o *Kit Festou* 🎉 (25 brigadeiros + 1 Balão personalizado)\n\n"
-                "📝 Digite *B3* ou *B4*"
-            )
-            return
-
-        # 2️⃣ Monte seu bolo
-        if t in ["2", "monte seu bolo", "normal", "personalizado"]:
+        # 1️⃣ Monte seu bolo
+        if t in ["1", "monte seu bolo", "normal", "personalizado"]:
             estado["linha"] = "normal"
             dados["linha"] = "normal"
             estado["etapa"] = 2
@@ -246,8 +230,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # 3️⃣ Linha Gourmet (Inglês e Redondo)
-        if t in ["3", "gourmet", "ingles", "redondo", "p6"]:
+        # 2️⃣ Linha Gourmet (Inglês e Redondo)
+        if t in ["2", "gourmet", "ingles", "redondo", "p6"]:
             estado["linha"] = "gourmet"
             dados["linha"] = "gourmet"
             estado["etapa"] = "gourmet"
@@ -261,12 +245,12 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-                # 4️⃣ Linha Mesversário ou Revelação
-        if t in ["4", "mesversario", "mesversário", "revelacao", "revelação"]:
+        # 3️⃣ Linha Mesversário ou Revelação
+        if t in ["3", "mesversario", "mesversário", "revelacao", "revelação"]:
             estado["linha"] = "mesversario"
             dados["linha"] = "mesversario"
-            estado["etapa"] = "mesversario"  # 🔹 aponta para o novo fluxo personalizado
-            dados["subetapa"] = "tamanho"   # define já aqui
+            estado["etapa"] = "mesversario"  # 🔹 fluxo personalizado
+            dados["subetapa"] = "tamanho"
             await responder_usuario(
                 telefone,
                 "🎉 *Linha Mesversário, Personalizados e Chá Revelação!*\n\n"
@@ -276,11 +260,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-        # 5️⃣ Linha Individual Baby Cake
-        if t in ["5", "individual", "baby cake", "babycake"]:
+        # 4️⃣ Linha Individual Baby Cake
+        if t in ["4", "individual", "baby cake", "babycake"]:
             estado["linha"] = "babycake"
             dados["linha"] = "babycake"
-            estado["etapa"] = "babycake"  # 🔹 novo fluxo independente
+            estado["etapa"] = "babycake"
             await responder_usuario(
                 telefone,
                 "🧁 *Linha Individual Baby Cake*\n\n"
@@ -292,9 +276,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
-
-        # 6️⃣ Tortas
-        if t in ["6", "torta", "tortas"]:
+        # 5️⃣ Tortas
+        if t in ["5", "torta", "tortas"]:
             estado["linha"] = "torta"
             dados["linha"] = "torta"
             estado["etapa"] = "gourmet"
@@ -316,7 +299,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "4️⃣ Linha Individual Baby Cake\n"
             "5️⃣ Tortas"
         )
-
         return
 
 
