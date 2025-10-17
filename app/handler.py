@@ -58,11 +58,13 @@ async def processar_mensagem(mensagem: dict):
                 "2️⃣ Ver cardápios\n"
                 "3️⃣ Encomendar bolos ou tortas\n"
                 "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Entregas 🚚"
+                "5️⃣ Entregas 🚚\n"
+                "6️⃣ Falar com atendente 👩‍🍳"
             )
         else:
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
         return
+
 
     if texto in CANCELAR_OPCOES:
         if telefone in estados_encomenda:
@@ -89,9 +91,11 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Ver cardápios\n"
             "3️⃣ Encomendar bolos ou tortas\n"
             "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚"
+            "5️⃣ Entregas 🚚\n"
+            "6️⃣ Falar com atendente 👩‍🍳"
         )
         return
+
 
     if telefone in estados_entrega:
         estado = estados_entrega[telefone]
@@ -114,6 +118,7 @@ async def processar_mensagem(mensagem: dict):
         estado = estados_cafeteria[telefone]
         resultado = await processar_cafeteria(telefone, texto, estado)
         estados_cafeteria[telefone] = estado
+
         if resultado == "voltar_menu":
             estados_cafeteria.pop(telefone, None)
             await responder_usuario(
@@ -123,11 +128,15 @@ async def processar_mensagem(mensagem: dict):
                 "2️⃣ Ver cardápios\n"
                 "3️⃣ Encomendar bolos ou tortas\n"
                 "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Entregas 🚚"
+                "5️⃣ Entregas 🚚\n"
+                "6️⃣ Falar com atendente 👩‍🍳"
             )
+
         elif resultado == "finalizar":
             estados_cafeteria.pop(telefone, None)
+
         return
+
 
     salvar_cliente(telefone, nome_cliente)
 
@@ -141,9 +150,11 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Ver cardápios\n"
             "3️⃣ Encomendar bolos ou tortas\n"
             "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚"
+            "5️⃣ Entregas 🚚\n"
+            "6️⃣ Falar com atendente 👩‍🍳"
         )
         return
+
 
     elif texto in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
         estados_encomenda[telefone] = {
