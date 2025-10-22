@@ -231,4 +231,5 @@ async def processar_mensagem(mensagem: dict):
             "3️⃣ Encomendar bolos ou tortas\n"
             "4️⃣ Pedidos Delivery Cafeteria\n"
             "5️⃣ Entregas 🚚"
+            "6️⃣ Falar com atendente 👩‍🍳"
         )
