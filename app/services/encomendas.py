@@ -370,8 +370,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
-
-    # ====== ETAPA 3 – RECHEIO + MOUSSE ======
     # ====== ETAPA 3 – RECHEIO + MOUSSE ======
     if etapa == 3:
         texto_limpo = (texto or "").strip()
@@ -763,20 +761,23 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     if etapa == "simples_cobertura":
         escolha = (texto or "").strip().lower()
-        coberturas = {"1": ("Vulcão", 35.0), "2": ("Simples", 25.0)}
+        coberturas = {"1": "Vulcão", "2": "Simples"}
+
         if escolha not in coberturas:
             await responder_usuario(telefone, "⚠️ Escolha inválida. Digite *1* (Vulcão) ou *2* (Simples).")
             return
 
-        cobertura, preco = coberturas[escolha]
+        cobertura = coberturas[escolha]
+
+        # 🔹 Calcula preço direto pelo módulo de preços
         from app.services.precos import calcular_preco_simples
         preco = calcular_preco_simples(cobertura)
+
         dados["cobertura"] = cobertura
         dados["valor_total"] = preco
         dados["serve_pessoas"] = 8
         dados["categoria"] = "simples"
 
-        # Monta pedido final
         pedido = {
             "categoria": "simples",
             "sabor": dados["sabor"],
@@ -791,10 +792,17 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         dados["pedido_preview"] = pedido
         estado["etapa"] = "confirmar_pedido"
 
-        await responder_usuario(telefone, montar_resumo(pedido, preco))
         await responder_usuario(
             telefone,
-            "Está tudo correto?\n1️⃣ Confirmar pedido\n2️⃣ Corrigir\n3️⃣ Falar com atendente"
+            f"🍰 *Resumo do seu bolo simples:*\n"
+            f"Sabor: {dados['sabor']}\n"
+            f"Cobertura: {cobertura}\n"
+            f"Serve 8 fatias\n"
+            f"💰 *Total: R${preco:.2f}*"
+        )
+        await responder_usuario(
+            telefone,
+            "Está tudo correto?\n1️⃣ Confirmar pedido\n2️⃣ Corrigir"
         )
         return
 
@@ -1169,7 +1177,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
-
     # ====== ETAPA PAGAMENTO – ESCOLHER FORMA ======
     if etapa == "pagamento_forma":
         escolha = texto.strip()
@@ -1191,7 +1198,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento(forma, 0))
             await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
             return
-
 
     # ====== ETAPA PAGAMENTO – TROCO ======
     if etapa == "pagamento_troco":

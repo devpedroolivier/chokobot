@@ -397,35 +397,51 @@ def _doces_bloco(pedido: dict) -> tuple[str, float]:
 def montar_resumo(pedido: dict, total_bolo: float) -> str:
     data = pedido.get("data_entrega", "")
     hora = pedido.get("horario_retirada", "")
-    cat  = pedido.get("categoria")
+    cat = pedido.get("categoria", "").lower()
 
     linhas = []
+
+    # ====== LINHA TRADICIONAL ======
     if cat == "tradicional":
         desc = f'{pedido.get("tamanho","")} {pedido.get("descricao","")}'.strip()
         if pedido.get("fruta_ou_nozes"):
             desc += f' + {pedido["fruta_ou_nozes"]}'
         linhas.append(f"- {desc}")
+
+    # ====== LINHA EMBRULHADO ======
     elif cat == "embrulhado":
         ped = pedido.get("pedacos", "")
         linhas.append(f'- Bolo embrulhado ({ped} pedaços)')
+
+    # ====== LINHA SIMPLES ======
+    elif cat == "simples":
+        sabor = pedido.get("sabor", "")
+        cobertura = pedido.get("cobertura", "")
+        linhas.append(f"- Bolo Simples ({sabor}) com cobertura {cobertura}")
+        linhas.append("Serve 8 fatias")
+
+    # ====== OUTRAS LINHAS (gourmet, torta, etc.) ======
     else:
         if pedido.get("produto"):
             cat_nome = pedido.get("categoria", "").capitalize()
             linhas.append(f'- {cat_nome} {pedido["produto"]}')
 
-
+    # ====== KIT FESTOU ======
     if pedido.get("kit_festou"):
-        linhas.append(f"+ Kit Festou (25 brigadeiros + 1 Balão 🎈 personalizado) — R${KIT_FESTOU_PRECO:.0f}")
+        linhas.append("🎉 + Kit Festou (25 brigadeiros + 1 balão 🎈 personalizado) — R$35")
 
+    # ====== MULTIPLICADOR DE QUANTIDADE ======
     q = int(pedido.get("quantidade", 1))
     if q > 1 and linhas:
-        linhas[-1] = linhas[-1] + f"  x{q}"
+        linhas[-1] = linhas[-1] + f" ×{q}"
 
     itens_txt = "\n".join(linhas)
 
+    # ====== BLOCO DE DOCES ======
     doces_txt, total_doces = _doces_bloco(pedido)
     total_geral = total_bolo + total_doces
 
+    # ====== CORPO DO RESUMO ======
     if pedido.get("modo_recebimento") == "entrega":
         corpo = [
             "✅ *Resumo do pedido*",
@@ -444,10 +460,10 @@ def montar_resumo(pedido: dict, total_bolo: float) -> str:
             itens_txt,
         ]
 
+    # ====== TOTAIS ======
     if doces_txt:
         corpo.append(doces_txt)
 
-        # >>> NOVO: adiciona forminhas, se existirem <<<
         if pedido.get("doces_forminha"):
             corpo.append(f"🎨 Forminhas: {', '.join(pedido['doces_forminha'])}")
 
@@ -465,3 +481,4 @@ def montar_resumo(pedido: dict, total_bolo: float) -> str:
         ]
 
     return "\n".join(corpo)
+
