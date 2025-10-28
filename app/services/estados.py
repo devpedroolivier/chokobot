@@ -13,3 +13,19 @@ estados_entrega: dict = {}
 # 🔹 Novo: clientes em atendimento humano (bot silencioso)
 # Exemplo de valor: {"inicio": datetime, "nome": "Cliente"}
 estados_atendimento: dict = {}
+
+# ====== PAGAMENTO ======
+
+# Subestados do fluxo de pagamento
+SUBESTADO_FORMA_PAGAMENTO = "AGUARDANDO_FORMA_PAGAMENTO"
+SUBESTADO_TROCO = "AGUARDANDO_TROCO"
+
+# Opções disponíveis de forma de pagamento
+FORMAS_PAGAMENTO = {
+    "1": "PIX",
+    "2": "Cartão (débito/crédito)",
+    "3": "Dinheiro",
+}
+
+# ====== CONTROLE ADMINISTRATIVO DO BOT ======
+BOT_ATIVO = True  # flag global — True = ativo / False = desativado

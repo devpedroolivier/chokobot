@@ -8,6 +8,9 @@ from app.config import DOCES_URL  # mantido por compatibilidade
 from app.services.precos import TRADICIONAL_BASE, _alias_fruta, calcular_total, montar_resumo, parse_doces_input, TRADICIONAL_ADICIONAIS
 import re
 from datetime import datetime
+from app.services.precos import calcular_preco_simples
+
+
 
 # === ALIASES DE PRODUTO (evita KeyError por variações de digitação) ===
 TORTAS_ALIASES = {
@@ -45,6 +48,28 @@ GOURMET_ALIASES = {
     "olho de sogra": "Olho de Sogra",
     "red velvet": "Red Velvet",
 }
+
+# ====== PAGAMENTO ======
+
+MSG_ESCOLHER_FORMA = (
+    "💳 *Forma de pagamento*\n"
+    "1️⃣ PIX\n"
+    "2️⃣ Cartão (débito/crédito)\n"
+    "3️⃣ Dinheiro\n\n"
+    "Digite *1*, *2* ou *3*."
+)
+
+MSG_PEDIR_TROCO = (
+    "💸 Você escolheu *dinheiro*.\n"
+    "Para facilitar, me diga: *troco para quanto?*\n"
+    "Exemplos: 50, 100, 200."
+)
+
+def msg_resumo_pagamento(forma, troco):
+    base = f"💳 Pagamento: *{forma}*"
+    if forma == "Dinheiro" and troco is not None:
+        base += f" — troco para *R${troco:.2f}*"
+    return base
 
 def _normaliza_produto(linha: str, nome: str) -> str | None:
     """
@@ -290,6 +315,21 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 "📝 Digite o *nome da torta* desejada:"
             )
             return
+        
+        # 6️⃣ Linha Simples
+        if t in ["6", "simples", "bolo simples"]:
+            estado["linha"] = "simples"
+            dados["linha"] = "simples"
+            estado["etapa"] = "simples"
+            await responder_usuario(
+                telefone,
+                "🍰 *Linha Simples* — serve 8 fatias\n\n"
+                "Sabores disponíveis:\n"
+                "1️⃣ Chocolate\n"
+                "2️⃣ Cenoura\n\n"
+                "📝 Digite *1* ou *2* para escolher o sabor."
+            )
+            return
 
         # fallback
         await responder_usuario(
@@ -299,10 +339,10 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "2️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
             "3️⃣ Linha Mesversário ou Revelação\n"
             "4️⃣ Linha Individual Baby Cake\n"
-            "5️⃣ Tortas"
+            "5️⃣ Tortas\n"
+            "6️⃣ Linha Simples"
         )
         return
-
 
     # ====== ETAPA 2 – MASSA ======
     if etapa == 2:
@@ -311,28 +351,54 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         if massa not in massas_validas:
             await responder_usuario(telefone, "⚠️ Massa inválida. Escolha: Branca | Chocolate | Mesclada")
             return
+
         dados["massa"] = massa.capitalize()
         estado["etapa"] = 3
+
         await responder_usuario(
             telefone,
             "🍫 *Escolha 1 recheio:*\n"
             "- Beijinho\n- Brigadeiro\n- Brigadeiro de Nutella\n"
             "- Brigadeiro Branco Gourmet\n- Brigadeiro Branco de Ninho\n"
-            "- Casadinho (Brigadeiro Branco + Brigadeiro Preto)\n- Doce de Leite\n\n"
+            "- Casadinho (Brigadeiro Branco + Brigadeiro Preto)\n"
+            "- Doce de Leite\n\n"
             "📌 *Escolha 1 mousse:*\n"
             "- Ninho\n- Trufa Branca\n- Chocolate\n- Trufa Preta\n\n"
-            "📝 Envie juntos no formato: *Brigadeiro + Ninho*",
+            "📝 Envie juntos no formato: *Brigadeiro + Ninho*\n\n"
+            "💡 *Observação:* O recheio *Casadinho* já combina Brigadeiro Branco e Preto — "
+            "por isso, não precisa escolher mousse adicional. 😉"
         )
-
         return
 
-  
+
+    # ====== ETAPA 3 – RECHEIO + MOUSSE ======
     # ====== ETAPA 3 – RECHEIO + MOUSSE ======
     if etapa == 3:
-        if "+" not in (texto or ""):
+        texto_limpo = (texto or "").strip()
+        # caso especial: Casadinho
+        if "casadinho" in texto_limpo.lower():
+            dados["recheio"] = "Casadinho (Brigadeiro Branco + Brigadeiro Preto)"
+            dados["mousse"] = None  # pular mousse
+            estado["etapa"] = 4
+            await responder_usuario(
+                telefone,
+                "🍫 *Recheio Casadinho selecionado!*\n"
+                "👉 Esse sabor já combina dois recheios (Brigadeiro Branco e Preto), "
+                "por isso não precisa de mousse adicional.\n"
+                "📏 Agora escolha o *tamanho* (digite):\n"
+                "- B3 (serve até 15 pessoas) — R$120\n"
+                "- B4 (serve até 30 pessoas) — R$180\n"
+                "- B6 (serve até 50 pessoas) — R$300\n"
+                "- B7 (serve até 80 pessoas) — R$380"
+            )
+            return
+
+        # padrão (demais recheios + mousse)
+        if "+" not in texto_limpo:
             await responder_usuario(telefone, "⚠️ Envie no formato: *Brigadeiro + Ninho*")
             return
-        recheio, mousse = map(str.strip, texto.split("+", 1))
+
+        recheio, mousse = map(str.strip, texto_limpo.split("+", 1))
         dados["recheio"] = recheio
         dados["mousse"] = mousse
         estado["etapa"] = 4
@@ -369,6 +435,41 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             )
             return
 
+        # ====== ETAPA GOURMET – INGLÊS (Kit Festou opcional) ======
+        if etapa == "gourmet_ingles":
+            produto = _normaliza_produto("gourmet", texto)
+
+            if not produto:
+                await responder_usuario(
+                    telefone,
+                    "⚠️ Bolo não reconhecido. Tente novamente.\n"
+                    "Sugestões: Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                    "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
+                )
+                return
+
+            dados["produto"] = produto
+            estado["etapa"] = "gourmet_kit"
+            await responder_usuario(
+                telefone,
+                "🎉 Deseja adicionar o *Kit Festou* (25 brigadeiros + 1 balão personalizado 🎈) (+R$35)?\n"
+                "1️⃣ Sim\n2️⃣ Não"
+            )
+            return
+
+        if etapa == "gourmet_kit":
+            resposta = (texto or "").strip().lower()
+            dados["kit_festou"] = resposta in ["1", "sim", "s", "yes"]
+
+            # Após resposta, segue fluxo normal (pede data)
+            estado["etapa"] = "data_entrega"
+            await responder_usuario(
+                telefone,
+                "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
+            )
+            return
+
+
         elif escolha in ["2", "redondo", "p6"]:
             dados["sub_linha"] = "redondo"
             estado["etapa"] = "gourmet_redondo"
@@ -393,7 +494,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
                 "⚠️ Escolha inválida. Digite *1* (Inglês) ou *2* (Redondo)."
             )
             return
-
 
     # ====== ETAPA 4 – TAMANHO ======
     if etapa == 4:
@@ -641,6 +741,63 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
         )
         return
 
+
+    # ====== ETAPA LINHA SIMPLES ======
+    if etapa == "simples":
+        escolha = (texto or "").strip().lower()
+        sabores = {"1": "Chocolate", "2": "Cenoura"}
+        if escolha not in sabores:
+            await responder_usuario(telefone, "⚠️ Escolha inválida. Digite *1* (Chocolate) ou *2* (Cenoura).")
+            return
+
+        dados["sabor"] = sabores[escolha]
+        estado["etapa"] = "simples_cobertura"
+        await responder_usuario(
+            telefone,
+            "🍫 Escolha a *cobertura*:\n"
+            "1️⃣ Vulcão (+R$35)\n"
+            "2️⃣ Simples (+R$25)\n\n"
+            "📝 Digite *1* ou *2* para escolher."
+        )
+        return
+
+    if etapa == "simples_cobertura":
+        escolha = (texto or "").strip().lower()
+        coberturas = {"1": ("Vulcão", 35.0), "2": ("Simples", 25.0)}
+        if escolha not in coberturas:
+            await responder_usuario(telefone, "⚠️ Escolha inválida. Digite *1* (Vulcão) ou *2* (Simples).")
+            return
+
+        cobertura, preco = coberturas[escolha]
+        from app.services.precos import calcular_preco_simples
+        preco = calcular_preco_simples(cobertura)
+        dados["cobertura"] = cobertura
+        dados["valor_total"] = preco
+        dados["serve_pessoas"] = 8
+        dados["categoria"] = "simples"
+
+        # Monta pedido final
+        pedido = {
+            "categoria": "simples",
+            "sabor": dados["sabor"],
+            "cobertura": cobertura,
+            "valor_total": preco,
+            "serve_pessoas": 8,
+            "quantidade": 1,
+            "descricao": f"{dados['sabor']} com cobertura {cobertura}",
+            "data_entrega": dados.get("data_entrega"),
+        }
+
+        dados["pedido_preview"] = pedido
+        estado["etapa"] = "confirmar_pedido"
+
+        await responder_usuario(telefone, montar_resumo(pedido, preco))
+        await responder_usuario(
+            telefone,
+            "Está tudo correto?\n1️⃣ Confirmar pedido\n2️⃣ Corrigir\n3️⃣ Falar com atendente"
+        )
+        return
+
     # ====== MONTA PEDIDO FINAL MESVERSÁRIO ======
     if dados.get("linha") == "mesversario" and etapa == 6:
         pedido = {
@@ -674,13 +831,32 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
     # ====== DATA / HORA (compartilhado) ======
     if etapa == "data_entrega":
-        if not _valida_data(texto):
+        texto_limpo = (texto or "").strip()
+
+        # Se o cliente não informar uma data, assume o dia seguinte (para encomendas)
+        if not texto_limpo:
+            from datetime import datetime, timedelta
+            amanha = datetime.now() + timedelta(days=1)
+            dados["data_entrega"] = amanha.strftime("%d/%m/%Y")
+
+            await responder_usuario(
+                telefone,
+                f"📅 Nenhuma data informada — será agendada automaticamente para *amanhã ({dados['data_entrega']})*."
+            )
+            estado["etapa"] = "hora_retirada"
+            await responder_usuario(telefone, "⏰ Informe o *horário de retirada/entrega* (HH:MM ou 24h):")
+            return
+
+        # Se o cliente digitou algo, validar normalmente
+        if not _valida_data(texto_limpo):
             await responder_usuario(telefone, "⚠️ Data inválida. Use o formato *DD/MM/AAAA*.")
             return
-        dados["data_entrega"] = (texto or "").strip()
+
+        dados["data_entrega"] = texto_limpo
         estado["etapa"] = "hora_retirada"
         await responder_usuario(telefone, "⏰ Informe o *horário de retirada/entrega* (HH:MM ou 24h):")
         return
+
 
     if etapa == "hora_retirada":
         if not _parse_hora(texto):
@@ -932,6 +1108,14 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
     if etapa == "confirmar_pedido":
         opc = (texto or "").strip().lower()
 
+        # ====== PAGAMENTO ======
+        # Se ainda não foi escolhida forma de pagamento, iniciamos aqui
+        if "pagamento" not in dados:
+            dados["pagamento"] = {}
+            await responder_usuario(telefone, MSG_ESCOLHER_FORMA)
+            estado["etapa"] = "pagamento_forma"
+            return
+
         if opc in ["1", "confirmar", "ok", "c", "sim", "s", "confirmar pedido", "pedido confirmado", "confirmo"]:
             # Confirmar retirada
             pedido = dados.get("pedido_preview")
@@ -984,4 +1168,46 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
             "2️⃣ Corrigir"
         )
         return
+
+
+    # ====== ETAPA PAGAMENTO – ESCOLHER FORMA ======
+    if etapa == "pagamento_forma":
+        escolha = texto.strip()
+        from app.services.estados import FORMAS_PAGAMENTO
+        if escolha not in FORMAS_PAGAMENTO:
+            await responder_usuario(telefone, "Não entendi.\n" + MSG_ESCOLHER_FORMA)
+            return
+
+        forma = FORMAS_PAGAMENTO[escolha]
+        dados["pagamento"]["forma"] = forma
+
+        if forma == "Dinheiro":
+            estado["etapa"] = "pagamento_troco"
+            await responder_usuario(telefone, MSG_PEDIR_TROCO)
+            return
+        else:
+            dados["pagamento"]["troco_para"] = None
+            estado["etapa"] = "confirmar_pedido"
+            await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento(forma, 0))
+            await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
+            return
+
+
+    # ====== ETAPA PAGAMENTO – TROCO ======
+    if etapa == "pagamento_troco":
+        valor = texto.strip().replace(",", ".")
+        try:
+            troco = float(valor)
+            if troco <= 0:
+                raise ValueError()
+        except Exception:
+            await responder_usuario(telefone, "Valor inválido. Informe apenas números. Exemplo: 50 ou 100.")
+            return
+
+        dados["pagamento"]["troco_para"] = troco
+        estado["etapa"] = "confirmar_pedido"
+        await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento("Dinheiro", troco))
+        await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
+        return
+
 

@@ -38,20 +38,34 @@ async def processar_entrega(telefone, texto, estado):
         )
         return
 
-    # ETAPA 2 — referência -> MOSTRA RESUMO e pede CONFIRMAÇÃO (não salvar ainda)
+       # ETAPA 2 — referência -> MOSTRA RESUMO e pede CONFIRMAÇÃO (não salvar ainda)
     if etapa == 2:
         dados["referencia"] = texto.strip()
 
         pedido = dados.get("pedido") or {}
         pedido["endereco"] = dados.get("endereco", "")  # 🔹 garante endereço no resumo
         pedido["referencia"] = dados.get("referencia", "")
+
+        # 🔹 Recupera forma de pagamento e troco do dicionário original da encomenda
+        pagamento = pedido.get("pagamento") or dados.get("pagamento") or {}
+        forma_pagamento = pagamento.get("forma")
+        troco_para = pagamento.get("troco_para")
+
+        # Monta texto amigável de pagamento
+        if forma_pagamento:
+            if forma_pagamento.lower() == "dinheiro" and troco_para:
+                info_pagamento = f"💵 {forma_pagamento} — troco para R${troco_para:.2f}"
+            else:
+                info_pagamento = f"💳 {forma_pagamento}"
+        else:
+            info_pagamento = "💳 Pagamento não informado"
+
         try:
             total = float(pedido.get("valor_total", 0))
-            # Usa o valor total já com a taxa de entrega aplicada
             await responder_usuario(telefone, montar_resumo(pedido, total))
             await responder_usuario(
                 telefone,
-                "💲 *Obs: já inclui a taxa de entrega de R$ 10,00.*"
+                f"{info_pagamento}\n\n💲 *Obs: já inclui a taxa de entrega de R$ 10,00.*"
             )
         except Exception as e:
             print(f"⚠️ Não foi possível montar o resumo: {e}")
@@ -65,6 +79,7 @@ async def processar_entrega(telefone, texto, estado):
             "3️⃣ Falar com atendente"
         )
         return
+
 
     # ETAPA 3 — confirmação final (agora sim salva)
     # ETAPA 3 — confirmação final (agora sim salva)

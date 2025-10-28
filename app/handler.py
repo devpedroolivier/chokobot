@@ -12,6 +12,7 @@ from app.services.estados import (
     estados_entrega,
     estados_cafeteria,
     estados_atendimento,
+    BOT_ATIVO,  # importa direto aqui também
 )
 from app.config import CAFETERIA_URL
 
@@ -23,6 +24,8 @@ mensagens_processadas = deque(maxlen=2000)
 ultimas_mensagens = {}
 
 async def processar_mensagem(mensagem: dict):
+    from app.services import estados  # garante acesso dinâmico à flag global
+
     texto = (mensagem.get("text", {}) or {}).get("message", "")
     if texto:
         texto = texto.lower().strip()
@@ -30,9 +33,31 @@ async def processar_mensagem(mensagem: dict):
     nome_cliente = mensagem.get("chatName", "Nome não informado")
     msg_id = mensagem.get("id") or mensagem.get("messageId")
 
+    # ====== COMANDOS DE ADMINISTRADOR ======
+    if telefone in ["5511989107142"]:  # 👈 seu número admin
+        cmd = texto.lower()
+        if cmd in ["desativar bot", "desligar bot", "pausar bot"]:
+            estados.BOT_ATIVO = False
+            await responder_usuario(telefone, "🚫 Bot desativado temporariamente.")
+            print("🚫 BOT DESATIVADO PELO ADMIN.")
+            return
+
+        if cmd in ["ativar bot", "ligar bot", "reativar bot"]:
+            estados.BOT_ATIVO = True
+            await responder_usuario(telefone, "✅ Bot reativado e pronto para atender!")
+            print("✅ BOT REATIVADO PELO ADMIN.")
+            return
+
+    # ====== VERIFICAÇÃO GLOBAL DO ESTADO DO BOT ======
+    if not estados.BOT_ATIVO:
+        print(f"⚠️ BOT DESATIVADO — Mensagem ignorada de {telefone}: {texto}")
+        return
+
+    # ====== VALIDAÇÃO BÁSICA DE MENSAGEM ======
     if not telefone or not texto:
         print("❌ Dados incompletos:", mensagem)
         return
+
 
     agora = datetime.now()
 

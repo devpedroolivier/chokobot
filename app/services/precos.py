@@ -70,6 +70,22 @@ ALIAS_ADICIONAIS = {
     "abacaxi": "Abacaxi"
 }
 
+# ====== LINHA SIMPLES ======
+LINHA_SIMPLES = {
+    "sabores": ["Chocolate", "Cenoura"],
+    "coberturas": {
+        "Vulcão": 35.0,
+        "Simples": 25.0,
+    },
+    "serve_pessoas": 8,
+}
+
+def calcular_preco_simples(cobertura: str) -> float:
+    """
+    Retorna o preço da Linha Simples de acordo com a cobertura.
+    """
+    return LINHA_SIMPLES["coberturas"].get(cobertura.title(), 0.0)
+
 def _alias_fruta(valor: str | None) -> str | None:
     if not valor:
         return None
