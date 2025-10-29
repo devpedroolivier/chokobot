@@ -34,7 +34,7 @@ async def processar_mensagem(mensagem: dict):
     msg_id = mensagem.get("id") or mensagem.get("messageId")
 
     # ====== COMANDOS DE ADMINISTRADOR ======
-    if telefone in ["5511989107142"]:  # 👈 seu número admin
+    if telefone in ["5516992622680"]:  # 👈 seu número admin
         cmd = texto.lower()
         if cmd in ["desativar bot", "desligar bot", "pausar bot"]:
             estados.BOT_ATIVO = False
