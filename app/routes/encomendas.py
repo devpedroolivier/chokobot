@@ -15,18 +15,18 @@ async def listar_encomendas(request: Request):
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT 
-            e.id,
-            c.nome AS cliente_nome,
-            c.telefone AS cliente_telefone,
-            e.categoria,
-            e.produto,
-            e.tamanho,
-            e.fruta_ou_nozes,
-            e.valor_total,
-            e.data_entrega,
-            e.horario_retirada,
-            COALESCE(d.status, 'pendente') AS status
+    SELECT 
+        e.id,
+        c.nome AS cliente_nome,
+        c.telefone AS cliente_telefone,
+        e.categoria,
+        e.produto,
+        e.tamanho,
+        e.adicional,
+        e.valor_total,
+        e.data_entrega,
+        e.horario AS horario_retirada,
+        COALESCE(d.status, 'pendente') AS status
         FROM encomendas e
         JOIN clientes c ON e.cliente_id = c.id
         LEFT JOIN entregas d ON d.encomenda_id = e.id
@@ -131,4 +131,29 @@ def excluir_encomenda(id: int):
     cursor.execute("DELETE FROM encomendas WHERE id = ?", (id,))
     conn.commit()
     conn.close()
+    return RedirectResponse(url="/painel/encomendas", status_code=303)
+
+# 🟢 ATUALIZAR STATUS (finalizar pedido ou marcar como entregue)
+@router.post("/painel/encomendas/{id}/status")
+def atualizar_status(id: int, status: str = Form(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # atualiza o status da entrega relacionada
+    cursor.execute("""
+        UPDATE entregas 
+        SET status = ?, atualizado_em = CURRENT_TIMESTAMP
+        WHERE encomenda_id = ?
+    """, (status, id))
+
+    # se ainda não existir entrega associada, cria uma
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO entregas (encomenda_id, tipo, status, atualizado_em)
+            VALUES (?, 'entrega', ?, CURRENT_TIMESTAMP)
+        """, (id, status))
+
+    conn.commit()
+    conn.close()
+    print(f"✅ Status da encomenda {id} atualizado para: {status}")
     return RedirectResponse(url="/painel/encomendas", status_code=303)

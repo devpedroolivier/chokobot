@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel Dinâmico - Chokodelícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-pink-50 via-white to-pink-100 min-h-screen text-gray-800">
+
+  <div class="container mx-auto px-6 py-10">
+    <!-- Cabeçalho -->
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold text-pink-700 flex items-center gap-2">
+        🍰 Painel Dinâmico
+        <span class="text-gray-400 text-sm font-normal">Chokodelícia</span>
+      </h1>
+      <div class="flex items-center gap-4">
+        <a href="/painel/encomendas/exportar" class="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm transition">
+          📄 Exportar TXT
+        </a>
+      </div>
+    </div>
+
+    <!-- Indicadores -->
+    <div class="grid grid-cols-3 gap-4 mb-10 text-center">
+      <div class="bg-white shadow rounded-xl p-4">
+        <h2 class="text-sm text-gray-500">Total de Pedidos</h2>
+        <p id="totalPedidos" class="text-2xl font-bold text-pink-600">{{ encomendas|length }}</p>
+      </div>
+      <div class="bg-white shadow rounded-xl p-4">
+        <h2 class="text-sm text-gray-500">Pendentes</h2>
+        <p id="totalPendentes" class="text-2xl font-bold text-yellow-600">
+          {{ encomendas|selectattr('status', 'equalto', 'pendente')|list|length }}
+        </p>
+      </div>
+      <div class="bg-white shadow rounded-xl p-4">
+        <h2 class="text-sm text-gray-500">Entregues</h2>
+        <p id="totalEntregues" class="text-2xl font-bold text-green-600">
+          {{ encomendas|selectattr('status', 'equalto', 'entregue')|list|length }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="overflow-x-auto bg-white rounded-xl shadow-lg">
+      <table id="tabelaEncomendas" class="w-full text-sm border-collapse">
+        <thead class="bg-pink-100 text-gray-700">
+          <tr>
+            <th class="p-3 text-left">Cliente</th>
+            <th class="p-3 text-left">Produto</th>
+            <th class="p-3 text-left">Data</th>
+            <th class="p-3 text-left">Horário</th>
+            <th class="p-3 text-left">Valor</th>
+            <th class="p-3 text-left">Status</th>
+            <th class="p-3 text-center">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in encomendas %}
+          <tr class="border-b hover:bg-pink-50" data-status="{{ e.status or 'pendente' }}">
+            <td class="p-3 font-medium">{{ e.cliente_nome }}</td>
+            <td class="p-3">{{ e.produto or '-' }}</td>
+            <td class="p-3">{{ e.data_entrega or '-' }}</td>
+            <td class="p-3">{{ e.horario or '-' }}</td>
+            <td class="p-3">R$ {{ e.valor_total or '0,00' }}</td>
+            <td class="p-3">
+              <span class="px-2 py-1 rounded text-xs
+                {% if e.status == 'pendente' %} bg-yellow-100 text-yellow-800
+                {% elif e.status == 'em preparo' %} bg-blue-100 text-blue-800
+                {% elif e.status == 'entregue' %} bg-green-100 text-green-800
+                {% else %} bg-gray-100 text-gray-700 {% endif %}">
+                {{ e.status or 'pendente' }}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              {% if e.status != 'entregue' %}
+                <button 
+                  class="btn-finalizar bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs transition"
+                  data-id="{{ e.id }}">
+                  ✅ Finalizar
+                </button>
+              {% else %}
+                <span class="text-gray-400 text-xs italic">Concluído</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="p-4 text-center text-gray-500">Nenhuma encomenda encontrada.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Atualiza status sem recarregar
+    document.querySelectorAll(".btn-finalizar").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        btn.disabled = true;
+        btn.textContent = "⏳ Atualizando...";
+
+        try {
+          const response = await fetch(`/painel/encomendas/${id}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "status=entregue"
+          });
+
+          if (response.ok) {
+            // Atualiza visualmente a linha
+            const row = btn.closest("tr");
+            row.dataset.status = "entregue";
+
+            // Muda a célula de status
+            const statusCell = row.querySelector("td:nth-child(6) span");
+            statusCell.textContent = "entregue";
+            statusCell.className = "px-2 py-1 rounded text-xs bg-green-100 text-green-800";
+
+            // Substitui o botão
+            btn.outerHTML = `<span class="text-gray-400 text-xs italic">Concluído</span>`;
+
+            // Atualiza contadores
+            atualizarContadores();
+          } else {
+            btn.textContent = "❌ Erro";
+            btn.disabled = false;
+          }
+        } catch (err) {
+          console.error("Erro:", err);
+          btn.textContent = "⚠️ Falha";
+          btn.disabled = false;
+        }
+      });
+    });
+
+    function atualizarContadores() {
+      const rows = document.querySelectorAll("#tabelaEncomendas tbody tr");
+      let total = 0, pendentes = 0, entregues = 0;
+
+      rows.forEach(row => {
+        const status = row.dataset.status;
+        if (!status) return;
+        total++;
+        if (status === "pendente") pendentes++;
+        if (status === "entregue") entregues++;
+      });
+
+      document.getElementById("totalPedidos").textContent = total;
+      document.getElementById("totalPendentes").textContent = pendentes;
+      document.getElementById("totalEntregues").textContent = entregues;
+    }
+  </script>
+
+</body>
+</html>

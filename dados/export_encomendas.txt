@@ -1,0 +1,14 @@
+~ | Belga | 11/08/2002 | R$190.0 | entregue
+~ | Belga | 11/08/2022 | R$140.0 | entregue
+~ | - | 11/08/2002 | R$215.0 | entregue
+Dr. PALOMA | Nozes com Doce de Leite | 03/10/2025 | R$140.0 | Retirar na loja
+Lorraine Abud Guirardeli | Belga | 10/10/2025 | R$140.0 | pendente
+Vania | Nozes com Doce de Leite | 2/10/2025 | R$140.0 | Retirar na loja
+Vania | - | 01/10/2025 | R$155.0 | Retirar na loja
+Vania | Argentina | 1/12/2025 | R$130.0 | Retirar na loja
+~ | - | 11/08/2022 | R$460.0 | pendente
+~ | - | 11/08/2022 | R$460.0 | pendente
+~ | - | 11/08/2022 | R$460.0 | pendente
+Vania | Cheesecake Pistache | 25/10/2025 | R$250.0 | pendente
+~ | Red Velvet | 20/10/2025 | R$130.0 | pendente
+Cliente Teste | - | 15/10/2025 | R$460.0 | pendente
