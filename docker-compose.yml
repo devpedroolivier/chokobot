@@ -5,7 +5,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./dados:/app/dados  # Persistência dos arquivos .txt
+      - /root/chokobot/dados:/app/dados
     env_file:
       - .env
     restart: unless-stopped
