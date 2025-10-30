@@ -38,7 +38,6 @@ def salvar_pedido_cafeteria_sqlite(phone: str, itens: List[str], nome: str = "No
     data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     itens_str = ", ".join(itens or [])
 
-    # garante colunas existentes
     cols = _existing_columns(conn, "pedidos_cafeteria", ["cliente_id", "itens", "criado_em"])
     placeholders = ", ".join("?" for _ in cols)
     sql = f"INSERT INTO pedidos_cafeteria ({', '.join(cols)}) VALUES ({placeholders})"
@@ -48,36 +47,50 @@ def salvar_pedido_cafeteria_sqlite(phone: str, itens: List[str], nome: str = "No
         "itens": itens_str,
         "criado_em": data_hora,
     }
-    cur.execute(sql, [values_map.get(c) for c in cols])
 
-    conn.commit()
-    conn.close()
-    print("☕ Pedido da cafeteria salvo no banco com sucesso.")
+    try:
+        cur.execute(sql, [values_map.get(c) for c in cols])
+        conn.commit()
+        print(f"☕ Pedido cafeteria salvo — Cliente: {nome} ({phone}), Itens: {itens_str}")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Erro ao salvar pedido cafeteria: {e}")
+    finally:
+        conn.close()
 
 
-def salvar_encomenda_sqlite(phone: str, dados: dict, nome: str = "Nome não informado") -> int:
+def salvar_encomenda_sqlite(
+    phone: str,
+    dados: dict,
+    nome: str = "Nome não informado",
+    cliente_id: int | None = None
+) -> int:
     """
     Salva encomenda no SQLite (com suporte a forma_pagamento e troco_para).
+    - Se cliente_id for informado, usa diretamente.
+    - Caso contrário, localiza ou cria o cliente pelo telefone.
     Somente as colunas existentes são usadas, então não quebra o banco.
     """
     conn = get_connection()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    # garante cliente
-    cur.execute("SELECT id FROM clientes WHERE telefone = ?", (phone,))
-    row = cur.fetchone()
-    cliente_id = _get_id_from_row(row)
+    # 🔹 Se não vier cliente_id, busca ou cria o cliente
     if not cliente_id:
-        cur.execute("INSERT INTO clientes (nome, telefone) VALUES (?, ?)", (nome, phone))
-        cliente_id = cur.lastrowid
+        print(f"⚠️ cliente_id não informado — criando/recuperando pelo telefone {phone}")
+        cur.execute("SELECT id FROM clientes WHERE telefone = ?", (phone,))
+        row = cur.fetchone()
+        cliente_id = _get_id_from_row(row)
+        if not cliente_id:
+            cur.execute("INSERT INTO clientes (nome, telefone) VALUES (?, ?)", (nome, phone))
+            cliente_id = cur.lastrowid
 
-    # coleta info de pagamento
-    pagamento = dados.get("pagamento", {})
+    # 🔹 Coleta info de pagamento
+    pagamento = dados.get("pagamento", {}) or {}
     forma_pagamento = pagamento.get("forma")
     troco_para = pagamento.get("troco_para")
 
-    # monta payload com chaves do fluxo
+    # 🔹 Monta payload principal
     payload = {
         "cliente_id": cliente_id,
         "categoria": dados.get("categoria") or dados.get("linha") or "tradicional",
@@ -85,24 +98,26 @@ def salvar_encomenda_sqlite(phone: str, dados: dict, nome: str = "Nome não info
         "massa": dados.get("massa"),
         "recheio": dados.get("recheio"),
         "mousse": dados.get("mousse"),
-        "adicional": dados.get("adicional") or dados.get("fruta_ou_nozes"),
+        # garante que adicional e fruta_ou_nozes fiquem sincronizados
+        "adicional": dados.get("fruta_ou_nozes") or dados.get("adicional"),
         "tamanho": dados.get("tamanho"),
         "data_entrega": dados.get("data_entrega") or dados.get("data") or dados.get("pronta_entrega"),
         "horario_retirada": dados.get("hora_entrega") or dados.get("horario_retirada"),
-        "descricao": dados.get("descricao") or dados.get("resumo"),
-        "valor_total": dados.get("valor_total") or dados.get("valor"),
+        "descricao": (dados.get("descricao") or dados.get("resumo") or "Bolo personalizado").strip(),
+        "valor_total": dados.get("valor_total") or dados.get("valor") or 0,
         "serve_pessoas": dados.get("serve_pessoas"),
         "gourmet": 1 if str(dados.get("gourmet", "")).lower() in ("1", "true", "sim", "yes", "gourmet") else 0,
         "entrega": dados.get("tipo_entrega") or dados.get("entrega"),
         "produto": dados.get("produto"),
-        "quantidade": dados.get("quantidade"),
+        "quantidade": dados.get("quantidade") or 1,
         "kit_festou": 1 if str(dados.get("kit_festou", "")).lower() in ("1", "true", "sim", "yes") else 0,
-        "fruta_ou_nozes": dados.get("fruta_ou_nozes"),
+        "fruta_ou_nozes": dados.get("fruta_ou_nozes") or dados.get("adicional"),
         # novos campos de pagamento
-        "forma_pagamento": forma_pagamento,
+        "forma_pagamento": forma_pagamento or "Pendente",
         "troco_para": troco_para,
     }
 
+    # 🔹 Verifica colunas existentes (flexível)
     candidate_cols = [
         "cliente_id", "categoria", "linha", "massa", "recheio", "mousse",
         "adicional", "tamanho", "gourmet", "entrega", "data_entrega",
@@ -114,14 +129,23 @@ def salvar_encomenda_sqlite(phone: str, dados: dict, nome: str = "Nome não info
 
     placeholders = ", ".join("?" for _ in cols)
     sql = f"INSERT INTO encomendas ({', '.join(cols)}) VALUES ({placeholders})"
-    cur.execute(sql, [payload.get(c) for c in cols])
 
-    encomenda_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    print(f"📝 Encomenda salva com sucesso. ID: {encomenda_id}")
-    return encomenda_id
-
+    try:
+        cur.execute(sql, [payload.get(c) for c in cols])
+        encomenda_id = cur.lastrowid
+        conn.commit()
+        print(
+            f"📝 Encomenda salva com sucesso — ID {encomenda_id}, "
+            f"Cliente: {nome} ({phone}), Categoria: {payload.get('categoria', 'n/d')}, "
+            f"Valor: R${payload.get('valor_total', 0):.2f}"
+        )
+        return encomenda_id
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Erro ao salvar encomenda: {e}")
+        return -1
+    finally:
+        conn.close()
 
 
 def salvar_entrega(
@@ -135,7 +159,6 @@ def salvar_entrega(
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    # colunas reais da tabela entregas
     candidate_cols = ["encomenda_id", "tipo", "endereco", "data_agendada", "status", "criado_em"]
     cols = _existing_columns(conn, "entregas", candidate_cols)
 
@@ -150,8 +173,13 @@ def salvar_entrega(
 
     placeholders = ", ".join("?" for _ in cols)
     sql = f"INSERT INTO entregas ({', '.join(cols)}) VALUES ({placeholders})"
-    cur.execute(sql, [values_map.get(c) for c in cols])
 
-    conn.commit()
-    conn.close()
-    print(f"📦 Entrega registrada no banco - Tipo: {tipo}, Status: {status}")
+    try:
+        cur.execute(sql, [values_map.get(c) for c in cols])
+        conn.commit()
+        print(f"📦 Entrega registrada no banco - Tipo: {tipo}, Status: {status}")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Erro ao salvar entrega: {e}")
+    finally:
+        conn.close()

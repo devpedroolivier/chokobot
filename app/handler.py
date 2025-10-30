@@ -133,7 +133,10 @@ async def processar_mensagem(mensagem: dict):
 
     if telefone in estados_encomenda:
         estado = estados_encomenda[telefone]
-        resultado = await processar_encomenda(telefone, texto, estado, nome_cliente)
+        resultado = await processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
+        from app.models.clientes import salvar_cliente
+        cliente_id = salvar_cliente(telefone, nome_cliente)
+
         estados_encomenda[telefone] = estado
         if resultado == "finalizar":
             estados_encomenda.pop(telefone, None)
@@ -163,7 +166,7 @@ async def processar_mensagem(mensagem: dict):
         return
 
 
-    salvar_cliente(telefone, nome_cliente)
+
 
     if is_saudacao(texto):
         await responder_usuario(

@@ -231,7 +231,65 @@ def _monta_pedido_final(dados: dict) -> dict:
     )
     return base
 
-async def processar_encomenda(telefone, texto, estado, nome_cliente):
+def _prepara_dados_para_salvar(dados: dict) -> dict:
+    """
+    Normaliza e prepara o dicionário 'dados' antes de salvar no banco.
+    Garante consistência com o painel e evita campos nulos.
+    """
+    from datetime import datetime
+
+    # cria cópia segura para não alterar o estado original do fluxo
+    d = dict(dados or {})
+
+    # — normaliza texto de descrição —
+    d["descricao"] = (
+        d.get("descricao")
+        or d.get("sabor")
+        or d.get("produto")
+        or f"{d.get('massa', '')} | {d.get('recheio', '')} + {d.get('mousse', '')}"
+        or "Bolo personalizado"
+    ).strip()
+
+    # — categoria coerente —
+    d["categoria"] = (
+        d.get("categoria")
+        or d.get("linha")
+        or "tradicional"
+    ).strip().lower()
+
+    # — fruta_ou_nozes e adicional unificados —
+    adicional = d.get("adicional") or d.get("fruta_ou_nozes")
+    if adicional in ["", None, "nenhum", "nao", "não"]:
+        adicional = None
+    d["fruta_ou_nozes"] = str(adicional).title() if adicional else None
+
+    # — valor total sempre float —
+    try:
+        d["valor_total"] = float(d.get("valor_total") or 0)
+    except:
+        d["valor_total"] = 0.0
+
+    # — kit festou como boolean —
+    d["kit_festou"] = bool(str(d.get("kit_festou", "")).lower() in ["1", "true", "sim", "yes"])
+
+    # — datas para formato ISO (YYYY-MM-DD) —
+    if d.get("data_entrega"):
+        try:
+            d["data_entrega"] = datetime.strptime(d["data_entrega"], "%d/%m/%Y").strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+    # — pagamento padronizado —
+    pagamento = d.get("pagamento") or {}
+    forma = pagamento.get("forma") or d.get("forma_pagamento") or "Pendente"
+    troco = pagamento.get("troco_para") or d.get("troco_para")
+    d["pagamento"] = {"forma": forma, "troco_para": troco}
+    d["forma_pagamento"] = forma
+    d["troco_para"] = troco
+
+    return d
+
+async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id):
     """
     Roteia o fluxo de encomendas.
     Observação: comandos globais 'menu' e 'cancelar' são tratados no handler principal.
@@ -1021,7 +1079,10 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
 
             # Persiste a encomenda e inicia fluxo de endereço para entrega
-            encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente)
+            dados = _prepara_dados_para_salvar(dados)
+            print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
+            encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente, cliente_id)
+
             estados_entrega[telefone] = {
                 "etapa": 1,
                 "dados": {
@@ -1138,7 +1199,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente):
 
             # Persiste a encomenda e registra retirada
             dados.update(pedido)
-            encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente)
+            dados = _prepara_dados_para_salvar(dados)
+            print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
+            encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente, cliente_id)
+
+
             salvar_entrega(
                 encomenda_id=encomenda_id,
                 tipo="retirada",

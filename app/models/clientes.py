@@ -13,19 +13,23 @@ def criar_tabela_clientes(conn: Connection):
     """)
     conn.commit()
 
-def salvar_cliente(phone: str, nome: str = "Nome não informado"):
+def salvar_cliente(telefone: str, nome: str):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM clientes WHERE telefone = ?", (phone,))
-    cliente = cursor.fetchone()
+    # Verifica se já existe o cliente
+    cursor.execute("SELECT id FROM clientes WHERE telefone = ?", (telefone,))
+    existente = cursor.fetchone()
 
-    if not cliente:
-        cursor.execute("INSERT INTO clientes (nome, telefone) VALUES (?, ?)", (nome, phone))
-        conn.commit()
-        print(f"📝 Novo cliente salvo: {nome} | {phone}")
+    if existente:
+        cliente_id = existente[0]
+        # Atualiza o nome caso tenha mudado
+        cursor.execute("UPDATE clientes SET nome = ? WHERE id = ?", (nome, cliente_id))
     else:
-        print(f"🔁 Cliente já cadastrado: {phone}")
+        cursor.execute("INSERT INTO clientes (nome, telefone) VALUES (?, ?)", (nome, telefone))
+        cliente_id = cursor.lastrowid
 
+    conn.commit()
     conn.close()
+    return cliente_id
 

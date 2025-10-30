@@ -12,11 +12,11 @@ def painel_principal(request: Request):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Carrega encomendas + status da entrega
+    # Carrega encomendas + status da entrega + nome do cliente (mesmo se cliente_id estiver nulo)
     cursor.execute("""
         SELECT 
             e.id,
-            c.nome AS cliente_nome,
+            COALESCE(c.nome, '~') AS cliente_nome,
             e.produto,
             e.categoria,
             e.data_entrega,
@@ -25,10 +25,11 @@ def painel_principal(request: Request):
             COALESCE(d.status, 'pendente') AS status,
             COALESCE(d.tipo, 'entrega') AS tipo
         FROM encomendas e
-        JOIN clientes c ON e.cliente_id = c.id
+        LEFT JOIN clientes c ON e.cliente_id = c.id
         LEFT JOIN entregas d ON d.encomenda_id = e.id
         ORDER BY e.id DESC
     """)
+    
     encomendas = [
         dict(zip([col[0] for col in cursor.description], row))
         for row in cursor.fetchall()
@@ -55,7 +56,10 @@ def atualizar_status(id: int, status: str = Form(...)):
     entrega_existente = cursor.fetchone()
 
     if entrega_existente:
-        cursor.execute("UPDATE entregas SET status = ? WHERE encomenda_id = ?", (status, id))
+        cursor.execute(
+            "UPDATE entregas SET status = ? WHERE encomenda_id = ?",
+            (status, id)
+        )
     else:
         # Cria entrega caso ainda não exista
         cursor.execute(
