@@ -4,38 +4,24 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.models import criar_tabelas
-from app.routes import router
+from app.routes import router  # importa o roteador unificado
 from app.db.init_db import ensure_views
 
 app = FastAPI(title="Agente WhatsApp - Chokodelícia")
 
-# Configura caminhos absolutos para static e templates
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # agora = /chokobot/app
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")   # /chokobot/app/templates
-STATIC_DIR = os.path.join(BASE_DIR, "static")         # /chokobot/app/static
+# Caminhos absolutos
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-
-# Routers principais
+# Registra rotas unificadas
 app.include_router(router)
 
-# Arquivos estáticos
+# Arquivos estáticos e templates
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-# Templates
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-# Rotas separadas
-from app.routes import clientes
-app.include_router(clientes.router)
-
-from app.routes import encomendas
-app.include_router(encomendas.router)
-
-from app.routes import web
-app.include_router(web.router)  # ✅ habilita /painel
-
-
-# Startup event → garante que DB e views estão criados
+# Evento de inicialização
 @app.on_event("startup")
 def on_startup():
     criar_tabelas()

@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 *.log
 .venv
+git_auto_push.py
