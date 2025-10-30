@@ -226,7 +226,9 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
             "3️⃣ Linha Mesversário ou Revelação\n"
             "4️⃣ Linha Individual Baby Cake\n"
-            "5️⃣ Tortas\n\n"
+            "5️⃣ Tortas\n"
+            "6️⃣ Linha Simples\n\n"
+
             "📷 Fotos e preços: https://keepo.io/boloschoko/"
         )
         return
