@@ -4,3 +4,4 @@ __pycache__/
 *.log
 .venv
 git_auto_push.py
+dados/chokobot.db

@@ -157,3 +157,17 @@ def atualizar_status(id: int, status: str = Form(...)):
     conn.close()
     print(f"✅ Status da encomenda {id} atualizado para: {status}")
     return RedirectResponse(url="/painel/encomendas", status_code=303)
+
+@router.get("/painel/encomendas/{id}", response_class=HTMLResponse)
+async def detalhes_encomenda(request: Request, id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM encomendas WHERE id = ?", (id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return HTMLResponse("<h3>Encomenda não encontrada.</h3>", status_code=404)
+
+    encomenda = dict(zip([col[0] for col in cursor.description], row))
+    return templates.TemplateResponse("encomenda_detalhes.html", {"request": request, "encomenda": encomenda})
