@@ -1279,6 +1279,6 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         estado["etapa"] = "confirmar_pedido"
         await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento("Dinheiro", troco))
         await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
-        return
+    return
 
 

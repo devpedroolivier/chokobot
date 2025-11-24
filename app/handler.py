@@ -16,6 +16,14 @@ from app.services.estados import (
 )
 from app.config import CAFETERIA_URL
 
+AVISO_FECHADO = (
+    "📢 *AVISO — FUNCIONAMENTO*\n\n"
+    "*NESTA SEGUNDA — LOJA FECHADA!*\n\n"
+    "Estaremos fechados devido à confraternização da equipe Choko.\n"
+    "*Retornamos Terça 25/nov a partir das 09h00.*"
+)
+
+
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
 MENU_OPCOES = ["menu", "voltar", "inicio", "principal", "bot"]
 REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot"]
@@ -32,6 +40,10 @@ async def processar_mensagem(mensagem: dict):
     telefone = (mensagem.get("phone") or "").replace("+", "").strip()
     nome_cliente = mensagem.get("chatName", "Nome não informado")
     msg_id = mensagem.get("id") or mensagem.get("messageId")
+
+    # === BLOQUEIO GLOBAL — ENVIA SÓ O AVISO ===
+    await responder_usuario(telefone, AVISO_FECHADO)
+    return
 
     # ====== COMANDOS DE ADMINISTRADOR ======
     if telefone in ["5516992622680"]:  # 👈 seu número admin
