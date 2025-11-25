@@ -41,9 +41,7 @@ async def processar_mensagem(mensagem: dict):
     nome_cliente = mensagem.get("chatName", "Nome não informado")
     msg_id = mensagem.get("id") or mensagem.get("messageId")
 
-    # === BLOQUEIO GLOBAL — ENVIA SÓ O AVISO ===
-    await responder_usuario(telefone, AVISO_FECHADO)
-    return
+    
 
     # ====== COMANDOS DE ADMINISTRADOR ======
     if telefone in ["5516992622680"]:  # 👈 seu número adminn
