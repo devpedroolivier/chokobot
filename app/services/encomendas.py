@@ -3,51 +3,24 @@ from datetime import datetime
 from app.models.entregas import salvar_entrega
 from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_encomenda_sqlite
-from app.services.estados import estados_entrega, estados_encomenda
+from app.services.estados import estados_entrega
 from app.config import DOCES_URL  # mantido por compatibilidade
-from app.services.precos import TRADICIONAL_BASE, _alias_fruta, calcular_total, montar_resumo, parse_doces_input, TRADICIONAL_ADICIONAIS
+from app.services.precos import TRADICIONAL_BASE, _alias_fruta, calcular_total, montar_resumo, TRADICIONAL_ADICIONAIS
+from app.services.encomendas_utils import (
+    TORTAS_ALIASES,
+    REDONDOS_ALIASES,
+    GOURMET_ALIASES,
+    TAMANHO_MAP,
+    _normaliza_produto,
+    _valida_data,
+    parse_doces_input_flex,
+    _parse_hora,
+    _normaliza_tamanho,
+)
 import re
-from datetime import datetime
 from app.services.precos import calcular_preco_simples
 
 
-
-# === ALIASES DE PRODUTO (evita KeyError por variações de digitação) ===
-TORTAS_ALIASES = {
-    "argentina": "Argentina",
-    "argentino": "Argentina",
-    "banoffee": "Banoffee",
-    "cheesecake": "Cheesecake Tradicional",
-    "cheesecake tradicional": "Cheesecake Tradicional",
-    "cheesecake pistache": "Cheesecake Pistache",
-    "pistache": "Cheesecake Pistache",
-    "citrus pie": "Citrus Pie",
-    "limao": "Limão",
-    "limão": "Limão",
-}
-
-REDONDOS_ALIASES = {
-    "lingua de gato": "Língua de Gato",
-    "língua de gato": "Língua de Gato",
-    "branco camafeu": "Branco Camafeu",
-    "belga": "Belga",
-    "naked cake": "Naked Cake",
-    "red velvet": "Red Velvet",
-}
-
-# Corrigido: GOURMET_ALIASES (antes estava GOUMERT_ALIASES)
-GOURMET_ALIASES = {
-    "belga": "Belga",
-    "floresta negra": "Floresta Negra",
-    "língua de gato": "Língua de Gato",
-    "lingua de gato": "Língua de Gato",
-    "ninho com morango": "Ninho com Morango",
-    "ninho c/ morango": "Ninho com Morango",
-    "nozes com doce de leite": "Nozes com Doce de Leite",
-    "nozes c/ doce de leite": "Nozes com Doce de Leite",
-    "olho de sogra": "Olho de Sogra",
-    "red velvet": "Red Velvet",
-}
 
 # ====== PAGAMENTO ======
 
@@ -71,111 +44,6 @@ def msg_resumo_pagamento(forma, troco):
         base += f" — troco para *R${troco:.2f}*"
     return base
 
-def _normaliza_produto(linha: str, nome: str) -> str | None:
-    """
-    Normaliza o nome do produto de acordo com a linha escolhida.
-    Retorna o nome oficial ou None se não encontrou alias.
-    """
-    key = (nome or "").strip().lower()
-    if linha == "torta":
-        return TORTAS_ALIASES.get(key)
-    if linha == "redondo":
-        return REDONDOS_ALIASES.get(key)
-    if linha == "gourmet":
-        return GOURMET_ALIASES.get(key)
-    return None
-
-TAMANHO_MAP = {
-    "b3": "B3", "mini": "B3", "15": "B3", "3": "B3",
-    "b4": "B4", "pequeno": "B4", "30": "B4", "4": "B4",
-    "b6": "B6", "medio": "B6", "médio": "B6", "50": "B6", "6": "B6",
-    "b7": "B7", "grande": "B7", "80": "B7", "7": "B7",
-}
-
-def _valida_data(txt: str) -> bool:
-    try:
-        datetime.strptime(txt.strip(), "%d/%m/%Y")
-        return True
-    except Exception:
-        return False
-
-def parse_doces_input_flex(texto: str):
-    """
-    Interpreta a lista de doces enviada pelo cliente.
-    Aceita:
-      - Brigadeiro de Ninho x25
-      - Brigadeiro de Ninho 25
-      - Itens separados por ';' ou por Enter
-    Retorna lista compatível com o resumo (nome, qtd).
-    """
-    itens = []
-    total = 0
-
-    # Divide por ponto e vírgula OU quebra de linha (\r\n ou \n)
-    linhas = re.split(r"[;\r\n]+", texto or "")
-    for linha in linhas:
-        t = (linha or "").strip()
-        if not t:
-            continue
-
-        # "Produto x25"
-        m = re.match(r"^(.*)\s+x(\d+)$", t, re.IGNORECASE)
-        if m:
-            nome, qtd = m.group(1).strip(), int(m.group(2))
-        else:
-            # "Produto 25"
-            m2 = re.match(r"^(.*)\s+(\d+)$", t)
-            if m2:
-                nome, qtd = m2.group(1).strip(), int(m2.group(2))
-            else:
-                nome, qtd = t, 1  # fallback
-
-        itens.append({"nome": nome, "qtd": qtd})
-        total += qtd
-
-    return itens, total
-
-def _parse_hora(txt: str) -> str | None:
-    """
-    Tenta normalizar a hora para HH:MM.
-    Aceita formatos: '11h', '11h30', '11:30', '1130', '11'
-    Retorna string HH:MM ou None se inválido.
-    """
-    if not txt:
-        return None
-    t = txt.strip().lower()
-
-    # casos simples: 11h, 11
-    m = re.match(r"^(\d{1,2})h?$", t)
-    if m:
-        h = int(m.group(1))
-        if 0 <= h <= 23:
-            return f"{h:02d}:00"
-
-    # casos tipo 11h30
-    m = re.match(r"^(\d{1,2})h(\d{2})$", t)
-    if m:
-        h, mnt = int(m.group(1)), int(m.group(2))
-        if 0 <= h <= 23 and 0 <= mnt <= 59:
-            return f"{h:02d}:{mnt:02d}"
-
-    # casos 1130
-    m = re.match(r"^(\d{1,2})(\d{2})$", t)
-    if m:
-        h, mnt = int(m.group(1)), int(m.group(2))
-        if 0 <= h <= 23 and 0 <= mnt <= 59:
-            return f"{h:02d}:{mnt:02d}"
-
-    # HH:MM padrão
-    try:
-        dt = datetime.strptime(t, "%H:%M")
-        return dt.strftime("%H:%M")
-    except:
-        return None
-
-def _normaliza_tamanho(txt: str) -> str:
-    t = (txt or "").strip().lower()
-    return TAMANHO_MAP.get(t, t.upper())
 
 def _monta_pedido_final(dados: dict) -> dict:
     """
@@ -593,15 +461,44 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         )
         return
 
-    # ====== ETAPA 5 – TAMANHO → DATA → HORA ======
-    if etapa == 5:
-        dados["tamanho"] = _normaliza_tamanho(texto)
+    # (Bloco de 'etapa == 5' para normalização de tamanho removido — duplicado)
+
+    # ====== ETAPA GOURMET – INGLÊS (Kit Festou opcional) ======
+    if etapa == "gourmet_ingles":
+        produto = _normaliza_produto("gourmet", texto)
+
+        if not produto:
+            await responder_usuario(
+                telefone,
+                "⚠️ Bolo não reconhecido. Tente novamente.\n"
+                "Sugestões: Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
+            )
+            return
+
+        dados["produto"] = produto
+        estado["etapa"] = "gourmet_kit"
+        await responder_usuario(
+            telefone,
+            "🎉 Deseja adicionar o *Kit Festou* (25 brigadeiros + 1 balão personalizado 🎈) (+R$35)?\n"
+            "1️⃣ Sim\n2️⃣ Não"
+        )
+        return
+
+    if etapa == "gourmet_kit":
+        resposta = (texto or "").strip().lower()
+        dados["kit_festou"] = resposta in ["1", "sim", "s", "yes"]
+
+        # Após resposta, segue fluxo normal (pede data)
         estado["etapa"] = "data_entrega"
-        await responder_usuario(telefone, "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):")
+        await responder_usuario(
+            telefone,
+            "📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
+        )
         return
 
     # ====== ETAPA GOURMET/REDONDO/TORTA – CAPTURA PRODUTO ======
-    if etapa in ["gourmet", "gourmet_ingles", "gourmet_redondo"]:
+    if etapa in ["gourmet", "gourmet_redondo"]:
         linha = estado.get("linha")
         sub_linha = dados.get("sub_linha")  # ingles ou redondo
         produto = _normaliza_produto(linha, texto)
