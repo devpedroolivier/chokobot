@@ -50,7 +50,8 @@ REDONDOS_P6 = {
 TORTAS = {
     "Argentina": {"preco": 130.0, "serve": 16},
     "Banoffee": {"preco": 130.0, "serve": 16},
-    "Cheesecake Tradicional": {"preco": 160.0, "serve": 16},
+    "Cheesecake Tradicional Versão Baixa": {"preco": 120.0, "serve": 16},
+    "Cheesecake Tradicional Versão Alta": {"preco": 160.0, "serve": 16},
     "Cheesecake Pistache": {"preco": 250.0, "serve": 16},
     "Citrus Pie": {"preco": 150.0, "serve": 16},
     "Limão": {"preco": 150.0, "serve": 16},

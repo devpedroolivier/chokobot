@@ -236,9 +236,16 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             estado["etapa"] = "gourmet"
             await responder_usuario(
                 telefone,
-                "🥧 *Tortas (serve 16 fatias)*: Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão\n"
+                "🥧 *Tortas (serve 16 fatias)*\n\n"
+                "• Argentina — R$130\n"
+                "• Banoffee — R$130\n"
+                "• Cheesecake Tradicional Versão Baixa — R$120\n"
+                "• Cheesecake Tradicional Versão Alta — R$160\n"
+                "• Cheesecake Pistache — R$250\n"
+                "• Citrus Pie — R$150\n"
+                "• Limão — R$150\n\n"
                 "📷 Fotos/preços: https://keepo.io/boloschoko/\n\n"
-                "📝 Digite o *nome da torta* desejada:"
+                "📝 Digite o *nome da torta* desejada exatamente como acima:"
             )
             return
         
@@ -516,7 +523,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
                 )
             elif linha == "torta":
                 msg_lista = (
-                    "Argentina, Banoffee, Cheesecake Tradicional/Pistache, Citrus Pie, Limão"
+                    "Argentina, Banoffee, Cheesecake Tradicional Versão Baixa, Cheesecake Tradicional Versão Alta, "
+                    "Cheesecake Pistache, Citrus Pie, Limão"
                 )
             else:
                 msg_lista = (
