@@ -70,6 +70,9 @@ async def processar_mensagem(mensagem: dict):
         print("❌ Dados incompletos:", mensagem)
         return
 
+    # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
+    from app.models.clientes import salvar_cliente
+    cliente_id = salvar_cliente(telefone, nome_cliente)
 
     agora = datetime.now()
 
@@ -155,11 +158,7 @@ async def processar_mensagem(mensagem: dict):
 
     if telefone in estados_encomenda:
         estado = estados_encomenda[telefone]
-
-        from app.models.clientes import salvar_cliente
-        cliente_id = salvar_cliente(telefone, nome_cliente)  # 🔹 primeiro cria o cliente
-
-        resultado = await processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)  # 🔹 depois processa
+        resultado = await processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
 
         estados_encomenda[telefone] = estado
         if resultado == "finalizar":
