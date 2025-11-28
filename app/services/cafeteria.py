@@ -18,9 +18,11 @@ async def processar_cafeteria(telefone, texto, estado):
                 "👉 Cardápio Doces: https://bit.ly/doceschoko\n"
             )
         elif texto == "4":
+            msg = "📋 Cardápio *Cestas Box/Presentes*:\nhttps://bit.ly/presenteschoko\n"
+        elif texto == "5":
             msg = "📋 Cardápio *Sazonais*:\nhttps://drive.google.com/file/d/1HkfUa5fiIJ2_CmUwFiCSp1RToaJfvu6T/view\n"
         else:
-            await responder_usuario(telefone, "❌ Opção inválida. Digite 1, 2, 3 ou 4.")
+            await responder_usuario(telefone, "❌ Opção inválida. Digite 1, 2, 3, 4 ou 5.")
             return
 
         msg += (
@@ -40,8 +42,9 @@ async def processar_cafeteria(telefone, texto, estado):
                 "📋 Qual cardápio você deseja ver?\n"
                 "1️⃣ Cardápio Cafeteria\n"
                 "2️⃣ Cardápio Bolos & Tortas\n"
-                "3️⃣ Cardápio Doces"
-                
+                "3️⃣ Cardápio Doces\n"
+                "4️⃣ Cardápio Cestas Box/Presentes\n"
+                "5️⃣ Cardápio Sazonais"
             )
         elif texto == "2":
             return "voltar_menu"
