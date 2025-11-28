@@ -187,14 +187,15 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
             }
             
             try:
-                encomenda_id = await salvar_encomenda_sqlite(
+                encomenda_id = salvar_encomenda_sqlite(
                     telefone, pedido_final, nome_cliente, cliente_id
                 )
                 
                 if dados.get("modo_recebimento") == "entrega":
-                    await salvar_entrega(
+                    salvar_entrega(
                         encomenda_id,
                         "cesta_box",
+                        dados.get("endereco"),
                         dados.get("data_entrega"),
                         "agendada"
                     )
