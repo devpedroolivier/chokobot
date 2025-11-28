@@ -5,12 +5,14 @@ from app.models.clientes import salvar_cliente
 from app.utils.mensagens import responder_usuario, is_saudacao
 from app.services.encomendas import processar_encomenda
 from app.services.cafeteria import processar_cafeteria
+from app.services.cestas_box import processar_cestas_box
 from app.services.entregas import processar_entrega
 from app.services.atendimento import processar_atendimento
 from app.services.estados import (
     estados_encomenda,
     estados_entrega,
     estados_cafeteria,
+    estados_cestas_box,
     estados_atendimento,
     BOT_ATIVO,  # importa direto aqui também
 )
@@ -93,8 +95,9 @@ async def processar_mensagem(mensagem: dict):
                 "2️⃣ Ver cardápios\n"
                 "3️⃣ Encomendar bolos ou tortas\n"
                 "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Entregas 🚚\n"
-                "6️⃣ Falar com atendente 👩‍🍳"
+                "5️⃣ Cestas Box Café ou Chocolate\n"
+                "6️⃣ Entregas 🚚\n"
+                "7️⃣ Falar com atendente 👩‍🍳"
             )
         else:
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
@@ -126,8 +129,9 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Ver cardápios\n"
             "3️⃣ Encomendar bolos ou tortas\n"
             "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚\n"
-            "6️⃣ Falar com atendente 👩‍🍳"
+            "5️⃣ Cestas Box Café ou Chocolate\n"
+            "6️⃣ Entregas 🚚\n"
+            "7️⃣ Falar com atendente 👩‍🍳"
         )
         return
 
@@ -139,6 +143,14 @@ async def processar_mensagem(mensagem: dict):
         if resultado == "finalizar":
             estados_entrega.pop(telefone, None)
             estados_encomenda.pop(telefone, None)
+        return
+
+    if telefone in estados_cestas_box:
+        estado = estados_cestas_box[telefone]
+        resultado = await processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id)
+        estados_cestas_box[telefone] = estado
+        if resultado == "finalizar":
+            estados_cestas_box.pop(telefone, None)
         return
 
     if telefone in estados_encomenda:
@@ -192,8 +204,9 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Ver cardápios\n"
             "3️⃣ Encomendar bolos ou tortas\n"
             "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚\n"
-            "6️⃣ Falar com atendente 👩‍🍳"
+            "5️⃣ Cestas Box Café ou Chocolate\n"
+            "6️⃣ Entregas 🚚\n"
+            "7️⃣ Falar com atendente 👩‍🍳"
         )
         return
 
@@ -251,7 +264,13 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["5", "entrega", "informações de entrega", "delivery"]:
+    elif texto in ["5", "cestas", "cesta", "box", "chocolate", "café", "cafe"]:
+        estados_cestas_box[telefone] = {"etapa": "selecao", "dados": {}}
+        from app.services.cestas_box import montar_menu_cestas
+        await responder_usuario(telefone, montar_menu_cestas())
+        return
+
+    elif texto in ["6", "entrega", "informações de entrega", "delivery"]:
         await responder_usuario(
             telefone,
             "🚚 Entregamos em *Pitangueiras-SP* (taxa R$10) *exceto zona rural*.\n"
@@ -261,7 +280,7 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["6", "atendente", "humano", "falar"]:
+    elif texto in ["7", "atendente", "humano", "falar"]:
         await processar_atendimento(telefone, nome_cliente)
         return
 
@@ -274,6 +293,7 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Ver cardápios\n"
             "3️⃣ Encomendar bolos ou tortas\n"
             "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Entregas 🚚\n"
-            "6️⃣ Falar com atendente 👩‍🍳"
+            "5️⃣ Cestas Box Café ou Chocolate\n"
+            "6️⃣ Entregas 🚚\n"
+            "7️⃣ Falar com atendente 👩‍🍳"
         )

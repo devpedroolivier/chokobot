@@ -9,6 +9,7 @@ Cada chave é o telefone (str) e o valor é um dict com metadados do fluxo.
 estados_encomenda: dict = {}
 estados_cafeteria: dict = {}
 estados_entrega: dict = {}
+estados_cestas_box: dict = {}
 
 # 🔹 Novo: clientes em atendimento humano (bot silencioso)
 # Exemplo de valor: {"inicio": datetime, "nome": "Cliente"}
