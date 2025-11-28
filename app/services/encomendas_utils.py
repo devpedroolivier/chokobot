@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import re
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict
@@ -13,6 +14,10 @@ TORTAS_ALIASES: Dict[str, str] = {
     "cheesecake baixa": "Cheesecake Tradicional Versão Baixa",
     "cheesecake tradicional alta": "Cheesecake Tradicional Versão Alta",
     "cheesecake alta": "Cheesecake Tradicional Versão Alta",
+    "cheesecake tradicional versao baixa": "Cheesecake Tradicional Versão Baixa",
+    "cheesecake tradicional versão baixa": "Cheesecake Tradicional Versão Baixa",
+    "cheesecake tradicional versao alta": "Cheesecake Tradicional Versão Alta",
+    "cheesecake tradicional versão alta": "Cheesecake Tradicional Versão Alta",
     "cheesecake pistache": "Cheesecake Pistache",
     "pistache": "Cheesecake Pistache",
     "citrus pie": "Citrus Pie",

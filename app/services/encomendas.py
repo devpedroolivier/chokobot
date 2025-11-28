@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # app/services/encomendas.py
 from datetime import datetime
 from app.models.entregas import salvar_entrega

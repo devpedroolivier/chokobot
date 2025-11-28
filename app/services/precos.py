@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # app/services/precos.py
 from typing import Tuple, List, Dict, Any
 import re
