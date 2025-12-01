@@ -274,7 +274,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             "3️⃣ Linha Mesversário ou Revelação\n"
             "4️⃣ Linha Individual Baby Cake\n"
             "5️⃣ Tortas\n"
-            "6️⃣ Linha Simples"
+            "6️⃣ Linha Simples\n"
+            "7️⃣ Cestas Box"
         )
         return
 
@@ -717,8 +718,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         await responder_usuario(
             telefone,
             "🍫 Escolha a *cobertura*:\n"
-            "1️⃣ Vulcão (+R$35)\n"
-            "2️⃣ Simples (+R$25)\n\n"
+            "1️⃣ Vulcão — R$35\n"
+            "2️⃣ Simples — R$25\n\n"
             "📝 Digite *1* ou *2* para escolher."
         )
         return

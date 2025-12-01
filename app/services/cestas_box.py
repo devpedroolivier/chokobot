@@ -62,7 +62,11 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
       - "selecao": aguardando seleção da cesta
       - "data_entrega": aguardando data
       - "hora_retirada": aguardando horário
+      - "modo_recebimento": escolher retirada ou entrega
+      - "endereco": endereço (se entrega)
       - "confirmar_pedido": confirmação final
+      - "pagamento_forma": escolher forma de pagamento
+      - "pagamento_troco": informar troco (se dinheiro)
     """
     etapa = estado.get("etapa", "selecao")
     dados = estado.setdefault("dados", {})
@@ -88,7 +92,6 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
             telefone,
             f"✅ Cesta selecionada: *{cesta_info['nome']}*\n"
             f"R${cesta_info['preco']:.2f}\n\n"
-            f"Detalhes:\n{cesta_info['descricao']}\n\n"
             f"📆 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
         )
         return
@@ -126,7 +129,7 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
             telefone,
             "📍 Como você deseja receber?\n"
             "1️⃣ Retirada na loja\n"
-            "2️⃣ Entrega em domicílio"
+            "2️⃣ Entrega em domicílio (taxa: R$10,00)"
         )
         return
 
@@ -136,6 +139,7 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
         
         if modo in ["1", "retirada"]:
             dados["modo_recebimento"] = "retirada"
+            dados["endereco"] = ""
             estado["etapa"] = "confirmar_pedido"
             await montar_resumo_e_confirmar(telefone, estado, dados)
             return
@@ -174,48 +178,18 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
         resposta = (texto or "").strip().lower()
         
         if resposta in ["1", "sim", "confirmar"]:
-            # Salva a encomenda
-            pedido_final = {
-                "categoria": "cesta_box",
-                "cesta_nome": dados.get("cesta_nome"),
-                "cesta_preco": dados.get("cesta_preco"),
-                "cesta_descricao": dados.get("cesta_descricao"),
-                "data_entrega": dados.get("data_entrega"),
-                "horario_retirada": dados.get("horario_retirada"),
-                "modo_recebimento": dados.get("modo_recebimento"),
-                "endereco": dados.get("endereco"),
-            }
-            
-            try:
-                encomenda_id = salvar_encomenda_sqlite(
-                    telefone, pedido_final, nome_cliente, cliente_id
-                )
-                
-                if dados.get("modo_recebimento") == "entrega":
-                    salvar_entrega(
-                        encomenda_id,
-                        "cesta_box",
-                        dados.get("endereco"),
-                        dados.get("data_entrega"),
-                        "agendada"
-                    )
-                
+            # Passa para pagamento
+            if "pagamento" not in dados:
+                dados["pagamento"] = {}
                 await responder_usuario(
                     telefone,
-                    f"✅ *Pedido confirmado!*\n"
-                    f"ID: #{encomenda_id}\n"
-                    f"Cesta: {dados.get('cesta_nome')}\n"
-                    f"Data: {dados.get('data_entrega')}\n"
-                    f"Horário: {dados.get('horario_retirada')}\n\n"
-                    f"💰 *Total: R${dados.get('cesta_preco'):.2f}*\n\n"
-                    f"Obrigado por sua compra! 🎁"
+                    "💳 *Forma de pagamento*\n"
+                    "1️⃣ PIX\n"
+                    "2️⃣ Cartão (débito/crédito)\n"
+                    "3️⃣ Dinheiro\n\n"
+                    "Digite *1*, *2* ou *3*."
                 )
-                
-                return "finalizar"
-            
-            except Exception as e:
-                print(f"❌ Erro ao salvar encomenda: {e}")
-                await responder_usuario(telefone, f"❌ Erro ao processar pedido: {str(e)}")
+                estado["etapa"] = "pagamento_forma"
                 return
         
         elif resposta in ["2", "nao", "não", "corrigir"]:
@@ -233,6 +207,114 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
                 "⚠️ Digite *1* para confirmar ou *2* para corrigir."
             )
             return
+
+    # ====== PAGAMENTO – FORMA ======
+    if etapa == "pagamento_forma":
+        escolha = (texto or "").strip()
+        formas_pagamento = {
+            "1": "PIX",
+            "2": "Cartão",
+            "3": "Dinheiro"
+        }
+        
+        if escolha not in formas_pagamento:
+            await responder_usuario(
+                telefone,
+                "Não entendi.\n"
+                "💳 *Forma de pagamento*\n"
+                "1️⃣ PIX\n"
+                "2️⃣ Cartão (débito/crédito)\n"
+                "3️⃣ Dinheiro"
+            )
+            return
+        
+        forma = formas_pagamento[escolha]
+        dados["pagamento"]["forma"] = forma
+        
+        if forma == "Dinheiro":
+            estado["etapa"] = "pagamento_troco"
+            await responder_usuario(
+                telefone,
+                "💸 Você escolheu *dinheiro*.\n"
+                "Para facilitar, me diga: *troco para quanto?*\n"
+                "Exemplos: 50, 100, 200."
+            )
+            return
+        else:
+            dados["pagamento"]["troco_para"] = None
+            estado["etapa"] = "finalizar_venda"
+            await responder_usuario(
+                telefone,
+                f"✅ Pagamento registrado: *{forma}*"
+            )
+            await salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
+            return "finalizar"
+
+    # ====== PAGAMENTO – TROCO ======
+    if etapa == "pagamento_troco":
+        valor = (texto or "").strip().replace(",", ".")
+        try:
+            troco = float(valor)
+            if troco <= 0:
+                raise ValueError()
+        except Exception:
+            await responder_usuario(telefone, "Valor inválido. Informe apenas números. Exemplo: 50 ou 100.")
+            return
+        
+        dados["pagamento"]["troco_para"] = troco
+        estado["etapa"] = "finalizar_venda"
+        await responder_usuario(
+            telefone,
+            f"✅ Pagamento registrado: *Dinheiro* — troco para *R${troco:.2f}*"
+        )
+        await salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
+        return "finalizar"
+
+
+async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id):
+    """Salva a encomenda de cesta box."""
+    try:
+        pedido_final = {
+            "categoria": "cesta_box",
+            "cesta_nome": dados.get("cesta_nome"),
+            "cesta_preco": dados.get("cesta_preco"),
+            "cesta_descricao": dados.get("cesta_descricao"),
+            "data_entrega": dados.get("data_entrega"),
+            "horario_retirada": dados.get("horario_retirada"),
+            "modo_recebimento": dados.get("modo_recebimento"),
+            "endereco": dados.get("endereco", ""),
+            "valor_total": dados.get("cesta_preco"),
+            "pagamento": dados.get("pagamento", {}),
+        }
+        
+        encomenda_id = salvar_encomenda_sqlite(
+            telefone, pedido_final, nome_cliente, cliente_id
+        )
+        
+        if dados.get("modo_recebimento") == "entrega":
+            salvar_entrega(
+                encomenda_id,
+                "cesta_box",
+                dados.get("data_entrega"),
+                "agendada"
+            )
+        
+        await responder_usuario(
+            telefone,
+            f"✅ *Pedido confirmado com sucesso!* ✅\n"
+            f"ID: #{encomenda_id}\n"
+            f"Cesta: {dados.get('cesta_nome')}\n"
+            f"Data: {dados.get('data_entrega')}\n"
+            f"Horário: {dados.get('horario_retirada')}\n\n"
+            f"💰 *Total: R${dados.get('cesta_preco'):.2f}*\n\n"
+            f"Obrigada por sua compra! 🎁\n"
+            f"✨ Se registrar o momento nas redes sociais, lembre de nos marcar @chokodelicia"
+        )
+    
+    except Exception as e:
+        print(f"❌ Erro ao salvar cesta box: {e}")
+        await responder_usuario(telefone, f"❌ Erro ao processar pedido: {str(e)}")
+
 
 
 async def montar_resumo_e_confirmar(telefone, estado, dados):
