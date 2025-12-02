@@ -129,7 +129,7 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
             telefone,
             "📍 Como você deseja receber?\n"
             "1️⃣ Retirada na loja\n"
-            "2️⃣ Entrega em domicílio (taxa: R$10,00)"
+            "2️⃣ Entrega em casa (taxa: R$10,00)"
         )
         return
 
@@ -319,7 +319,7 @@ async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
 
 async def montar_resumo_e_confirmar(telefone, estado, dados):
     """Monta o resumo do pedido e pede confirmação."""
-    modo_txt = "🏪 Retirada na loja" if dados.get("modo_recebimento") == "retirada" else "🚚 Entrega em domicílio"
+    modo_txt = "🏪 Retirada na loja" if dados.get("modo_recebimento") == "retirada" else "🚚 Entrega em casa"
     endereco_txt = f"\n📍 Endereço: {dados.get('endereco', '')}" if dados.get("endereco") else ""
     
     resumo = (
