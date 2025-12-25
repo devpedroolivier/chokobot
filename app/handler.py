@@ -17,12 +17,11 @@ from app.services.estados import (
     BOT_ATIVO,  # importa direto aqui também
 )
 from app.config import CAFETERIA_URL
-
+AVISO_FECHADO_ATIVO = True
 AVISO_FECHADO = (
-    "📢 *AVISO — FUNCIONAMENTO*\n\n"
-    "*NESTA SEGUNDA — LOJA FECHADA!*\n\n"
-    "Estaremos fechados devido à confraternização da equipe Choko.\n"
-    "*Retornamos Terça 25/nov a partir das 09h00.*"
+    "Ol\u00e1! Estamos fechados devido ao feriado de Natal.\n"
+    "Retornamos amanh\u00e3, dia 26 (sexta-feira), \u00e0s 9h.\n"
+    "\u00c9 tempo de celebrar. Boas festas! \U0001F384\u2728"
 )
 
 
@@ -68,6 +67,10 @@ async def processar_mensagem(mensagem: dict):
     # ====== VALIDAÇÃO BÁSICA DE MENSAGEM ======
     if not telefone or not texto:
         print("❌ Dados incompletos:", mensagem)
+        return
+
+    if AVISO_FECHADO_ATIVO:
+        await responder_usuario(telefone, AVISO_FECHADO)
         return
 
     # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
