@@ -68,13 +68,6 @@ async def processar_mensagem(mensagem: dict):
         print("❌ Dados incompletos:", mensagem)
         return
 
-    # ====== AVISO DE FERIADO: responder e interromper todas as opera??es ======
-    await responder_usuario(telefone, AVISO_FECHADO)
-    return
-
-    # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
-    from app.models.clientes import salvar_cliente
-    cliente_id = salvar_cliente(telefone, nome_cliente)
 
     agora = datetime.now()
 
@@ -89,6 +82,14 @@ async def processar_mensagem(mensagem: dict):
         print(f"⚠️ Ignorado duplicado por conteúdo de {telefone}: '{texto}'")
         return
     ultimas_mensagens[telefone] = {"texto": texto, "hora": agora}
+    # ====== AVISO DE FERIADO: responder e interromper todas as opera??es ======
+    await responder_usuario(telefone, AVISO_FECHADO)
+    return
+
+    # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
+    from app.models.clientes import salvar_cliente
+    cliente_id = salvar_cliente(telefone, nome_cliente)
+
 
     if telefone in estados_atendimento:
         if texto in REATIVAR_BOT_OPCOES:
