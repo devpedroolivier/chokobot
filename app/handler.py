@@ -18,11 +18,9 @@ from app.services.estados import (
 )
 from app.config import CAFETERIA_URL
 AVISO_FECHADO = (
-    "Ol?! Estamos fechados devido ao feriado de Ano Novo????
-"
-    "Retornamos dia 2 (sexta-feira), atendimento 13h ?s 18h!
-"
-    "? tempo de celebrar. Boas festas!"
+    "Ol\u00e1! Estamos fechados devido ao feriado de Ano Novo\U0001F386\U0001F90D\n"
+    "Retornamos dia 2 (sexta-feira), atendimento 13h \u00e0s 18h!\n"
+    "\u00c9 tempo de celebrar. Boas festas!"
 )
 
 
