@@ -18,10 +18,11 @@ from app.services.estados import (
 )
 from app.config import CAFETERIA_URL
 AVISO_FECHADO = (
-    "\U0001F389 *AVISO DE FUNCIONAMENTO*\n\n"
-    "*NESTA SEGUNDA \u274c LOJA FECHADA!*\n\n"
-    "Estaremos fechados devido \u00e0 confraterniza\u00e7\u00e3o da equipe Choko.\n"
-    "*Retornamos Ter\u00e7a 25/nov a partir das 09h00.*"
+    "Ol?! Estamos fechados devido ao feriado de Ano Novo????
+"
+    "Retornamos dia 2 (sexta-feira), atendimento 13h ?s 18h!
+"
+    "? tempo de celebrar. Boas festas!"
 )
 
 
@@ -68,6 +69,10 @@ async def processar_mensagem(mensagem: dict):
     if not telefone or not texto:
         print("❌ Dados incompletos:", mensagem)
         return
+
+    # ====== AVISO DE FERIADO: responder e interromper todas as opera??es ======
+    await responder_usuario(telefone, AVISO_FECHADO)
+    return
 
     # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
     from app.models.clientes import salvar_cliente
