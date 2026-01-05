@@ -17,11 +17,6 @@ from app.services.estados import (
     BOT_ATIVO,  # importa direto aqui também
 )
 from app.config import CAFETERIA_URL
-AVISO_FECHADO = (
-    "Ol\u00e1! Estamos fechados devido ao feriado de Ano Novo\U0001F386\U0001F90D\n"
-    "Retornamos dia 2 (sexta-feira), atendimento 13h \u00e0s 18h!\n"
-    "\u00c9 tempo de celebrar. Boas festas!"
-)
 
 
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
@@ -82,10 +77,6 @@ async def processar_mensagem(mensagem: dict):
         print(f"⚠️ Ignorado duplicado por conteúdo de {telefone}: '{texto}'")
         return
     ultimas_mensagens[telefone] = {"texto": texto, "hora": agora}
-    # ====== AVISO DE FERIADO: responder e interromper todas as opera??es ======
-    await responder_usuario(telefone, AVISO_FECHADO)
-    return
-
     # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
     from app.models.clientes import salvar_cliente
     cliente_id = salvar_cliente(telefone, nome_cliente)
