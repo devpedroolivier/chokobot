@@ -1,4 +1,3 @@
-from datetime import datetime
 from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_pedido_cafeteria_sqlite
 
@@ -19,10 +18,8 @@ async def processar_cafeteria(telefone, texto, estado):
             )
         elif texto == "4":
             msg = "📋 Cardápio *Cestas Box/Presentes*:\nhttps://bit.ly/presenteschoko\n"
-        elif texto == "5":
-            msg = "📋 Cardápio *de Natal* 🎄:\nhttps://drive.google.com/file/d/1U2LyNWMexbbcTsImfsB4SbdLG4R_034P/view?usp=drive_link\n"
         else:
-            await responder_usuario(telefone, "❌ Opção inválida. Digite 1, 2, 3, 4 ou 5.")
+            await responder_usuario(telefone, "❌ Opção inválida. Digite 1, 2, 3 ou 4.")
             return
 
         msg += (
@@ -43,8 +40,7 @@ async def processar_cafeteria(telefone, texto, estado):
                 "1️⃣ Cardápio Cafeteria\n"
                 "2️⃣ Cardápio Bolos & Tortas\n"
                 "3️⃣ Cardápio Doces\n"
-                "4️⃣ Cardápio Cestas Box/Presentes\n"
-                "5️⃣ Cardápio de Natal 🎄"
+                "4️⃣ Cardápio Cestas Box/Presentes"
             )
         elif texto == "2":
             return "voltar_menu"
