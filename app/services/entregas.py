@@ -61,11 +61,12 @@ async def processar_entrega(telefone, texto, estado):
             info_pagamento = "💳 Pagamento não informado"
 
         try:
+            taxa_entrega = float(pedido.get("taxa_entrega") or 10.0)
             total = float(pedido.get("valor_total", 0))
             await responder_usuario(telefone, montar_resumo(pedido, total))
             await responder_usuario(
                 telefone,
-                f"{info_pagamento}\n\n💲 *Obs: já inclui a taxa de entrega de R$ 10,00.*"
+                f"{info_pagamento}\n\n💲 *Obs: já inclui a taxa de entrega de R$ {taxa_entrega:.2f}.*"
             )
         except Exception as e:
             print(f"⚠️ Não foi possível montar o resumo: {e}")

@@ -16,12 +16,30 @@ from app.services.estados import (
     estados_atendimento,
     BOT_ATIVO,  # importa direto aqui também
 )
-from app.config import CAFETERIA_URL
+from app.config import CAFETERIA_URL, DOCES_URL
 
 
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
 MENU_OPCOES = ["menu", "voltar", "inicio", "principal", "bot"]
 REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot"]
+
+MENU_OPTIONS = [
+    "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje",
+    "2️⃣ Ver cardápios",
+    "3️⃣ Encomendar bolos ou tortas",
+    "4️⃣ Pedidos Delivery Cafeteria",
+    "5️⃣ Cestas Box Café ou Chocolate",
+    "6️⃣ Entregas 🚚",
+    "7️⃣ Docinhos 🍬",
+    "8️⃣ Falar com atendente 👩‍🍳",
+]
+MENU_PROMPT = "Escolha uma opção:\n" + "\n".join(MENU_OPTIONS)
+MAIN_MENU_GREETING = (
+    "🍫 Olá! Bem-vindo(a) à *Chokodelícia* 🍫\n"
+    "Sou a *Trufinha* 🍬, assistente virtual da nossa Cafeteria e Doceria!"
+)
+MAIN_MENU_MESSAGE = f"{MAIN_MENU_GREETING}\n\n{MENU_PROMPT}"
+MENU_PRINCIPAL_MESSAGE = f"🍫 *Menu Principal*\n{MENU_PROMPT}"
 
 mensagens_processadas = deque(maxlen=2000)
 ultimas_mensagens = {}
@@ -88,13 +106,7 @@ async def processar_mensagem(mensagem: dict):
             await responder_usuario(
                 telefone,
                 "🤖 Bot reativado. Vamos continuar!\n"
-                "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-                "2️⃣ Ver cardápios\n"
-                "3️⃣ Encomendar bolos ou tortas\n"
-                "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Cestas Box Café ou Chocolate\n"
-                "6️⃣ Entregas 🚚\n"
-                "7️⃣ Falar com atendente 👩‍🍳"
+                f"{MENU_PROMPT}"
             )
         else:
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
@@ -119,17 +131,7 @@ async def processar_mensagem(mensagem: dict):
         estados_encomenda.pop(telefone, None)
         estados_cafeteria.pop(telefone, None)
         estados_entrega.pop(telefone, None)
-        await responder_usuario(
-            telefone,
-            "🍫 *Menu Principal*\n"
-            "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-            "2️⃣ Ver cardápios\n"
-            "3️⃣ Encomendar bolos ou tortas\n"
-            "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Cestas Box Café ou Chocolate\n"
-            "6️⃣ Entregas 🚚\n"
-            "7️⃣ Falar com atendente 👩‍🍳"
-        )
+        await responder_usuario(telefone, MENU_PRINCIPAL_MESSAGE)
         return
 
 
@@ -170,13 +172,7 @@ async def processar_mensagem(mensagem: dict):
             estados_cafeteria.pop(telefone, None)
             await responder_usuario(
                 telefone,
-                "🍫 Olá novamente! Escolha uma opção:\n"
-                "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-                "2️⃣ Ver cardápios\n"
-                "3️⃣ Encomendar bolos ou tortas\n"
-                "4️⃣ Pedidos Delivery Cafeteria\n"
-                "5️⃣ Entregas 🚚\n"
-                "6️⃣ Falar com atendente 👩‍🍳"
+                f"🍫 Olá novamente!\n{MENU_PROMPT}"
             )
 
         elif resultado == "finalizar":
@@ -188,19 +184,7 @@ async def processar_mensagem(mensagem: dict):
 
 
     if is_saudacao(texto):
-        await responder_usuario(
-            telefone,
-            "🍫 Olá! Bem-vindo(a) à *Chokodelícia* 🍫\n"
-            "Sou a *Trufinha* 🍬, assistente virtual da nossa Cafeteria e Doceria!\n\n"
-            "Escolha uma opção:\n"
-            "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-            "2️⃣ Ver cardápios\n"
-            "3️⃣ Encomendar bolos ou tortas\n"
-            "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Cestas Box Café ou Chocolate\n"
-            "6️⃣ Entregas 🚚\n"
-            "7️⃣ Falar com atendente 👩‍🍳"
-        )
+        await responder_usuario(telefone, MAIN_MENU_MESSAGE)
         return
 
 
@@ -274,20 +258,22 @@ async def processar_mensagem(mensagem: dict):
         )
         return
 
-    elif texto in ["7", "atendente", "humano", "falar"]:
+    elif texto in ["7", "doces", "docinhos"]:
+        await responder_usuario(
+            telefone,
+            f"🍬 *Docinhos*\n"
+            f"Cardápio: {DOCES_URL}\n"
+            "Envie os itens que deseja (ex: Brigadeiro Belga x25). "
+            "Em seguida confirmamos o valor, formas de entrega e pagamento."
+        )
+        return
+
+    elif texto in ["8", "atendente", "humano", "falar"]:
         await processar_atendimento(telefone, nome_cliente)
         return
 
     else:
         await responder_usuario(
             telefone,
-            "Desculpe, não entendi sua mensagem 😕\n"
-            "Digite uma das opções abaixo:\n"
-            "1️⃣ Pronta Entrega B3 ou B4 — sabores disponíveis hoje\n"
-            "2️⃣ Ver cardápios\n"
-            "3️⃣ Encomendar bolos ou tortas\n"
-            "4️⃣ Pedidos Delivery Cafeteria\n"
-            "5️⃣ Cestas Box Café ou Chocolate\n"
-            "6️⃣ Entregas 🚚\n"
-            "7️⃣ Falar com atendente 👩‍🍳"
+            f"Desculpe, não entendi sua mensagem 😕\n{MENU_PROMPT}"
         )

@@ -400,6 +400,10 @@ def montar_resumo(pedido: dict, total_bolo: float) -> str:
     data = pedido.get("data_entrega", "")
     hora = pedido.get("horario_retirada", "")
     cat = pedido.get("categoria", "").lower()
+    try:
+        taxa_entrega = float(pedido.get("taxa_entrega") or 0.0)
+    except:
+        taxa_entrega = 0.0
 
     linhas = []
 
@@ -453,6 +457,8 @@ def montar_resumo(pedido: dict, total_bolo: float) -> str:
             "📦 Itens:",
             itens_txt,
         ]
+        if taxa_entrega:
+            corpo.append(f"🚚 Taxa de entrega: R${taxa_entrega:.2f}")
     else:
         corpo = [
             "✅ *Resumo do pedido*",

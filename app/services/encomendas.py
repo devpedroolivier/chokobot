@@ -155,8 +155,55 @@ def _prepara_dados_para_salvar(dados: dict) -> dict:
     d["pagamento"] = {"forma": forma, "troco_para": troco}
     d["forma_pagamento"] = forma
     d["troco_para"] = troco
+    try:
+        d["taxa_entrega"] = float(d.get("taxa_entrega") or 0)
+    except:
+        d["taxa_entrega"] = 0.0
 
     return d
+
+async def _iniciar_entrega(telefone, dados, nome_cliente, cliente_id):
+    """
+    Prepara o pedido para entrega, salva no banco e inicia o fluxo de endereço.
+    """
+    pedido = _monta_pedido_final(dados)
+    pedido["doces_forminha"] = dados.get("doces_forminha", [])
+    pedido["pagamento"] = dados.get("pagamento", {})
+
+    total, serve = calcular_total(pedido)
+    taxa = float(dados.get("taxa_entrega") or 10.0)
+    total += taxa
+
+    pedido["taxa_entrega"] = taxa
+    pedido["valor_total"] = total
+    pedido["serve_pessoas"] = serve
+    pedido["modo_recebimento"] = "entrega"
+    pedido["endereco"] = dados.get("endereco", "")
+    pedido["referencia"] = dados.get("referencia", "")
+
+    dados.update(pedido)
+    dados["taxa_entrega"] = taxa
+
+    dados = _prepara_dados_para_salvar(dados)
+    print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
+    encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente, cliente_id)
+
+    estados_entrega[telefone] = {
+        "etapa": 1,
+        "dados": {
+            "encomenda_id": encomenda_id,
+            "data": dados["data_entrega"],
+            "pedido": pedido,
+            "endereco": "",
+            "referencia": "",
+        },
+        "nome": nome_cliente,
+    }
+
+    await responder_usuario(
+        telefone,
+        "📍 Informe o *endereço completo* para entrega (Rua, número, bairro):"
+    )
 
 async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id):
     """
@@ -742,32 +789,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         dados["valor_total"] = preco
         dados["serve_pessoas"] = 8
         dados["categoria"] = "simples"
+        dados["descricao"] = f"{dados.get('sabor')} com cobertura {cobertura}"
+        dados["taxa_entrega"] = 5.0
 
-        pedido = {
-            "categoria": "simples",
-            "sabor": dados["sabor"],
-            "cobertura": cobertura,
-            "valor_total": preco,
-            "serve_pessoas": 8,
-            "quantidade": 1,
-            "descricao": f"{dados['sabor']} com cobertura {cobertura}",
-            "data_entrega": dados.get("data_entrega"),
-        }
-
-        dados["pedido_preview"] = pedido
-        estado["etapa"] = "confirmar_pedido"
-
+        estado["etapa"] = "data_entrega"
         await responder_usuario(
             telefone,
-            f"🍰 *Resumo do seu bolo simples:*\n"
-            f"Sabor: {dados['sabor']}\n"
-            f"Cobertura: {cobertura}\n"
-            f"Serve 8 fatias\n"
-            f"💰 *Total: R${preco:.2f}*"
-        )
-        await responder_usuario(
-            telefone,
-            "Está tudo correto?\n1️⃣ Confirmar pedido\n2️⃣ Corrigir"
+            "📅 Informe a *data de retirada/entrega* (DD/MM/AAAA):"
         )
         return
 
@@ -862,7 +890,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
                 telefone,
                 "📦 Como você prefere receber?\n"
                 "1️⃣ Retirar na loja\n"
-                "2️⃣ Receber em casa (taxa de entrega: R$ 10,00)",
+                f"2️⃣ Receber em casa (taxa de entrega: R$ {float(dados.get('taxa_entrega') or 10.0):.2f})",
             )
             return
 
@@ -947,7 +975,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             f"Cores escolhidas: {', '.join(cores_escolhidas)}\n\n"
             "Agora, escolha a forma de receber:\n"
             "1️⃣ Retirar na loja\n"
-            "2️⃣ Receber em casa (taxa de entrega: R$ 10,00)",
+            f"2️⃣ Receber em casa (taxa de entrega: R$ {float(dados.get('taxa_entrega') or 10.0):.2f})",
         )
         return
 
@@ -956,6 +984,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         t = (texto or "").strip().lower()
 
         if t in ["1", "retirada", "retirar", "loja", "r"]:
+            dados["taxa_entrega"] = 0.0
             pedido = _monta_pedido_final(dados)
             pedido["doces_forminha"] = dados.get("doces_forminha", [])
             total, serve = calcular_total(pedido)
@@ -972,41 +1001,20 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             return
 
         if t in ["2", "entregar", "entrega", "receber", "e"]:
-            pedido = _monta_pedido_final(dados)
-            pedido["doces_forminha"] = dados.get("doces_forminha", [])
-            total, serve = calcular_total(pedido)
-            total += 10.0
-            pedido["valor_total"] = total
-            pedido["serve_pessoas"] = serve
-            
-            dados.update(pedido)
-            pedido["modo_recebimento"] = "entrega"
-            pedido["endereco"] = dados.get("endereco", "")
-            pedido["referencia"] = dados.get("referencia", "")
+            if "pagamento" not in dados:
+                dados["pagamento"] = {}
+                dados["pos_pagamento"] = "entrega"
+                await responder_usuario(telefone, MSG_ESCOLHER_FORMA)
+                estado["etapa"] = "pagamento_forma"
+                return
 
-
-            # Persiste a encomenda e inicia fluxo de endereço para entrega
-            dados = _prepara_dados_para_salvar(dados)
-            print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
-            encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente, cliente_id)
-
-            estados_entrega[telefone] = {
-                "etapa": 1,
-                "dados": {
-                    "encomenda_id": encomenda_id,
-                    "data": dados["data_entrega"],
-                    "pedido": pedido,
-                    "endereco": "",
-                    "referencia": "",
-                },
-                "nome": nome_cliente,
-            }
-            await responder_usuario(telefone, "📍 Informe o *endereço completo* para entrega (Rua, número, bairro):")
+            await _iniciar_entrega(telefone, dados, nome_cliente, cliente_id)
             return
 
         await responder_usuario(
             telefone,
-            "Por favor, escolha:\n1️⃣ Retirar na loja\n2️⃣ Receber em casa (taxa de entrega: R$ 10,00)",
+            "Por favor, escolha:\n1️⃣ Retirar na loja\n"
+            f"2️⃣ Receber em casa (taxa de entrega: R$ {float(dados.get('taxa_entrega') or 10.0):.2f})",
         )
         return
 
@@ -1166,6 +1174,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             return
         else:
             dados["pagamento"]["troco_para"] = None
+            if dados.get("pos_pagamento") == "entrega":
+                dados.pop("pos_pagamento", None)
+                await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento(forma, 0))
+                await _iniciar_entrega(telefone, dados, nome_cliente, cliente_id)
+                return
             estado["etapa"] = "confirmar_pedido"
             await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento(forma, 0))
             await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
@@ -1183,6 +1196,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             return
 
         dados["pagamento"]["troco_para"] = troco
+        if dados.get("pos_pagamento") == "entrega":
+            dados.pop("pos_pagamento", None)
+            await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento("Dinheiro", troco))
+            await _iniciar_entrega(telefone, dados, nome_cliente, cliente_id)
+            return
         estado["etapa"] = "confirmar_pedido"
         await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento("Dinheiro", troco))
         await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")

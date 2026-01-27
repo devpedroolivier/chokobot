@@ -146,6 +146,7 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
         
         elif modo in ["2", "entrega"]:
             dados["modo_recebimento"] = "entrega"
+            dados["taxa_entrega"] = 10.0
             estado["etapa"] = "endereco"
             await responder_usuario(
                 telefone,
@@ -283,7 +284,7 @@ async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
             "horario_retirada": dados.get("horario_retirada"),
             "modo_recebimento": dados.get("modo_recebimento"),
             "endereco": dados.get("endereco", ""),
-            "valor_total": dados.get("cesta_preco"),
+            "valor_total": dados.get("cesta_preco", 0.0) + dados.get("taxa_entrega", 0.0),
             "pagamento": dados.get("pagamento", {}),
         }
         
@@ -299,6 +300,7 @@ async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
                 "agendada"
             )
         
+        total = dados.get("cesta_preco", 0.0) + dados.get("taxa_entrega", 0.0)
         await responder_usuario(
             telefone,
             f"✅ *Pedido confirmado com sucesso!* ✅\n"
@@ -306,7 +308,7 @@ async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
             f"Cesta: {dados.get('cesta_nome')}\n"
             f"Data: {dados.get('data_entrega')}\n"
             f"Horário: {dados.get('horario_retirada')}\n\n"
-            f"💰 *Total: R${dados.get('cesta_preco'):.2f}*\n\n"
+            f"💰 *Total: R${total:.2f}*\n\n"
             f"Obrigada por sua compra! 🎁\n"
             f"✨ Se registrar o momento nas redes sociais, lembre de nos marcar @chokodelicia"
         )
@@ -321,17 +323,21 @@ async def montar_resumo_e_confirmar(telefone, estado, dados):
     """Monta o resumo do pedido e pede confirmação."""
     modo_txt = "🏪 Retirada na loja" if dados.get("modo_recebimento") == "retirada" else "🚚 Entrega em casa"
     endereco_txt = f"\n📍 Endereço: {dados.get('endereco', '')}" if dados.get("endereco") else ""
+    preco_base = dados.get("cesta_preco", 0.0)
+    taxa = dados.get("taxa_entrega", 0.0)
+    total = preco_base + taxa
     
     resumo = (
         f"✅ *Resumo do seu pedido*\n\n"
         f"🎁 *Cesta*: {dados.get('cesta_nome')}\n"
-        f"R${dados.get('cesta_preco'):.2f}\n\n"
+        f"R${preco_base:.2f}\n\n"
         f"📋 *Detalhes*:\n{dados.get('cesta_descricao')}\n\n"
         f"📅 *Data*: {dados.get('data_entrega')}\n"
         f"⏰ *Horário*: {dados.get('horario_retirada')}\n"
         f"{modo_txt}{endereco_txt}\n\n"
         f"———\n"
-        f"*Total: R${dados.get('cesta_preco'):.2f}*\n"
+        f"{f'Taxa de entrega: R${taxa:.2f}\\n' if taxa else ''}"
+        f"*Total: R${total:.2f}*\n"
         f"———\n\n"
         f"Tudo correto?\n"
         f"1️⃣ Confirmar pedido\n"
