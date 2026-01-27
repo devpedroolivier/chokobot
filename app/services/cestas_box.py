@@ -327,6 +327,7 @@ async def montar_resumo_e_confirmar(telefone, estado, dados):
     taxa = dados.get("taxa_entrega", 0.0)
     total = preco_base + taxa
     
+    taxa_txt = f"Taxa de entrega: R${taxa:.2f}\n" if taxa else ""
     resumo = (
         f"✅ *Resumo do seu pedido*\n\n"
         f"🎁 *Cesta*: {dados.get('cesta_nome')}\n"
@@ -336,7 +337,7 @@ async def montar_resumo_e_confirmar(telefone, estado, dados):
         f"⏰ *Horário*: {dados.get('horario_retirada')}\n"
         f"{modo_txt}{endereco_txt}\n\n"
         f"———\n"
-        f"{f'Taxa de entrega: R${taxa:.2f}\\n' if taxa else ''}"
+        f"{taxa_txt}"
         f"*Total: R${total:.2f}*\n"
         f"———\n\n"
         f"Tudo correto?\n"
@@ -345,3 +346,4 @@ async def montar_resumo_e_confirmar(telefone, estado, dados):
     )
     
     await responder_usuario(telefone, resumo)
+
