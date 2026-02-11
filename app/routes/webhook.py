@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Request
+﻿import json
 from datetime import datetime
+
+from fastapi import APIRouter, HTTPException, Request
+
 from app.handler import processar_mensagem
+from app.security import validate_webhook_request
 
 router = APIRouter()
+
 
 def print_painel(body: dict):
     nome = body.get("chatName", "Desconhecido")
@@ -11,23 +16,28 @@ def print_painel(body: dict):
     hora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     print("\n" + "=" * 50)
-    print("📬 NOVA MENSAGEM RECEBIDA")
-    print(f"👤 Nome: {nome}")
-    print(f"📱 Número: {numero}")
-    print(f"💬 Mensagem: {texto}")
-    print(f"🕐 Horário: {hora}")
+    print("NOVA MENSAGEM RECEBIDA")
+    print(f"Nome: {nome}")
+    print(f"Numero: {numero}")
+    print(f"Mensagem: {texto}")
+    print(f"Horario: {hora}")
     print("=" * 50 + "\n")
+
 
 @router.post("/webhook")
 async def receber_webhook(request: Request):
-    body = await request.json()
+    raw_body = await request.body()
+    validate_webhook_request(request, raw_body)
 
-    # Ignora mensagens que não são do usuário
+    try:
+        body = json.loads(raw_body.decode("utf-8") or "{}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="JSON invalido") from exc
+
     if body.get("fromMe") or body.get("type") == "DeliveryCallback":
-        print("ℹ️ Ignorado: mensagem enviada por mim ou callback de entrega.")
+        print("Ignorado: mensagem enviada por mim ou callback de entrega.")
         return {"status": "ignored"}
 
     print_painel(body)
-
     await processar_mensagem(body)
     return {"status": "ok"}

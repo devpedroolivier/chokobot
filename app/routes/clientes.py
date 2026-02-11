@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Request, Form
+﻿from datetime import datetime
+
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+
 from app.db.database import get_connection
+from app.security import require_panel_auth
 from app.templates_engine import templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_panel_auth)])
+
 
 @router.get("/painel/clientes", response_class=HTMLResponse)
 def listar_clientes(request: Request):
@@ -27,8 +32,10 @@ def editar_cliente(request: Request, cliente_id: int):
     cursor.execute("SELECT * FROM clientes WHERE id = ?", (cliente_id,))
     cliente = cursor.fetchone()
     conn.close()
+
     if cliente:
         return templates.TemplateResponse("cliente_form.html", {"request": request, "cliente": cliente})
+
     return RedirectResponse(url="/painel/clientes", status_code=302)
 
 
@@ -36,24 +43,24 @@ def editar_cliente(request: Request, cliente_id: int):
 def atualizar_cliente(cliente_id: int, nome: str = Form(...), telefone: str = Form(...)):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE clientes SET nome = ?, telefone = ? WHERE id = ?
-    """, (nome, telefone, cliente_id))
+    cursor.execute(
+        "UPDATE clientes SET nome = ?, telefone = ? WHERE id = ?",
+        (nome, telefone, cliente_id),
+    )
     conn.commit()
     conn.close()
     return RedirectResponse(url="/painel/clientes", status_code=302)
 
 
-@router.post("/painel/clientes", response_class=HTMLResponse)
+@router.post("/painel/clientes")
 def salvar_novo_cliente(nome: str = Form(...), telefone: str = Form(...)):
-    from datetime import datetime
     agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO clientes (nome, telefone, criado_em)
-        VALUES (?, ?, ?)
-    """, (nome, telefone, agora))
+    cursor.execute(
+        "INSERT INTO clientes (nome, telefone, criado_em) VALUES (?, ?, ?)",
+        (nome, telefone, agora),
+    )
     conn.commit()
     conn.close()
     return RedirectResponse(url="/painel/clientes", status_code=302)

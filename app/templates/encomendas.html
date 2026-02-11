@@ -1,78 +1,60 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Encomendas - Chokodelícia</title>
+  <meta charset="UTF-8" />
+  <title>Encomendas - Chokodelicia</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 font-sans">
   <div class="container mx-auto px-6 py-8">
-
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold">📦 Encomendas</h1>
-      <a href="/painel" class="text-blue-700 hover:underline">← Voltar ao Painel</a>
+      <h1 class="text-2xl font-bold">Encomendas</h1>
+      <a href="/painel" class="text-blue-700 hover:underline">Voltar ao Painel</a>
     </div>
 
-    <!-- Botão para Nova Encomenda -->
-    <div class="mb-6">
+    <div class="mb-6 flex gap-3">
       <a href="/painel/encomendas/novo" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
-        + Nova Encomenda
+        Nova Encomenda
+      </a>
+      <a href="/painel/encomendas/exportar" class="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 transition">
+        Exportar TXT
       </a>
     </div>
 
-    <!-- Tabela de Encomendas -->
     <table class="w-full bg-white shadow-md rounded text-sm">
       <thead>
         <tr class="bg-blue-600 text-white">
           <th class="p-3 text-left">ID</th>
           <th class="p-3 text-left">Cliente</th>
           <th class="p-3 text-left">Telefone</th>
-          <th class="p-3 text-left">Linha</th>
-          <th class="p-3 text-left">Massa</th>
-          <th class="p-3 text-left">Recheio</th>
-          <th class="p-3 text-left">Mousse</th>
-          <th class="p-3 text-left">Adicional</th>
+          <th class="p-3 text-left">Categoria</th>
+          <th class="p-3 text-left">Produto</th>
           <th class="p-3 text-left">Tamanho</th>
-          <th class="p-3 text-left">Gourmet</th>
-          <th class="p-3 text-left">Entrega</th>
-          <th class="p-3 text-left">Criado em</th>
-          <th class="p-3 text-left">Ações</th>
+          <th class="p-3 text-left">Adicional</th>
+          <th class="p-3 text-left">Data</th>
+          <th class="p-3 text-left">Horario</th>
+          <th class="p-3 text-left">Valor</th>
+          <th class="p-3 text-left">Status</th>
+          <th class="p-3 text-left">Acoes</th>
         </tr>
       </thead>
       <tbody>
         {% for e in encomendas %}
         <tr class="border-b hover:bg-gray-100">
-          <td class="p-3">{{ e[0] }}</td>
-          <td class="p-3">{{ e[1] or '-' }}</td>
-          <td class="p-3">{{ e[2] or '-' }}</td>
-          <td class="p-3">
-            {% if e[3] == "normal" %}
-              Bolo Personalizado
-            {% elif e[3] == "gourmet" %}
-              Linha Gourmet
-            {% elif e[3] == "redondo" %}
-              Bolo Redondo
-            {% elif e[3] == "torta" %}
-              Torta
-            {% elif e[3] == "pronta_entrega" %}
-              Pronta Entrega
-            {% else %}
-              {{ e[3] if e[3] else "-" }}
-            {% endif %}
-          </td>
-          <td class="p-3">{{ e[4] or '-' }}</td>
-          <td class="p-3">{{ e[5] or '-' }}</td>
-          <td class="p-3">{{ e[6] or '-' }}</td>
-          <td class="p-3">{{ e[7] or '-' }}</td>
-          <td class="p-3">{{ e[8] or '-' }}</td>
-          <td class="p-3">{{ e[9] or '-' }}</td>
-          <td class="p-3">
-            {{ "🎁 Pronta Entrega" if e[10] == "pronta entrega" else (e[10] or '-') }}
-          </td>
-          <td class="p-3">{{ e[11] or '-' }}</td>
+          <td class="p-3">{{ e.id }}</td>
+          <td class="p-3">{{ e.cliente_nome or '-' }}</td>
+          <td class="p-3">{{ e.cliente_telefone or '-' }}</td>
+          <td class="p-3">{{ e.linha or e.categoria or '-' }}</td>
+          <td class="p-3">{{ e.produto or '-' }}</td>
+          <td class="p-3">{{ e.tamanho or '-' }}</td>
+          <td class="p-3">{{ e.adicional or '-' }}</td>
+          <td class="p-3">{{ e.data_entrega or '-' }}</td>
+          <td class="p-3">{{ e.horario or '-' }}</td>
+          <td class="p-3">R$ {{ e.valor_total or '0.00' }}</td>
+          <td class="p-3">{{ e.status or 'pendente' }}</td>
           <td class="p-3 space-x-2">
-            <a href="/painel/encomendas/{{ e[0] }}/editar" class="text-blue-600 hover:underline">Editar</a>
-            <form method="post" action="/painel/encomendas/{{ e[0] }}/excluir" class="inline">
+            <a href="/painel/encomendas/{{ e.id }}" class="text-blue-600 hover:underline">Detalhes</a>
+            <form method="post" action="/painel/encomendas/{{ e.id }}/excluir" class="inline">
               <button type="submit" class="text-red-600 hover:underline" onclick="return confirm('Deseja excluir esta encomenda?')">
                 Excluir
               </button>
@@ -81,7 +63,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="13" class="p-3 text-center">Nenhuma encomenda encontrada.</td>
+          <td colspan="12" class="p-3 text-center">Nenhuma encomenda encontrada.</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -1,13 +1,12 @@
-# app/db/init_db.py
-from pathlib import Path
+﻿from pathlib import Path
+
 from app.db.database import get_connection
+
 
 def ensure_views():
     """
-    Executa o SQL de criação/atualização de VIEWS (e o que mais você quiser colocar lá).
-    Ele lê o arquivo schema.sql e executa no banco apontado por get_connection().
+    Executa o SQL de criacao/atualizacao de views.
     """
-    # tenta resolver schema.sql tanto em dev quanto no container
     candidates = [
         Path("app/db/schema.sql"),
         Path("app") / "db" / "schema.sql",
@@ -16,7 +15,7 @@ def ensure_views():
     ]
     schema_path = next((p for p in candidates if p.exists()), None)
     if not schema_path:
-        print("[DB] ⚠️ schema.sql não encontrado; pulando ensure_views()")
+        print("[DB] schema.sql nao encontrado; pulando ensure_views()")
         return
 
     sql = schema_path.read_text(encoding="utf-8")
@@ -24,6 +23,6 @@ def ensure_views():
     try:
         with conn:
             conn.executescript(sql)
-        print(f"[DB] ✅ Views aplicadas a partir de: {schema_path.resolve()}")
+        print(f"[DB] Views aplicadas a partir de: {schema_path.resolve()}")
     finally:
         conn.close()
