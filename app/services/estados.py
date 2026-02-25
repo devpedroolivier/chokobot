@@ -1,32 +1,26 @@
-# app/services/estados.py
+from app.infrastructure.state.conversation_state_store import build_conversation_state_store
 
-"""
-Estados em memória para controlar o fluxo de conversa por telefone.
-Cada chave é o telefone (str) e o valor é um dict com metadados do fluxo.
-"""
+_store = build_conversation_state_store()
 
-# Fluxos automáticos
-estados_encomenda: dict = {}
-estados_cafeteria: dict = {}
-estados_entrega: dict = {}
-estados_cestas_box: dict = {}
+estados_encomenda = _store.estados_encomenda
+estados_cafeteria = _store.estados_cafeteria
+estados_entrega = _store.estados_entrega
+estados_cestas_box = _store.estados_cestas_box
+estados_atendimento = _store.estados_atendimento
 
-# 🔹 Novo: clientes em atendimento humano (bot silencioso)
-# Exemplo de valor: {"inicio": datetime, "nome": "Cliente"}
-estados_atendimento: dict = {}
 
-# ====== PAGAMENTO ======
+def is_bot_ativo() -> bool:
+    return _store.is_bot_ativo()
 
-# Subestados do fluxo de pagamento
+
+def set_bot_ativo(value: bool) -> None:
+    _store.set_bot_ativo(value)
+
+
 SUBESTADO_FORMA_PAGAMENTO = "AGUARDANDO_FORMA_PAGAMENTO"
 SUBESTADO_TROCO = "AGUARDANDO_TROCO"
-
-# Opções disponíveis de forma de pagamento
 FORMAS_PAGAMENTO = {
     "1": "PIX",
     "2": "Cartão (débito/crédito)",
     "3": "Dinheiro",
 }
-
-# ====== CONTROLE ADMINISTRATIVO DO BOT ======
-BOT_ATIVO = True  # flag global — True = ativo / False = desativado

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from collections import deque
 from app.models.clientes import salvar_cliente
 from app.utils.mensagens import responder_usuario, is_saudacao
+from app.utils.payload import normalize_incoming
 from app.services.encomendas import processar_encomenda
 from app.services.cafeteria import processar_cafeteria
 from app.services.cestas_box import processar_cestas_box
@@ -14,7 +15,8 @@ from app.services.estados import (
     estados_cafeteria,
     estados_cestas_box,
     estados_atendimento,
-    BOT_ATIVO,  # importa direto aqui também
+    is_bot_ativo,
+    set_bot_ativo,
 )
 from app.config import CAFETERIA_URL, DOCES_URL
 
@@ -45,14 +47,13 @@ mensagens_processadas = deque(maxlen=2000)
 ultimas_mensagens = {}
 
 async def processar_mensagem(mensagem: dict):
-    from app.services import estados  # garante acesso dinâmico à flag global
-
-    texto = (mensagem.get("text", {}) or {}).get("message", "")
+    norm = normalize_incoming(mensagem)
+    texto = norm["text"]
     if texto:
         texto = texto.lower().strip()
-    telefone = (mensagem.get("phone") or "").replace("+", "").strip()
-    nome_cliente = mensagem.get("chatName", "Nome não informado")
-    msg_id = mensagem.get("id") or mensagem.get("messageId")
+    telefone = norm["phone"]
+    nome_cliente = norm["chat_name"] or "Nome não informado"
+    msg_id = norm["message_id"]
 
     
 
@@ -60,25 +61,25 @@ async def processar_mensagem(mensagem: dict):
     if telefone in ["5516992622680"]:  # 👈 seu número adminn
         cmd = texto.lower()
         if cmd in ["desativar bot", "desligar bot", "pausar bot"]:
-            estados.BOT_ATIVO = False
+            set_bot_ativo(False)
             await responder_usuario(telefone, "🚫 Bot desativado temporariamente.")
             print("🚫 BOT DESATIVADO PELO ADMIN.")
             return
 
         if cmd in ["ativar bot", "ligar bot", "reativar bot"]:
-            estados.BOT_ATIVO = True
+            set_bot_ativo(True)
             await responder_usuario(telefone, "✅ Bot reativado e pronto para atender!")
             print("✅ BOT REATIVADO PELO ADMIN.")
             return
 
     # ====== VERIFICAÇÃO GLOBAL DO ESTADO DO BOT ======
-    if not estados.BOT_ATIVO:
+    if not is_bot_ativo():
         print(f"⚠️ BOT DESATIVADO — Mensagem ignorada de {telefone}: {texto}")
         return
 
     # ====== VALIDAÇÃO BÁSICA DE MENSAGEM ======
     if not telefone or not texto:
-        print("❌ Dados incompletos:", mensagem)
+        print("❌ Dados incompletos:", {"telefone": telefone, "texto": texto, "tipo": norm["message_type"]})
         return
 
 

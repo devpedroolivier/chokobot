@@ -1,10 +1,12 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import traceback
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.models import criar_tabelas
-from app.routes import router  # importa o roteador unificado
+from app.api.router import router
 from app.db.init_db import ensure_views
 
 app = FastAPI(title="Agente WhatsApp - Chokodelícia")
@@ -26,3 +28,10 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 def on_startup():
     criar_tabelas()
     ensure_views()
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    print(f"❌ Excecao nao tratada: {exc}")
+    traceback.print_exc()
+    return JSONResponse(status_code=500, content={"status": "error", "detail": "internal_error"})
