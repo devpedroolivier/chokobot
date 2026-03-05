@@ -101,16 +101,31 @@ async def processar_mensagem(mensagem: dict):
     cliente_id = salvar_cliente(telefone, nome_cliente)
 
     if telefone in estados_atendimento:
-        if texto in REATIVAR_BOT_OPCOES:
+        estado = estados_atendimento[telefone]
+        # Garantir que temos um timestamp
+        if "inicio" not in estado:
+            estado["inicio"] = agora.isoformat()
+            
+        ultimo_contato = datetime.fromisoformat(estado["inicio"])
+        
+        # Se passou de 30 minutos desde a última mensagem, reativa automaticamente
+        if (agora - ultimo_contato) > timedelta(minutes=30):
             estados_atendimento.pop(telefone, None)
-            await responder_usuario(
-                telefone,
-                "🤖 Bot reativado. Vamos continuar!\n"
-                f"{MENU_PROMPT}"
-            )
+            await responder_usuario(telefone, "🤖 Oi! Como ficamos um tempinho sem nos falar, a Trufinha (IA) foi reativada. Se precisar de algo, estou aqui!")
+            # O código continua e a IA vai processar a mensagem atual normalmente
         else:
-            print(f"👤 {telefone} em atendimento humano — bot silencioso.")
-        return
+            if texto in REATIVAR_BOT_OPCOES:
+                estados_atendimento.pop(telefone, None)
+                await responder_usuario(
+                    telefone,
+                    "🤖 Bot reativado. Como posso ajudar?"
+                )
+                return
+            else:
+                # Atualiza o cronômetro para manter o silêncio enquanto conversam
+                estados_atendimento[telefone]["inicio"] = agora.isoformat()
+                print(f"👤 {telefone} em atendimento humano — bot silencioso.")
+                return
 
     # ====== PROCESSAMENTO VIA AGENTES DE IA ======
     from app.ai.runner import process_message_with_ai
@@ -121,34 +136,3 @@ async def processar_mensagem(mensagem: dict):
     # Envia a resposta final gerada pela IA (ou pelas tools) de volta ao cliente via WhatsApp
     await responder_usuario(telefone, resposta_ia)
     return
-        estados_cestas_box[telefone] = estado
-        if resultado == "finalizar":
-            estados_cestas_box.pop(telefone, None)
-        return
-
-    if telefone in estados_encomenda:
-        estado = estados_encomenda[telefone]
-        resultado = await processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
-
-        estados_encomenda[telefone] = estado
-        if resultado == "finalizar":
-            estados_encomenda.pop(telefone, None)
-        return
-
-
-
-    if telefone in estados_cafeteria:
-        estado = estados_cafeteria[telefone]
-        resultado = await processar_cafeteria(telefone, texto, estado)
-        estados_cafeteria[telefone] = estado
-
-        if resultado == "voltar_menu":
-            estados_cafeteria.pop(telefone, None)
-            await responder_usuario(
-                telefone,
-                f"🍫 Olá novamente!\n{MENU_PROMPT}"
-            )
-
-        elif resultado == "finalizar":
-            estados_cafeteria.pop(telefone, None)
-
