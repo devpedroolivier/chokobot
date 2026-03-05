@@ -100,7 +100,6 @@ async def processar_mensagem(mensagem: dict):
     from app.models.clientes import salvar_cliente
     cliente_id = salvar_cliente(telefone, nome_cliente)
 
-
     if telefone in estados_atendimento:
         if texto in REATIVAR_BOT_OPCOES:
             estados_atendimento.pop(telefone, None)
@@ -113,41 +112,15 @@ async def processar_mensagem(mensagem: dict):
             print(f"👤 {telefone} em atendimento humano — bot silencioso.")
         return
 
-
-    if texto in CANCELAR_OPCOES:
-        if telefone in estados_encomenda:
-            estados_encomenda.pop(telefone)
-            await responder_usuario(telefone, "❌ Encomenda cancelada com sucesso.")
-        elif telefone in estados_cafeteria:
-            estados_cafeteria.pop(telefone)
-            await responder_usuario(telefone, "❌ Pedido da cafeteria cancelado com sucesso.")
-        elif telefone in estados_entrega:
-            estados_entrega.pop(telefone)
-            await responder_usuario(telefone, "❌ Solicitação de entrega cancelada com sucesso.")
-        else:
-            await responder_usuario(telefone, "⚠️ Nenhuma operação em andamento para cancelar.")
-        return
-
-    if texto in MENU_OPCOES:
-        estados_encomenda.pop(telefone, None)
-        estados_cafeteria.pop(telefone, None)
-        estados_entrega.pop(telefone, None)
-        await responder_usuario(telefone, MENU_PRINCIPAL_MESSAGE)
-        return
-
-
-    if telefone in estados_entrega:
-        estado = estados_entrega[telefone]
-        resultado = await processar_entrega(telefone, texto, estado)
-        estados_entrega[telefone] = estado
-        if resultado == "finalizar":
-            estados_entrega.pop(telefone, None)
-            estados_encomenda.pop(telefone, None)
-        return
-
-    if telefone in estados_cestas_box:
-        estado = estados_cestas_box[telefone]
-        resultado = await processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id)
+    # ====== PROCESSAMENTO VIA AGENTES DE IA ======
+    from app.ai.runner import process_message_with_ai
+    
+    # Chama o Swarm de Agentes
+    resposta_ia = await process_message_with_ai(telefone, texto, nome_cliente, cliente_id)
+    
+    # Envia a resposta final gerada pela IA (ou pelas tools) de volta ao cliente via WhatsApp
+    await responder_usuario(telefone, resposta_ia)
+    return
         estados_cestas_box[telefone] = estado
         if resultado == "finalizar":
             estados_cestas_box.pop(telefone, None)
@@ -179,103 +152,3 @@ async def processar_mensagem(mensagem: dict):
         elif resultado == "finalizar":
             estados_cafeteria.pop(telefone, None)
 
-        return
-
-
-
-
-    if is_saudacao(texto):
-        await responder_usuario(telefone, MAIN_MENU_MESSAGE)
-        return
-
-
-    elif texto in ["1", "pronta", "pronta entrega", "pronta-entrega"]:
-        estados_encomenda[telefone] = {
-            "etapa": "pronta_item",
-            "dados": {"linha": "pronta_entrega"}
-        }
-        await responder_usuario(
-            telefone,
-            "📦 *Pronta entrega de hoje:*\n\n"
-            "🎂 Mesclado de Brigadeiro com Ninho\n\n"
-            "B3 (até 15 pessoas) — R$120\n"
-            "B4 (até 30 pessoas) — R$180\n\n"
-            "Adicione +R$35 e leve o *Kit Festou* 🎉 (25 brigadeiros + 1 Balão personalizado)\n\n"
-            "📝 Digite *B3* ou *B4*"
-        )
-        return
-
-
-    elif texto in ["2", "cardápio", "cardapio", "cardapios"]:
-        estados_cafeteria[telefone] = {"subetapa": "aguardando_cardapio"}
-        await responder_usuario(
-            telefone,
-            "📋 Qual cardápio você deseja ver?\n"
-            "1️⃣ Cardápio Cafeteria\n"
-            "2️⃣ Cardápio Bolos & Tortas\n"
-            "3️⃣ Cardápio Doces\n"
-            "4️⃣ Cardápio Cestas Box/Presentes\n"
-            "5️⃣ Cardápio Páscoa Inesquecível"
-        )
-        return
-
-    elif texto in ["3", "bolo", "encomendar", "encomendas", "torta", "tortas"]:
-        estados_encomenda[telefone] = {"etapa": 1, "dados": {}}
-        await responder_usuario(
-            telefone,
-            "🎂 *Vamos começar sua encomenda!*\n\n"
-            "Qual linha você deseja?\n"
-            "1️⃣ Monte seu bolo (B3 | B4 | B6 | B7)\n"
-            "2️⃣ Linha Gourmet (Inglês ou Redondo P6)\n"
-            "3️⃣ Linha Mesversário ou Revelação\n"
-            "4️⃣ Linha Individual Baby Cake\n"
-            "5️⃣ Tortas\n"
-            "6️⃣ Linha Simples\n\n"
-
-            "📷 Fotos e preços: https://keepo.io/boloschoko/"
-        )
-        return
-
-    elif texto in ["4", "pedido", "cafeteria", "delivery"]:
-        await responder_usuario(
-            telefone,
-            f"☕ Os pedidos da *cafeteria* são feitos pelo nosso link oficial: {CAFETERIA_URL}\n"
-            "Qualquer dúvida, me chame aqui. 😉"
-        )
-        return
-
-    elif texto in ["5", "cestas", "cesta", "box", "chocolate", "café", "cafe"]:
-        estados_cestas_box[telefone] = {"etapa": "selecao", "dados": {}}
-        from app.services.cestas_box import montar_menu_cestas
-        await responder_usuario(telefone, montar_menu_cestas())
-        return
-
-    elif texto in ["6", "entrega", "informações de entrega", "delivery"]:
-        await responder_usuario(
-            telefone,
-            "🚚 Entregamos em *Pitangueiras-SP* (taxa R$10) *exceto zona rural*.\n"
-            "Ibitiuva, zona rural ou Usina: combinar valor especial.\n"
-            "Para outras regiões, o valor depende da distância (via Uber).\n"
-            "Horário de entregas: 10h às 18h."
-        )
-        return
-
-    elif texto in ["7", "doces", "docinhos"]:
-        await responder_usuario(
-            telefone,
-            f"🍬 *Docinhos*\n"
-            f"Cardápio: {DOCES_URL}\n"
-            "Envie os itens que deseja (ex: Brigadeiro Belga x25). "
-            "Em seguida confirmamos o valor, formas de entrega e pagamento."
-        )
-        return
-
-    elif texto in ["8", "atendente", "humano", "falar"]:
-        await processar_atendimento(telefone, nome_cliente)
-        return
-
-    else:
-        await responder_usuario(
-            telefone,
-            f"Desculpe, não entendi sua mensagem 😕\n{MENU_PROMPT}"
-        )

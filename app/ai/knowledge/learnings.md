@@ -1,0 +1,2 @@
+- O cliente pode pedir torta de limão para retirada e pagar em dinheiro, solicitando troco.
+- Sempre que alguém pedir bolo de cenoura, avise que ele vem com muita calda de chocolate extra.
