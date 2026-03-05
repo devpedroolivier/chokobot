@@ -215,7 +215,7 @@ async def processar_mensagem(mensagem: dict):
             "2️⃣ Cardápio Bolos & Tortas\n"
             "3️⃣ Cardápio Doces\n"
             "4️⃣ Cardápio Cestas Box/Presentes\n"
-            "5️⃣ Cardápio Páscoa Inesquecível Chokodelícia"
+            "5️⃣ Cardápio Páscoa Inesquecível"
         )
         return
 
