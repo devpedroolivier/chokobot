@@ -142,14 +142,21 @@ def get_openai_tools(agent):
     return openai_tools
 
 
+import time
+from datetime import datetime
+
 async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, cliente_id: int) -> str:
     """Função principal que o handler vai chamar para processar a mensagem pela IA."""
+    start_time = time.time()
     session = get_or_create_session(telefone)
+    
+    agora = datetime.now()
+    data_hora_atual = agora.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
     
     if not session["messages"]:
         # Inicializa o prompt de sistema do agente atual
         agent = AGENTS_MAP.get(session["current_agent"], TriageAgent)
-        system_instructions = agent.instructions
+        system_instructions = agent.instructions + f"\n\n[CONTEXTO DO SISTEMA: {data_hora_atual}]"
         
         # Inject learnings on boot
         learnings = get_learnings()
@@ -161,14 +168,22 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
     # Adiciona a mensagem do usuário
     session["messages"].append({"role": "user", "content": text})
     
+    print(f"\n[AI RUNNER] 🤖 Iniciando raciocínio para {telefone}...")
+    print(f"[AI RUNNER] 🧠 Agente atual: {session['current_agent']}")
+    
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    iteration_count = 0
+
     # Loop de raciocínio da IA
     while True:
+        iteration_count += 1
         current_agent_name = session["current_agent"]
         agent = AGENTS_MAP.get(current_agent_name, TriageAgent)
         
         # Atualiza as instruções se trocar de agente
         if session["messages"][0]["role"] == "system":
-            sys_inst = agent.instructions
+            sys_inst = agent.instructions + f"\n\n[CONTEXTO DO SISTEMA: {data_hora_atual}]"
             learnings = get_learnings()
             if learnings:
                 sys_inst += f"\n\nREGRAS APRENDIDAS ANTERIORMENTE:\n{learnings}"
@@ -184,11 +199,19 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
             temperature=0.1
         )
         
+        # Coleta métricas de tokens
+        if response.usage:
+            total_prompt_tokens += response.usage.prompt_tokens
+            total_completion_tokens += response.usage.completion_tokens
+            
         msg = response.choices[0].message
         session["messages"].append(msg)
         
         # Se a IA respondeu com texto final
         if not msg.tool_calls:
+            end_time = time.time()
+            print(f"[AI RUNNER] ✅ Finalizado em {end_time - start_time:.2f}s | Iterações: {iteration_count}")
+            print(f"[AI RUNNER] 📊 Tokens - Prompt: {total_prompt_tokens} | Completion: {total_completion_tokens} | Total: {total_prompt_tokens + total_completion_tokens}")
             return msg.content
             
         # Se a IA decidiu chamar uma ferramenta
@@ -196,6 +219,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
             function_name = tool_call.function.name
             arguments = json.loads(tool_call.function.arguments)
             
+            print(f"[AI RUNNER] 🛠️  Ferramenta chamada: {function_name}")
             tool_result = ""
             
             if function_name == "transfer_to_agent":
@@ -203,6 +227,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                 if new_agent in AGENTS_MAP:
                     session["current_agent"] = new_agent
                     tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
+                    print(f"[AI RUNNER] 🔄 Handoff efetuado: -> {new_agent}")
                 else:
                     tool_result = f"Erro: Agente {new_agent} não existe."
                     
