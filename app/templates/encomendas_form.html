@@ -39,7 +39,7 @@
         <label class="block text-gray-700 text-sm font-medium mb-2">Linha</label>
         <select name="linha" required class="w-full border border-gray-300 rounded px-3 py-2">
           <option value="">Selecione</option>
-          <option value="normal" {% if encomenda and encomenda['linha'] == 'normal' %}selected{% endif %}>Normal</option>
+          <option value="tradicional" {% if encomenda and encomenda['linha'] in ['tradicional', 'normal'] %}selected{% endif %}>Tradicional</option>
           <option value="gourmet" {% if encomenda and encomenda['linha'] == 'gourmet' %}selected{% endif %}>Gourmet</option>
         </select>
       </div>

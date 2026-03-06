@@ -3,6 +3,8 @@ import re
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict
 
+LIMITE_HORARIO_ENTREGA = "17:30"
+
 # === ALIASES DE PRODUTO (evita KeyError por variações de digitação) ===
 TORTAS_ALIASES: Dict[str, str] = {
     "argentina": "Argentina",
@@ -140,6 +142,20 @@ def _parse_hora(txt: str) -> Optional[str]:
         return None
 
 
+def _horario_entrega_permitido(txt: str | None) -> bool:
+    hora = _parse_hora(txt or "")
+    if not hora:
+        return False
+    return hora <= LIMITE_HORARIO_ENTREGA
+
+
+def _linha_canonica(valor: str | None) -> str:
+    linha = (valor or "").strip().lower()
+    if linha in {"normal", "tradicional"}:
+        return "tradicional"
+    return linha
+
+
 def _normaliza_tamanho(txt: str) -> str:
     t = (txt or "").strip().lower()
     return TAMANHO_MAP.get(t, t.upper())
@@ -154,5 +170,8 @@ __all__ = [
     "_valida_data",
     "parse_doces_input_flex",
     "_parse_hora",
+    "_horario_entrega_permitido",
+    "_linha_canonica",
+    "LIMITE_HORARIO_ENTREGA",
     "_normaliza_tamanho",
 ]

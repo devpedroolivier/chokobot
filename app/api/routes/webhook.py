@@ -1,48 +1,78 @@
-from fastapi import APIRouter, Request
-from datetime import datetime
+import json
 import traceback
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException, Request
+
 from app.handler import processar_mensagem
-from app.utils.payload import normalize_incoming, is_group_message
+from app.observability import increment_counter, log_event
+from app.security import (
+    hash_phone,
+    is_replay_event,
+    preview_text,
+    security_audit,
+    verify_webhook_secret,
+    webhook_secret_header,
+)
 from app.utils.mensagens import responder_usuario
+from app.utils.payload import is_group_message, normalize_incoming
 
 router = APIRouter()
+
 
 def print_painel(body: dict):
     norm = normalize_incoming(body)
     nome = norm["chat_name"]
-    numero = norm["phone"] or "N/A"
+    numero = hash_phone(norm["phone"])
     texto = norm["text"]
     hora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    print("\n" + "=" * 50)
-    print("📬 NOVA MENSAGEM RECEBIDA")
-    print(f"👤 Nome: {nome}")
-    print(f"📱 Número: {numero}")
-    print(f"💬 Mensagem: {texto}")
-    print(f"🕐 Horário: {hora}")
-    print("=" * 50 + "\n")
+    log_event(
+        "webhook_inbound",
+        chat_name=preview_text(nome, 40),
+        phone_hash=numero,
+        text=preview_text(texto, 120),
+        at=hora,
+    )
+
 
 @router.post("/webhook")
 async def receber_webhook(request: Request):
-    body = await request.json()
+    raw_body = await request.body()
+    verify_webhook_secret(request.headers.get(webhook_secret_header()))
 
-    # Ignora mensagens que não são do usuário
+    try:
+        body = json.loads(raw_body.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        security_audit("webhook_invalid_json", error=type(exc).__name__)
+        raise HTTPException(status_code=400, detail="invalid_json") from exc
+
     if body.get("fromMe") or body.get("type") == "DeliveryCallback":
-        print("ℹ️ Ignorado: mensagem enviada por mim ou callback de entrega.")
+        increment_counter("webhook_events_total", status="ignored", reason="self_or_callback")
+        log_event("webhook_ignored", reason="self_or_callback")
         return {"status": "ignored"}
     if is_group_message(body):
-        print("ℹ️ Ignorado: mensagem de grupo.")
+        increment_counter("webhook_events_total", status="ignored", reason="group_message")
+        log_event("webhook_ignored", reason="group_message")
         return {"status": "ignored"}
+
+    norm = normalize_incoming(body)
+    if is_replay_event(norm.get("message_id")):
+        security_audit("webhook_replay_detected", message_id=norm.get("message_id", ""))
+        increment_counter("webhook_events_total", status="ignored", reason="replay")
+        return {"status": "ignored", "detail": "replay_detected"}
 
     print_painel(body)
 
     try:
         await processar_mensagem(body)
+        increment_counter("webhook_events_total", status="ok", reason="processed")
         return {"status": "ok"}
     except Exception as exc:
-        print(f"❌ Erro ao processar webhook: {exc}")
+        increment_counter("webhook_events_total", status="error", reason=type(exc).__name__)
+        log_event("webhook_processing_error", error_type=type(exc).__name__)
         traceback.print_exc()
-        phone = normalize_incoming(body).get("phone")
+        phone = norm.get("phone")
         if phone:
             await responder_usuario(
                 phone,

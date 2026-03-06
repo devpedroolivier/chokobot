@@ -12,6 +12,9 @@ from app.services.encomendas_utils import (
     REDONDOS_ALIASES,
     GOURMET_ALIASES,
     TAMANHO_MAP,
+    LIMITE_HORARIO_ENTREGA,
+    _horario_entrega_permitido,
+    _linha_canonica,
     _normaliza_produto,
     _valida_data,
     parse_doces_input_flex,
@@ -51,7 +54,7 @@ def _monta_pedido_final(dados: dict) -> dict:
     Constrói o dicionário 'pedido' conforme a linha escolhida.
     Também inclui campos de doces quando existirem.
     """
-    linha = dados.get("linha") or "normal"
+    linha = _linha_canonica(dados.get("linha") or "tradicional")
 
     base = {
         "kit_festou": bool(dados.get("kit_festou")),
@@ -63,7 +66,7 @@ def _monta_pedido_final(dados: dict) -> dict:
     }
 
     # Tradicional (com tamanho) ou quando tem tamanho e não tem produto (fallback)
-    if linha in ["normal", "pronta_entrega"] or ("tamanho" in dados and not dados.get("produto")):
+    if linha in ["tradicional", "pronta_entrega"] or ("tamanho" in dados and not dados.get("produto")):
         adicional_txt = (dados.get("adicional") or "").strip().lower()
         fruta_nozes = None if adicional_txt in ["", "nenhum", "nao", "não"] else (dados.get("adicional") or "").title()
         desc = dados.get("descricao") or f'{dados.get("massa", "")} | {dados.get("recheio")} + {dados.get("mousse")}'
@@ -166,6 +169,14 @@ async def _iniciar_entrega(telefone, dados, nome_cliente, cliente_id):
     """
     Prepara o pedido para entrega, salva no banco e inicia o fluxo de endereço.
     """
+    if not _horario_entrega_permitido(dados.get("horario_retirada")):
+        await responder_usuario(
+            telefone,
+            f"🚚 As entregas são realizadas até as *{LIMITE_HORARIO_ENTREGA}*.\n"
+            f"Informe um horário até *{LIMITE_HORARIO_ENTREGA}* ou escolha *retirada na loja*."
+        )
+        return
+
     pedido = _monta_pedido_final(dados)
     pedido["doces_forminha"] = dados.get("doces_forminha", [])
     pedido["pagamento"] = dados.get("pagamento", {})
@@ -218,13 +229,13 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         t = (texto or "").strip().lower()
 
         # 1️⃣ Monte seu bolo
-        if t in ["1", "monte seu bolo", "normal", "personalizado"]:
-            estado["linha"] = "normal"
-            dados["linha"] = "normal"
+        if t in ["1", "monte seu bolo", "normal", "tradicional", "personalizado"]:
+            estado["linha"] = "tradicional"
+            dados["linha"] = "tradicional"
             estado["etapa"] = 2
             await responder_usuario(
                 telefone,
-                "🍰 *Monte seu bolo!*\n\n"
+                "🍰 *Monte seu bolo tradicional!*\n\n"
                 "1️⃣ Escolha a *massa*:\n- Branca\n- Chocolate\n- Mesclada",
             )
             return
@@ -860,10 +871,11 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
 
 
     if etapa == "hora_retirada":
-        if not _parse_hora(texto):
+        hora_normalizada = _parse_hora(texto)
+        if not hora_normalizada:
             await responder_usuario(telefone, "⚠️ Hora inválida. Use o formato *HH:MM* (24h).")
             return
-        dados["horario_retirada"] = (texto or "").strip()
+        dados["horario_retirada"] = hora_normalizada
         estado["etapa"] = "doces_oferta"
         await responder_usuario(
             telefone,
@@ -1001,6 +1013,15 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             return
 
         if t in ["2", "entregar", "entrega", "receber", "e"]:
+            if not _horario_entrega_permitido(dados.get("horario_retirada")):
+                estado["etapa"] = "ajustar_hora_entrega"
+                await responder_usuario(
+                    telefone,
+                    f"🚚 As entregas são realizadas até as *{LIMITE_HORARIO_ENTREGA}*.\n"
+                    f"Informe um novo horário até *{LIMITE_HORARIO_ENTREGA}* ou digite *retirada*."
+                )
+                return
+
             if "pagamento" not in dados:
                 dados["pagamento"] = {}
                 dados["pos_pagamento"] = "entrega"
@@ -1016,6 +1037,47 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             "Por favor, escolha:\n1️⃣ Retirar na loja\n"
             f"2️⃣ Receber em casa (taxa de entrega: R$ {float(dados.get('taxa_entrega') or 10.0):.2f})",
         )
+        return
+
+    if etapa == "ajustar_hora_entrega":
+        t = (texto or "").strip().lower()
+
+        if t in ["retirada", "retirar", "loja", "1", "r"]:
+            dados["taxa_entrega"] = 0.0
+            pedido = _monta_pedido_final(dados)
+            pedido["doces_forminha"] = dados.get("doces_forminha", [])
+            total, serve = calcular_total(pedido)
+            pedido["valor_total"] = total
+            pedido["serve_pessoas"] = serve
+            dados["pedido_preview"] = pedido
+            estado["modo_recebimento"] = "retirada"
+            estado["etapa"] = "confirmar_pedido"
+            await responder_usuario(telefone, montar_resumo(pedido, total))
+            await responder_usuario(
+                telefone,
+                "Está tudo correto?\n1️⃣ Confirmar pedido\n2️⃣ Corrigir\n3️⃣ Falar com atendente",
+            )
+            return
+
+        hora_normalizada = _parse_hora(texto)
+        if not hora_normalizada or not _horario_entrega_permitido(hora_normalizada):
+            await responder_usuario(
+                telefone,
+                f"⚠️ Para entrega, informe um horário válido até *{LIMITE_HORARIO_ENTREGA}* ou digite *retirada*."
+            )
+            return
+
+        dados["horario_retirada"] = hora_normalizada
+        estado["etapa"] = 6
+
+        if "pagamento" not in dados:
+            dados["pagamento"] = {}
+            dados["pos_pagamento"] = "entrega"
+            await responder_usuario(telefone, MSG_ESCOLHER_FORMA)
+            estado["etapa"] = "pagamento_forma"
+            return
+
+        await _iniciar_entrega(telefone, dados, nome_cliente, cliente_id)
         return
 
     # ====== PRONTA ENTREGA – ITEM ======
@@ -1205,5 +1267,4 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento("Dinheiro", troco))
         await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
     return
-
 

@@ -4,6 +4,8 @@ import os
 from typing import Dict, Any, List
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.tools import get_menu, escalate_to_human, create_cake_order, CakeOrderSchema, get_learnings, save_learning
+from app.observability import increment_counter, log_event, observe_duration
+from app.security import ai_learning_enabled
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -52,7 +54,7 @@ def get_openai_tools(agent):
             }
         })
         
-    if save_learning in agent.tools:
+    if save_learning in agent.tools and ai_learning_enabled():
         openai_tools.append({
             "type": "function",
             "function": {
@@ -93,7 +95,7 @@ def get_openai_tools(agent):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "linha": {"type": "string", "description": "normal, gourmet, mesversario, babycake, torta, simples"},
+                        "linha": {"type": "string", "description": "tradicional, gourmet, mesversario, babycake, torta, simples"},
                         "categoria": {"type": "string", "description": "tradicional, ingles, redondo, torta"},
                         "produto": {"type": "string"},
                         "tamanho": {"type": "string"},
@@ -171,8 +173,8 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
     # Adiciona a mensagem do usuário
     session["messages"].append({"role": "user", "content": text})
     
-    print(f"\n[AI RUNNER] 🤖 Iniciando raciocínio para {telefone}...")
-    print(f"[AI RUNNER] 🧠 Agente atual: {session['current_agent']}")
+    log_event("ai_run_started", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
+    increment_counter("ai_runs_total", stage="started", agent=session["current_agent"])
     
     total_prompt_tokens = 0
     total_completion_tokens = 0
@@ -213,8 +215,15 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
         # Se a IA respondeu com texto final
         if not msg.tool_calls:
             end_time = time.time()
-            print(f"[AI RUNNER] ✅ Finalizado em {end_time - start_time:.2f}s | Iterações: {iteration_count}")
-            print(f"[AI RUNNER] 📊 Tokens - Prompt: {total_prompt_tokens} | Completion: {total_completion_tokens} | Total: {total_prompt_tokens + total_completion_tokens}")
+            observe_duration("ai_run_duration_seconds", end_time - start_time, agent=session["current_agent"])
+            increment_counter("ai_runs_total", stage="completed", agent=session["current_agent"])
+            log_event(
+                "ai_run_completed",
+                agent=session["current_agent"],
+                iterations=iteration_count,
+                prompt_tokens=total_prompt_tokens,
+                completion_tokens=total_completion_tokens,
+            )
             return msg.content
             
         # Se a IA decidiu chamar uma ferramenta
@@ -222,7 +231,8 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
             function_name = tool_call.function.name
             arguments = json.loads(tool_call.function.arguments)
             
-            print(f"[AI RUNNER] 🛠️  Ferramenta chamada: {function_name}")
+            increment_counter("ai_tool_calls_total", tool_name=function_name, agent=session["current_agent"])
+            log_event("ai_tool_called", tool_name=function_name, agent=session["current_agent"])
             tool_result = ""
             
             if function_name == "transfer_to_agent":
@@ -230,7 +240,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                 if new_agent in AGENTS_MAP:
                     session["current_agent"] = new_agent
                     tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
-                    print(f"[AI RUNNER] 🔄 Handoff efetuado: -> {new_agent}")
+                    log_event("ai_handoff", to_agent=new_agent)
                 else:
                     tool_result = f"Erro: Agente {new_agent} não existe."
                     

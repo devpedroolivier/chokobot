@@ -3,6 +3,7 @@
 from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_encomenda_sqlite
 from app.models.entregas import salvar_entrega
+from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido
 
 # Catálogo de cestas box
 CESTAS_BOX_CATALOGO = {
@@ -145,6 +146,15 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
             return
         
         elif modo in ["2", "entrega"]:
+            if not _horario_entrega_permitido(dados.get("horario_retirada")):
+                estado["etapa"] = "hora_retirada"
+                await responder_usuario(
+                    telefone,
+                    f"🚚 As entregas são realizadas até as *{LIMITE_HORARIO_ENTREGA}*.\n"
+                    f"Informe um horário até *{LIMITE_HORARIO_ENTREGA}* para entrega."
+                )
+                return
+
             dados["modo_recebimento"] = "entrega"
             dados["taxa_entrega"] = 10.0
             estado["etapa"] = "endereco"
@@ -346,4 +356,3 @@ async def montar_resumo_e_confirmar(telefone, estado, dados):
     )
     
     await responder_usuario(telefone, resumo)
-

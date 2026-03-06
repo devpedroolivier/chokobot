@@ -1,6 +1,7 @@
 import asyncio, os, json, re, unicodedata
 import httpx
 from app.config import ZAPI_ENDPOINT_TEXT, ZAPI_TOKEN
+from app.observability import increment_counter, log_event
 from app.security import hash_phone, preview_text
 
 SAUDACOES = ["oi", "iae", "salve", "olá", "ola", "bom dia", "boa tarde", "boa noite"]
@@ -74,7 +75,8 @@ def _enfileirar(phone: str, mensagem: str):
         os.makedirs(os.path.dirname(OUTBOX_PATH), exist_ok=True)
         with open(OUTBOX_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps({"phone": phone, "message": mensagem}, ensure_ascii=False) + "\n")
-        print(f"[OUTBOX] queued phone_hash={hash_phone(phone)} text='{preview_text(mensagem, 80)}'")
+        increment_counter("outbox_events_total", status="queued")
+        log_event("outbox_queued", phone_hash=hash_phone(phone), text=preview_text(mensagem, 80))
     except Exception as e:
         print(f"⚠️ Falha ao enfileirar mensagem: {e}")
 
@@ -105,22 +107,27 @@ async def responder_usuario(phone: str, mensagem: str) -> bool:
                         f"[ZAPI] sending attempt={attempt}/{HTTP_MAX_RETRIES} "
                         f"phone_hash={hash_phone(phone)} text='{preview_text(mensagem, 120)}'"
                     )
+                    increment_counter("provider_send_attempts_total", provider="zapi")
                     resp = await client.post(ZAPI_ENDPOINT_TEXT, json=payload, headers=headers)
                     code = resp.status_code
 
                     if 200 <= code < 300:
-                        print(f"[ZAPI] sent status={code} phone_hash={hash_phone(phone)}")
+                        increment_counter("provider_send_results_total", provider="zapi", status="success")
+                        log_event("provider_send_success", provider="zapi", status_code=code, phone_hash=hash_phone(phone))
                         break  # ✅ interrompe imediatamente após sucesso
                     else:
+                        increment_counter("provider_send_results_total", provider="zapi", status="http_error")
                         print(f"[ZAPI] http_error status={code} phone_hash={hash_phone(phone)}")
                         if code not in (429, 500, 502, 503, 504):
                             break  # não precisa tentar de novo
 
                 except (httpx.ConnectTimeout, httpx.ReadTimeout) as e:
                     last_exc = e
+                    increment_counter("provider_send_results_total", provider="zapi", status="timeout")
                     print(f"⏱️ Timeout na tentativa {attempt}: {repr(e)}")
                 except httpx.HTTPError as e:
                     last_exc = e
+                    increment_counter("provider_send_results_total", provider="zapi", status="transport_error")
                     print(f"❌ Erro HTTP na tentativa {attempt}: {repr(e)}")
 
                 # backoff entre tentativas

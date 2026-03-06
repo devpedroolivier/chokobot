@@ -46,8 +46,8 @@
           <td class="p-3">{{ e[1] or '-' }}</td>
           <td class="p-3">{{ e[2] or '-' }}</td>
           <td class="p-3">
-            {% if e[3] == "normal" %}
-              Bolo Personalizado
+            {% if e[3] in ["normal", "tradicional"] %}
+              Bolo Tradicional
             {% elif e[3] == "gourmet" %}
               Linha Gourmet
             {% elif e[3] == "redondo" %}

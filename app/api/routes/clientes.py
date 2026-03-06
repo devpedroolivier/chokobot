@@ -4,8 +4,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.api.dependencies import get_customer_repository
 from app.domain.repositories.customer_repository import CustomerRepository
 from app.infrastructure.web.templates import templates
+from app.security import require_panel_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_panel_auth)])
 
 
 @router.get("/painel/clientes", response_class=HTMLResponse)

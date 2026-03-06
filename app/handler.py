@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from collections import deque
 from app.models.clientes import salvar_cliente
+from app.security import get_admin_phones, hash_phone, preview_text
 from app.utils.mensagens import responder_usuario, is_saudacao
 from app.utils.payload import normalize_incoming
 from app.services.encomendas import processar_encomenda
@@ -58,42 +59,55 @@ async def processar_mensagem(mensagem: dict):
     
 
     # ====== COMANDOS DE ADMINISTRADOR ======
-    if telefone in ["5516992622680"]:  # 👈 seu número adminn
+    if telefone in get_admin_phones():
         cmd = texto.lower()
         if cmd in ["desativar bot", "desligar bot", "pausar bot"]:
             set_bot_ativo(False)
             await responder_usuario(telefone, "🚫 Bot desativado temporariamente.")
-            print("🚫 BOT DESATIVADO PELO ADMIN.")
+            print(f"[ADMIN] bot_desativado phone_hash={hash_phone(telefone)}")
             return
 
         if cmd in ["ativar bot", "ligar bot", "reativar bot"]:
             set_bot_ativo(True)
             await responder_usuario(telefone, "✅ Bot reativado e pronto para atender!")
-            print("✅ BOT REATIVADO PELO ADMIN.")
+            print(f"[ADMIN] bot_reativado phone_hash={hash_phone(telefone)}")
             return
 
     # ====== VERIFICAÇÃO GLOBAL DO ESTADO DO BOT ======
     if not is_bot_ativo():
-        print(f"⚠️ BOT DESATIVADO — Mensagem ignorada de {telefone}: {texto}")
+        print(
+            f"[HANDLER] bot_desativado phone_hash={hash_phone(telefone)} "
+            f"text='{preview_text(texto)}'"
+        )
         return
 
     # ====== VALIDAÇÃO BÁSICA DE MENSAGEM ======
     if not telefone or not texto:
-        print("❌ Dados incompletos:", {"telefone": telefone, "texto": texto, "tipo": norm["message_type"]})
+        print(
+            "[HANDLER] dados_incompletos:",
+            {
+                "phone_hash": hash_phone(telefone),
+                "text": preview_text(texto),
+                "tipo": norm["message_type"],
+            },
+        )
         return
 
 
     agora = datetime.now()
 
     if msg_id and msg_id in mensagens_processadas:
-        print(f"⚠️ Ignorado webhook duplicado ({msg_id}) de {telefone}")
+        print(f"[HANDLER] webhook_duplicado message_id={msg_id} phone_hash={hash_phone(telefone)}")
         return
     if msg_id:
         mensagens_processadas.append(msg_id)
 
     ultima = ultimas_mensagens.get(telefone)
     if ultima and ultima["texto"] == texto and (agora - ultima["hora"]) < timedelta(seconds=2):
-        print(f"⚠️ Ignorado duplicado por conteúdo de {telefone}: '{texto}'")
+        print(
+            f"[HANDLER] conteudo_duplicado phone_hash={hash_phone(telefone)} "
+            f"text='{preview_text(texto)}'"
+        )
         return
     ultimas_mensagens[telefone] = {"texto": texto, "hora": agora}
     # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
@@ -124,7 +138,7 @@ async def processar_mensagem(mensagem: dict):
             else:
                 # Atualiza o cronômetro para manter o silêncio enquanto conversam
                 estados_atendimento[telefone]["inicio"] = agora.isoformat()
-                print(f"👤 {telefone} em atendimento humano — bot silencioso.")
+                print(f"[HANDLER] atendimento_humano_ativo phone_hash={hash_phone(telefone)}")
                 return
 
     # ====== PROCESSAMENTO VIA AGENTES DE IA ======

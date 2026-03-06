@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 
 from app.security import ai_learning_enabled, security_audit
+from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido, _linha_canonica
 from app.services.precos import KIT_FESTOU_PRECO, TRADICIONAL_BASE
 
 class PagamentoSchema(BaseModel):
@@ -11,7 +12,7 @@ class PagamentoSchema(BaseModel):
     troco_para: Optional[float] = Field(None, description="Valor para troco, se a forma for Dinheiro")
 
 class CakeOrderSchema(BaseModel):
-    linha: str = Field(..., description="Linha do bolo. Ex: normal, gourmet, mesversario, babycake, torta, simples")
+    linha: str = Field(..., description="Linha do bolo. Ex: tradicional, gourmet, mesversario, babycake, torta, simples")
     categoria: str = Field(..., description="Categoria derivada da linha. Ex: tradicional, ingles, redondo, torta")
     produto: Optional[str] = Field(None, description="Nome do produto específico (para gourmet, tortas, etc)")
     tamanho: Optional[str] = Field(None, description="Tamanho do bolo. Ex: B3, B4, P4, P6")
@@ -79,6 +80,7 @@ def _build_ready_delivery_summary() -> str:
         "☕ Cafeteria e Vitrine\n"
         "- Cardapio Cafeteria: http://bit.ly/44ZlKlZ\n"
         "- A vitrine pode variar no dia.\n"
+        "- Entregas sao realizadas ate 17:30.\n"
     )
 
 
@@ -150,6 +152,10 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
     from app.services.precos import calcular_total
 
     dados = order_details.dict()
+    dados["linha"] = _linha_canonica(dados.get("linha"))
+
+    if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
+        return f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. Ajuste o horario ou altere para retirada."
     
     # Recalcular valor total baseado na base de preços
     # Isso seria adaptado da lógica de precos.py, mas para simplificar, 

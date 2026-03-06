@@ -5,8 +5,9 @@ from app.api.dependencies import get_order_repository
 from app.application.use_cases.update_order_delivery_status import UpdateOrderDeliveryStatus
 from app.domain.repositories.order_repository import OrderRepository
 from app.infrastructure.web.templates import templates
+from app.security import require_panel_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_panel_auth)])
 
 
 @router.get("/painel", response_class=HTMLResponse)

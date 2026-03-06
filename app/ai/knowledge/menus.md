@@ -91,5 +91,6 @@
 
 ## Entregas e Pagamento
 - **Modo de recebimento:** retirada na loja ou entrega
+- **Horário limite para entregas:** até 17:30
 - **Taxa de entrega padrao:** geralmente R$10,00, salvo regra especifica
 - **Formas de pagamento:** PIX, Cartao (debito/credito), Dinheiro

@@ -5,8 +5,9 @@ import os
 from app.api.dependencies import get_order_repository
 from app.domain.repositories.order_repository import OrderRepository
 from app.infrastructure.web.templates import templates
+from app.security import require_panel_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_panel_auth)])
 
 
 @router.get("/painel/encomendas", response_class=HTMLResponse)
@@ -65,7 +66,7 @@ def salvar_encomenda_form(
     horario_retirada: str = Form(""),
     repository: OrderRepository = Depends(get_order_repository),
 ):
-    categoria_final = categoria or linha or "normal"
+    categoria_final = categoria or linha or "tradicional"
     adicional_final = adicional or fruta_ou_nozes
     horario_final = horario or horario_retirada
 
