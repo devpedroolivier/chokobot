@@ -2,10 +2,10 @@ from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_pedido_cafeteria_sqlite
 
 PRONTA_ENTREGA_BOLOS_MSG = (
-    "🎂 Pronta Entrega de bolo no sistema:\n"
+    "🎂 Bolos Pronta Entrega:\n"
     "- B3 (ate 15 pessoas) — R$120 — sabor padrao: Mesclado com Brigadeiro + Ninho\n"
     "- B4 (ate 30 pessoas) — R$180 — sabor padrao: Mesclado com Brigadeiro + Ninho\n"
-    "- Kit Festou opcional: +R$35\n"
+    "🎉 Kit Festou opcional: +R$35\n"
     "- Regra atual do fluxo: retirada na loja"
 )
 

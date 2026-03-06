@@ -1,6 +1,7 @@
-import asyncio, os, json
+import asyncio, os, json, re, unicodedata
 import httpx
 from app.config import ZAPI_ENDPOINT_TEXT, ZAPI_TOKEN
+from app.security import hash_phone, preview_text
 
 SAUDACOES = ["oi", "iae", "salve", "olá", "ola", "bom dia", "boa tarde", "boa noite"]
 
@@ -16,12 +17,64 @@ OUTBOX_PATH          = os.getenv("OUTBOX_PATH", "dados/outbox.jsonl")
 # 🔒 Evita que dois envios simultâneos disparem para o mesmo número
 _locks_envio = {}
 
+_HEADING_ICON_RULES = (
+    ("kit festou", "🎉"),
+    ("bolos pronta entrega", "🎂"),
+    ("bolo pronta entrega", "🎂"),
+    ("monte seu bolo", "🎂"),
+    ("tradicional", "🎂"),
+    ("cafeteria", "☕"),
+    ("vitrine", "☕"),
+    ("doces avulsos", "🍬"),
+    ("linha gourmet", "✨"),
+    ("ingles", "🍰"),
+    ("redondo", "🍰"),
+    ("mesversario", "🎈"),
+    ("revelacao", "🎈"),
+    ("baby cake", "🧁"),
+    ("tortas", "🥧"),
+    ("linha simples", "🍰"),
+    ("cestas", "🎁"),
+    ("presentes", "🎁"),
+    ("entregas", "🚚"),
+    ("pagamento", "💳"),
+    ("pronta entrega", "🛍️"),
+    ("encomendas", "📦"),
+)
+
+
+def _normalize_heading(texto: str) -> str:
+    base = unicodedata.normalize("NFKD", texto)
+    sem_acento = "".join(char for char in base if not unicodedata.combining(char))
+    return sem_acento.casefold()
+
+
+def _heading_icon(titulo: str) -> str:
+    normalized = _normalize_heading(titulo)
+    for pattern, icon in _HEADING_ICON_RULES:
+        if pattern in normalized:
+            return icon
+    return "📌"
+
+
+def formatar_mensagem_saida(mensagem: str) -> str:
+    linhas_formatadas = []
+    for linha in mensagem.splitlines():
+        match = re.match(r"^\s*#{2,6}\s+(.*\S)\s*$", linha)
+        if not match:
+            linhas_formatadas.append(linha)
+            continue
+
+        titulo = re.sub(r"^\d+\.\s*", "", match.group(1)).strip()
+        linhas_formatadas.append(f"{_heading_icon(titulo)} {titulo}")
+    return "\n".join(linhas_formatadas)
+
 def _enfileirar(phone: str, mensagem: str):
     try:
         os.makedirs(os.path.dirname(OUTBOX_PATH), exist_ok=True)
         with open(OUTBOX_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps({"phone": phone, "message": mensagem}, ensure_ascii=False) + "\n")
-        print(f"📥 Mensagem enfileirada para retry offline: {phone}")
+        print(f"[OUTBOX] queued phone_hash={hash_phone(phone)} text='{preview_text(mensagem, 80)}'")
     except Exception as e:
         print(f"⚠️ Falha ao enfileirar mensagem: {e}")
 
@@ -30,6 +83,8 @@ async def responder_usuario(phone: str, mensagem: str) -> bool:
     Envia mensagem de forma confiável com retry controlado e lock por telefone.
     Garante que apenas uma mensagem por número é enviada por vez, evitando duplicidade.
     """
+    mensagem = formatar_mensagem_saida(mensagem)
+
     # Lock por número para evitar sobreposição
     lock = _locks_envio.setdefault(phone, asyncio.Lock())
     async with lock:
@@ -47,18 +102,17 @@ async def responder_usuario(phone: str, mensagem: str) -> bool:
             for attempt in range(1, HTTP_MAX_RETRIES + 1):
                 try:
                     print(
-                        f"\n📤 ENVIANDO MENSAGEM (tentativa {attempt}/{HTTP_MAX_RETRIES})"
-                        f"\n📱 Para: {phone}\n💬 Conteúdo:\n{mensagem}\n"
+                        f"[ZAPI] sending attempt={attempt}/{HTTP_MAX_RETRIES} "
+                        f"phone_hash={hash_phone(phone)} text='{preview_text(mensagem, 120)}'"
                     )
                     resp = await client.post(ZAPI_ENDPOINT_TEXT, json=payload, headers=headers)
                     code = resp.status_code
 
                     if 200 <= code < 300:
-                        print(f"✅ Enviado! Código: {code}")
-                        print(f"📦 Retorno: {resp.text}\n" + "-" * 50)
+                        print(f"[ZAPI] sent status={code} phone_hash={hash_phone(phone)}")
                         break  # ✅ interrompe imediatamente após sucesso
                     else:
-                        print(f"⚠️ HTTP {code} ao enviar: {resp.text[:200]}")
+                        print(f"[ZAPI] http_error status={code} phone_hash={hash_phone(phone)}")
                         if code not in (429, 500, 502, 503, 504):
                             break  # não precisa tentar de novo
 

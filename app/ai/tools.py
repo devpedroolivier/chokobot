@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 
-from app.services.precos import DOCES_UNITARIOS, KIT_FESTOU_PRECO, TRADICIONAL_BASE
+from app.security import ai_learning_enabled, security_audit
+from app.services.precos import KIT_FESTOU_PRECO, TRADICIONAL_BASE
 
 class PagamentoSchema(BaseModel):
     forma: Literal["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"] = Field(..., description="Forma de pagamento escolhida")
@@ -26,6 +28,10 @@ class CakeOrderSchema(BaseModel):
     endereco: Optional[str] = Field(None, description="Endereço completo para entrega, obrigatório se modo for entrega")
     taxa_entrega: float = Field(0.0, description="Taxa de entrega (0 se retirada)")
     pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
+
+def _learnings_path() -> Path:
+    return Path(os.getenv("AI_LEARNINGS_PATH", "app/ai/knowledge/learnings.md"))
+
 
 def _load_menu_text() -> str:
     menu_path = Path("app/ai/knowledge/menus.md")
@@ -61,32 +67,18 @@ def _normalize_category(category: str | None) -> str:
 def _build_ready_delivery_summary() -> str:
     b3 = TRADICIONAL_BASE["B3"]
     b4 = TRADICIONAL_BASE["B4"]
-    doces = [
-        "Brigadeiro Escama",
-        "Brigadeiro De Ninho",
-        "Casadinho",
-        "Brigadeiro Belga Callebaut Ao Leite",
-        "Chokobom",
-        "Pirulito De Chocolate",
-    ]
-    doces_lines = "\n".join(
-        f"- {nome}: R${DOCES_UNITARIOS[nome]:.2f}" for nome in doces
-    )
     return (
-        "PRONTA ENTREGA\n"
-        "- Mostrar apenas itens prontos do dia, cafeteria, doces avulsos e bolo pronta entrega.\n"
+        "🛍️ Pronta Entrega\n"
+        "- Mostrar apenas itens prontos do dia, cafeteria e bolos de pronta entrega.\n"
         "- Nao misturar com encomendas personalizadas.\n\n"
-        "BOLOS PRONTA ENTREGA DO FLUXO INTERNO\n"
+        "🎂 Bolos Pronta Entrega\n"
         f"- B3 (ate {b3['serve']} pessoas): R${b3['preco']:.2f} | sabor padrao: Mesclado com Brigadeiro + Ninho\n"
         f"- B4 (ate {b4['serve']} pessoas): R${b4['preco']:.2f} | sabor padrao: Mesclado com Brigadeiro + Ninho\n"
-        f"- Kit Festou opcional: +R${KIT_FESTOU_PRECO:.2f}\n"
+        f"🎉 Kit Festou opcional: +R${KIT_FESTOU_PRECO:.2f}\n"
         "- Regra atual: pronta entrega segue como retirada na loja no fluxo interno.\n\n"
-        "CAFETERIA E VITRINE\n"
+        "☕ Cafeteria e Vitrine\n"
         "- Cardapio Cafeteria: http://bit.ly/44ZlKlZ\n"
-        "- A vitrine pode variar no dia.\n\n"
-        "DOCES AVULSOS\n"
-        "- Cardapio de Doces: https://bit.ly/doceschoko\n"
-        f"{doces_lines}\n"
+        "- A vitrine pode variar no dia.\n"
     )
 
 
@@ -121,15 +113,22 @@ def get_menu(category: str = "todas") -> str:
 def get_learnings() -> str:
     """Lê as instruções e regras aprendidas previamente pela IA."""
     try:
-        with open("app/ai/knowledge/learnings.md", "r", encoding="utf-8") as f:
+        with _learnings_path().open("r", encoding="utf-8") as f:
             return f.read()
     except Exception:
         return ""
 
 def save_learning(aprendizado: str) -> str:
     """Salva uma nova regra de negócio, preferência do cliente ou correção aprendida para consultas futuras."""
-    with open("app/ai/knowledge/learnings.md", "a", encoding="utf-8") as f:
+    if not ai_learning_enabled():
+        security_audit("ai_learning_blocked")
+        return "Aprendizado persistente desativado neste ambiente."
+
+    path = _learnings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
         f.write(f"- {aprendizado}\n")
+    security_audit("ai_learning_saved")
     return "Aprendizado salvo com sucesso! Vou me lembrar disso."
 
 def escalate_to_human(telefone: str, motivo: str):
