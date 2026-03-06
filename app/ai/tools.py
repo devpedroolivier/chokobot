@@ -1,5 +1,8 @@
+from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
+
+from app.services.precos import DOCES_UNITARIOS, KIT_FESTOU_PRECO, TRADICIONAL_BASE
 
 class PagamentoSchema(BaseModel):
     forma: Literal["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"] = Field(..., description="Forma de pagamento escolhida")
@@ -24,13 +27,96 @@ class CakeOrderSchema(BaseModel):
     taxa_entrega: float = Field(0.0, description="Taxa de entrega (0 se retirada)")
     pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
 
+def _load_menu_text() -> str:
+    menu_path = Path("app/ai/knowledge/menus.md")
+    return menu_path.read_text(encoding="utf-8")
+
+
+def _normalize_category(category: str | None) -> str:
+    raw = (category or "todas").strip().lower()
+    aliases = {
+        "todas": "todas",
+        "geral": "todas",
+        "menu": "todas",
+        "completo": "todas",
+        "pronta entrega": "pronta_entrega",
+        "pronta_entrega": "pronta_entrega",
+        "pronta": "pronta_entrega",
+        "vitrine": "pronta_entrega",
+        "cafeteria": "pronta_entrega",
+        "doces": "pronta_entrega",
+        "avulsos": "pronta_entrega",
+        "encomenda": "encomendas",
+        "encomendas": "encomendas",
+        "personalizado": "encomendas",
+        "personalizados": "encomendas",
+        "bolo personalizado": "encomendas",
+        "bolos": "encomendas",
+        "tortas": "encomendas",
+        "cestas": "encomendas",
+    }
+    return aliases.get(raw, "todas")
+
+
+def _build_ready_delivery_summary() -> str:
+    b3 = TRADICIONAL_BASE["B3"]
+    b4 = TRADICIONAL_BASE["B4"]
+    doces = [
+        "Brigadeiro Escama",
+        "Brigadeiro De Ninho",
+        "Casadinho",
+        "Brigadeiro Belga Callebaut Ao Leite",
+        "Chokobom",
+        "Pirulito De Chocolate",
+    ]
+    doces_lines = "\n".join(
+        f"- {nome}: R${DOCES_UNITARIOS[nome]:.2f}" for nome in doces
+    )
+    return (
+        "PRONTA ENTREGA\n"
+        "- Mostrar apenas itens prontos do dia, cafeteria, doces avulsos e bolo pronta entrega.\n"
+        "- Nao misturar com encomendas personalizadas.\n\n"
+        "BOLOS PRONTA ENTREGA DO FLUXO INTERNO\n"
+        f"- B3 (ate {b3['serve']} pessoas): R${b3['preco']:.2f} | sabor padrao: Mesclado com Brigadeiro + Ninho\n"
+        f"- B4 (ate {b4['serve']} pessoas): R${b4['preco']:.2f} | sabor padrao: Mesclado com Brigadeiro + Ninho\n"
+        f"- Kit Festou opcional: +R${KIT_FESTOU_PRECO:.2f}\n"
+        "- Regra atual: pronta entrega segue como retirada na loja no fluxo interno.\n\n"
+        "CAFETERIA E VITRINE\n"
+        "- Cardapio Cafeteria: http://bit.ly/44ZlKlZ\n"
+        "- A vitrine pode variar no dia.\n\n"
+        "DOCES AVULSOS\n"
+        "- Cardapio de Doces: https://bit.ly/doceschoko\n"
+        f"{doces_lines}\n"
+    )
+
+
+def _slice_section(text: str, start: str, end: str | None = None) -> str:
+    start_idx = text.find(start)
+    if start_idx == -1:
+        return ""
+    end_idx = text.find(end, start_idx) if end else -1
+    if end_idx == -1:
+        return text[start_idx:].strip()
+    return text[start_idx:end_idx].strip()
+
+
 def get_menu(category: str = "todas") -> str:
-    """Retorna os cardápios da doceria como texto em Markdown para o agente consultar."""
+    """Retorna o cardapio completo ou filtrado entre pronta entrega e encomendas."""
     try:
-        with open("app/ai/knowledge/menus.md", "r", encoding="utf-8") as f:
-            return f.read()
+        text = _load_menu_text()
+        normalized = _normalize_category(category)
+
+        if normalized == "pronta_entrega":
+            return _build_ready_delivery_summary()
+
+        if normalized == "encomendas":
+            encomendas = _slice_section(text, "## Encomendas", "## Entregas e Pagamento")
+            pagamentos = _slice_section(text, "## Entregas e Pagamento")
+            return f"{encomendas}\n\n{pagamentos}".strip()
+
+        return text
     except Exception as e:
-        return "Erro ao carregar cardápio: " + str(e)
+        return "Erro ao carregar cardapio: " + str(e)
 
 def get_learnings() -> str:
     """Lê as instruções e regras aprendidas previamente pela IA."""

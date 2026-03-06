@@ -28,11 +28,14 @@ def get_openai_tools(agent):
             "type": "function",
             "function": {
                 "name": "get_menu",
-                "description": "Busca os cardápios, produtos e preços atualizados da Chokodelícia.",
+                "description": "Busca os cardapios, produtos e precos da Chokodelicia. Use `category=\"pronta_entrega\"` para vitrine/cafeteria/doces e `category=\"encomendas\"` para bolos personalizados, tortas e cestas.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "category": {"type": "string", "description": "Categoria do menu (opcional)"}
+                        "category": {
+                            "type": "string",
+                            "description": "Categoria do menu: pronta_entrega, encomendas ou todas",
+                        }
                     },
                     "required": []
                 }
@@ -232,7 +235,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                     tool_result = f"Erro: Agente {new_agent} não existe."
                     
             elif function_name == "get_menu":
-                tool_result = get_menu()
+                tool_result = get_menu(arguments.get("category", "todas"))
                 
             elif function_name == "get_learnings":
                 tool_result = get_learnings()

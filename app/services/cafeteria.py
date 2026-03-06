@@ -1,6 +1,15 @@
 from app.utils.mensagens import responder_usuario
 from app.utils.banco import salvar_pedido_cafeteria_sqlite
 
+PRONTA_ENTREGA_BOLOS_MSG = (
+    "🎂 Pronta Entrega de bolo no sistema:\n"
+    "- B3 (ate 15 pessoas) — R$120 — sabor padrao: Mesclado com Brigadeiro + Ninho\n"
+    "- B4 (ate 30 pessoas) — R$180 — sabor padrao: Mesclado com Brigadeiro + Ninho\n"
+    "- Kit Festou opcional: +R$35\n"
+    "- Regra atual do fluxo: retirada na loja"
+)
+
+
 async def processar_cafeteria(telefone, texto, estado):
     subetapa = estado.get("subetapa")
     nome = estado.get("nome", "Nome não informado")
@@ -10,18 +19,11 @@ async def processar_cafeteria(telefone, texto, estado):
         if texto == "1":
             msg = "📋 Cardápio *Cafeteria*:\nhttp://bit.ly/44ZlKlZ\n"
         elif texto == "2":
-            msg = "📋 Cardápio *Bolos & Tortas*:\nhttps://keepo.io/boloschoko/\n"
+            msg = "📋 Cardápio *Doces Avulsos*:\nhttps://bit.ly/doceschoko\n"
         elif texto == "3":
-            msg = (
-                "📋 Cardápio *Doces*:\n"
-                "👉 Cardápio Doces: https://bit.ly/doceschoko\n"
-            )
-        elif texto == "4":
-            msg = "📋 Cardápio *Cestas Box/Presentes*:\nhttps://bit.ly/presenteschoko\n"
-        elif texto == "5":
-            msg = "📋 Cardápio *Páscoa Inesquecível*:\nhttps://bit.ly/pascoainesquecivelchoko\n"
+            msg = PRONTA_ENTREGA_BOLOS_MSG + "\n"
         else:
-            await responder_usuario(telefone, "❌ Opção inválida. Digite 1, 2, 3, 4 ou 5.")
+            await responder_usuario(telefone, "❌ Opção inválida. Digite 1, 2 ou 3.")
             return
 
         msg += (
@@ -38,12 +40,10 @@ async def processar_cafeteria(telefone, texto, estado):
             estado["subetapa"] = "aguardando_cardapio"
             await responder_usuario(
                 telefone,
-                "📋 Qual cardápio você deseja ver?\n"
+                "📋 Qual cardápio de pronta entrega você deseja ver?\n"
                 "1️⃣ Cardápio Cafeteria\n"
-                "2️⃣ Cardápio Bolos & Tortas\n"
-                "3️⃣ Cardápio Doces\n"
-                "4️⃣ Cardápio Cestas Box/Presentes\n"
-                "5️⃣ Cardápio Páscoa Inesquecível"
+                "2️⃣ Cardápio Doces Avulsos\n"
+                "3️⃣ Bolos Pronta Entrega"
             )
         elif texto == "2":
             return "voltar_menu"
