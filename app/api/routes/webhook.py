@@ -4,7 +4,8 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.handler import processar_mensagem
+from app.application.events import MessageReceivedEvent
+from app.application.service_registry import get_conversation_gateway, get_event_bus
 from app.observability import increment_counter, log_event
 from app.security import (
     hash_phone,
@@ -36,6 +37,10 @@ def print_painel(body: dict):
     )
 
 
+async def dispatch_inbound_message(body: dict):
+    return await get_conversation_gateway().handle_inbound_message(body)
+
+
 @router.post("/webhook")
 async def receber_webhook(request: Request):
     raw_body = await request.body()
@@ -63,9 +68,10 @@ async def receber_webhook(request: Request):
         return {"status": "ignored", "detail": "replay_detected"}
 
     print_painel(body)
+    get_event_bus().publish(MessageReceivedEvent(payload=norm))
 
     try:
-        await processar_mensagem(body)
+        await dispatch_inbound_message(body)
         increment_counter("webhook_events_total", status="ok", reason="processed")
         return {"status": "ok"}
     except Exception as exc:

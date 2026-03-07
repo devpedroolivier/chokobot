@@ -2,10 +2,86 @@ services:
   chokobot:
     container_name: chokobot_container
     build: .
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8003:8000"
     volumes:
-      - /root/chokobot/dados:/app/dados
+      - ./dados:/app/dados
     env_file:
       - .env
+    environment:
+      - TZ=America/Sao_Paulo
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  chokobot-edge:
+    profiles: ["split"]
+    container_name: chokobot_edge_container
+    build: .
+    command: ["uvicorn", "app.edge_main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./dados:/app/dados
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Sao_Paulo
+      - CONVERSATION_SERVICE_URL=http://chokobot-conversation:8000
+      - REDIS_URL=redis://chokobot-redis:6379/0
+    depends_on:
+      chokobot-conversation:
+        condition: service_healthy
+      chokobot-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  chokobot-conversation:
+    profiles: ["split"]
+    container_name: chokobot_conversation_container
+    build: .
+    command: ["uvicorn", "app.conversation_main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./dados:/app/dados
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Sao_Paulo
+      - REDIS_URL=redis://chokobot-redis:6379/0
+    depends_on:
+      chokobot-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  chokobot-redis:
+    profiles: ["split"]
+    container_name: chokobot_redis_container
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped

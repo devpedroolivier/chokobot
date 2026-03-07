@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 # app/services/encomendas.py
 from datetime import datetime
-from app.models.entregas import salvar_entrega
+from app.application.service_registry import get_delivery_gateway, get_order_gateway
 from app.utils.mensagens import responder_usuario
-from app.utils.banco import salvar_encomenda_sqlite
 from app.services.estados import estados_entrega
 from app.config import DOCES_URL  # mantido por compatibilidade
 from app.services.precos import TRADICIONAL_BASE, _alias_fruta, calcular_total, montar_resumo, TRADICIONAL_ADICIONAIS
@@ -169,6 +168,7 @@ async def _iniciar_entrega(telefone, dados, nome_cliente, cliente_id):
     """
     Prepara o pedido para entrega, salva no banco e inicia o fluxo de endereço.
     """
+    order_gateway = get_order_gateway()
     if not _horario_entrega_permitido(dados.get("horario_retirada")):
         await responder_usuario(
             telefone,
@@ -197,7 +197,12 @@ async def _iniciar_entrega(telefone, dados, nome_cliente, cliente_id):
 
     dados = _prepara_dados_para_salvar(dados)
     print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
-    encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente, cliente_id)
+    encomenda_id = order_gateway.create_order(
+        phone=telefone,
+        dados=dados,
+        nome_cliente=nome_cliente,
+        cliente_id=cliente_id,
+    )
 
     estados_entrega[telefone] = {
         "etapa": 1,
@@ -221,6 +226,8 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
     Roteia o fluxo de encomendas.
     Observação: comandos globais 'menu' e 'cancelar' são tratados no handler principal.
     """
+    order_gateway = get_order_gateway()
+    delivery_gateway = get_delivery_gateway()
     etapa = estado["etapa"]
     dados = estado.setdefault("dados", {})
     
@@ -1178,14 +1185,19 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             dados.update(pedido)
             dados = _prepara_dados_para_salvar(dados)
             print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
-            encomenda_id = salvar_encomenda_sqlite(telefone, dados, nome_cliente, cliente_id)
+            encomenda_id = order_gateway.create_order(
+                phone=telefone,
+                dados=dados,
+                nome_cliente=nome_cliente,
+                cliente_id=cliente_id,
+            )
 
 
-            salvar_entrega(
+            delivery_gateway.create_delivery(
                 encomenda_id=encomenda_id,
                 tipo="retirada",
                 data_agendada=dados.get("data_entrega"),
-                status="Retirar na loja"
+                status="Retirar na loja",
             )
 
             await responder_usuario(
@@ -1267,4 +1279,3 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         await responder_usuario(telefone, "✅ Pagamento registrado!\n" + msg_resumo_pagamento("Dinheiro", troco))
         await responder_usuario(telefone, "Confirma o pedido?\n1️⃣ Sim\n2️⃣ Corrigir")
     return
-

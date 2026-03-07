@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # app/services/cestas_box.py
+from app.application.service_registry import get_delivery_gateway, get_order_gateway
 from app.utils.mensagens import responder_usuario
-from app.utils.banco import salvar_encomenda_sqlite
-from app.models.entregas import salvar_entrega
 from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido
 
 # Catálogo de cestas box
@@ -284,6 +283,8 @@ async def processar_cestas_box(telefone, texto, estado, nome_cliente, cliente_id
 
 async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id):
     """Salva a encomenda de cesta box."""
+    order_gateway = get_order_gateway()
+    delivery_gateway = get_delivery_gateway()
     try:
         pedido_final = {
             "categoria": "cesta_box",
@@ -298,16 +299,20 @@ async def salvar_pedido_cesta(telefone, estado, dados, nome_cliente, cliente_id)
             "pagamento": dados.get("pagamento", {}),
         }
         
-        encomenda_id = salvar_encomenda_sqlite(
-            telefone, pedido_final, nome_cliente, cliente_id
+        encomenda_id = order_gateway.create_order(
+            phone=telefone,
+            dados=pedido_final,
+            nome_cliente=nome_cliente,
+            cliente_id=cliente_id,
         )
         
         if dados.get("modo_recebimento") == "entrega":
-            salvar_entrega(
-                encomenda_id,
-                "cesta_box",
-                dados.get("data_entrega"),
-                "agendada"
+            delivery_gateway.create_delivery(
+                encomenda_id=encomenda_id,
+                tipo="cesta_box",
+                endereco=dados.get("endereco"),
+                data_agendada=dados.get("data_entrega"),
+                status="agendada",
             )
         
         total = dados.get("cesta_preco", 0.0) + dados.get("taxa_entrega", 0.0)

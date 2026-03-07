@@ -1,6 +1,8 @@
 # app/handler.py
 from datetime import datetime, timedelta
-from collections import deque
+from app.application.commands import GenerateAiReplyCommand
+from app.application.events import AiReplyGeneratedEvent
+from app.application.service_registry import get_command_bus, get_event_bus
 from app.models.clientes import salvar_cliente
 from app.security import get_admin_phones, hash_phone, preview_text
 from app.utils.mensagens import responder_usuario, is_saudacao
@@ -16,7 +18,11 @@ from app.services.estados import (
     estados_cafeteria,
     estados_cestas_box,
     estados_atendimento,
+    get_recent_message,
+    has_processed_message,
     is_bot_ativo,
+    mark_processed_message,
+    set_recent_message,
     set_bot_ativo,
 )
 from app.config import CAFETERIA_URL, DOCES_URL
@@ -44,8 +50,16 @@ MAIN_MENU_GREETING = (
 MAIN_MENU_MESSAGE = f"{MAIN_MENU_GREETING}\n\n{MENU_PROMPT}"
 MENU_PRINCIPAL_MESSAGE = f"🍫 *Menu Principal*\n{MENU_PROMPT}"
 
-mensagens_processadas = deque(maxlen=2000)
-ultimas_mensagens = {}
+
+async def gerar_resposta_ia(telefone: str, texto: str, nome_cliente: str, cliente_id: int) -> str:
+    return await get_command_bus().dispatch(
+        GenerateAiReplyCommand(
+            telefone=telefone,
+            text=texto,
+            nome_cliente=nome_cliente,
+            cliente_id=cliente_id,
+        )
+    )
 
 async def processar_mensagem(mensagem: dict):
     norm = normalize_incoming(mensagem)
@@ -96,20 +110,26 @@ async def processar_mensagem(mensagem: dict):
 
     agora = datetime.now()
 
-    if msg_id and msg_id in mensagens_processadas:
+    if msg_id and has_processed_message(msg_id):
         print(f"[HANDLER] webhook_duplicado message_id={msg_id} phone_hash={hash_phone(telefone)}")
         return
     if msg_id:
-        mensagens_processadas.append(msg_id)
+        mark_processed_message(msg_id, agora)
 
-    ultima = ultimas_mensagens.get(telefone)
-    if ultima and ultima["texto"] == texto and (agora - ultima["hora"]) < timedelta(seconds=2):
+    ultima = get_recent_message(telefone)
+    ultima_hora = None
+    if ultima and ultima.get("hora"):
+        try:
+            ultima_hora = datetime.fromisoformat(ultima["hora"])
+        except Exception:
+            ultima_hora = None
+    if ultima and ultima.get("texto") == texto and ultima_hora and (agora - ultima_hora) < timedelta(seconds=2):
         print(
             f"[HANDLER] conteudo_duplicado phone_hash={hash_phone(telefone)} "
             f"text='{preview_text(texto)}'"
         )
         return
-    ultimas_mensagens[telefone] = {"texto": texto, "hora": agora}
+    set_recent_message(telefone, texto, agora)
     # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
     from app.models.clientes import salvar_cliente
     cliente_id = salvar_cliente(telefone, nome_cliente)
@@ -141,11 +161,14 @@ async def processar_mensagem(mensagem: dict):
                 print(f"[HANDLER] atendimento_humano_ativo phone_hash={hash_phone(telefone)}")
                 return
 
-    # ====== PROCESSAMENTO VIA AGENTES DE IA ======
-    from app.ai.runner import process_message_with_ai
-    
-    # Chama o Swarm de Agentes
-    resposta_ia = await process_message_with_ai(telefone, texto, nome_cliente, cliente_id)
+    resposta_ia = await gerar_resposta_ia(telefone, texto, nome_cliente, cliente_id)
+    get_event_bus().publish(
+        AiReplyGeneratedEvent(
+            telefone=telefone,
+            nome_cliente=nome_cliente,
+            reply=resposta_ia,
+        )
+    )
     
     # Envia a resposta final gerada pela IA (ou pelas tools) de volta ao cliente via WhatsApp
     await responder_usuario(telefone, resposta_ia)

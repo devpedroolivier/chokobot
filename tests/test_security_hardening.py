@@ -79,7 +79,7 @@ class SecurityHardeningTests(unittest.TestCase):
             headers={"X-Webhook-Secret": "super-secret"},
         )
         with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
-            with patch.object(webhook_module, "processar_mensagem", AsyncMock()) as mocked_process:
+            with patch.object(webhook_module, "dispatch_inbound_message", AsyncMock()) as mocked_process:
                 first = asyncio.run(webhook_module.receber_webhook(request))
                 second = asyncio.run(webhook_module.receber_webhook(request))
 

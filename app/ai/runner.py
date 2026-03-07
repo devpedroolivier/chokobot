@@ -1,25 +1,57 @@
 import json
-from openai import AsyncOpenAI
 import os
-from typing import Dict, Any, List
+import time
+from datetime import datetime
+from typing import Any, Dict
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from openai import AsyncOpenAI
+
 from app.ai.agents import AGENTS_MAP, TriageAgent
-from app.ai.tools import get_menu, escalate_to_human, create_cake_order, CakeOrderSchema, get_learnings, save_learning
+from app.ai.tools import CakeOrderSchema, create_cake_order, escalate_to_human, get_learnings, get_menu, save_learning
 from app.observability import increment_counter, log_event, observe_duration
 from app.security import ai_learning_enabled
+from app.services.estados import ai_sessions
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Gerenciamento de memória em RAM para o MVP (substitui o Redis dos fluxos engessados)
-# Estrutura: { telefone: {"messages": [...], "current_agent": "TriageAgent"} }
-CONVERSATIONS: Dict[str, Dict[str, Any]] = {}
+CONVERSATIONS = ai_sessions
+
+
+def _assistant_message_to_dict(message) -> dict:
+    payload = {
+        "role": getattr(message, "role", "assistant"),
+        "content": getattr(message, "content", None),
+    }
+    tool_calls = []
+    for tool_call in getattr(message, "tool_calls", []) or []:
+        tool_calls.append(
+            {
+                "id": tool_call.id,
+                "type": getattr(tool_call, "type", "function"),
+                "function": {
+                    "name": tool_call.function.name,
+                    "arguments": tool_call.function.arguments,
+                },
+            }
+        )
+    if tool_calls:
+        payload["tool_calls"] = tool_calls
+    return payload
+
+
+def save_session(telefone: str, session: dict) -> None:
+    CONVERSATIONS[telefone] = session
 
 def get_or_create_session(telefone: str) -> Dict[str, Any]:
-    if telefone not in CONVERSATIONS:
-        CONVERSATIONS[telefone] = {
+    session = CONVERSATIONS.get(telefone)
+    if session is None:
+        session = {
             "messages": [],
-            "current_agent": "TriageAgent"
+            "current_agent": "TriageAgent",
         }
-    return CONVERSATIONS[telefone]
+        save_session(telefone, session)
+    return session
 
 # Mapeamento de funções reais para as definições de Tools da OpenAI
 def get_openai_tools(agent):
@@ -143,20 +175,39 @@ def get_openai_tools(agent):
             }
         }
     })
-    
+
     return openai_tools
 
 
-import time
-from datetime import datetime
+def _current_timezone() -> ZoneInfo:
+    timezone_name = os.getenv("BOT_TIMEZONE") or os.getenv("TZ") or "America/Sao_Paulo"
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("America/Sao_Paulo")
 
-async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, cliente_id: int) -> str:
+
+def current_local_datetime() -> datetime:
+    return datetime.now(_current_timezone())
+
+
+def build_system_time_context(now: datetime | None = None) -> str:
+    current_time = now or current_local_datetime()
+    return current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
+
+
+async def process_message_with_ai(
+    telefone: str,
+    text: str,
+    nome_cliente: str,
+    cliente_id: int,
+    now: datetime | None = None,
+) -> str:
     """Função principal que o handler vai chamar para processar a mensagem pela IA."""
     start_time = time.time()
     session = get_or_create_session(telefone)
-    
-    agora = datetime.now()
-    data_hora_atual = agora.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
+
+    data_hora_atual = build_system_time_context(now)
     
     if not session["messages"]:
         # Inicializa o prompt de sistema do agente atual
@@ -169,9 +220,11 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
             system_instructions += f"\n\nREGRAS APRENDIDAS ANTERIORMENTE:\n{learnings}"
             
         session["messages"].append({"role": "system", "content": system_instructions})
+        save_session(telefone, session)
     
     # Adiciona a mensagem do usuário
     session["messages"].append({"role": "user", "content": text})
+    save_session(telefone, session)
     
     log_event("ai_run_started", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
     increment_counter("ai_runs_total", stage="started", agent=session["current_agent"])
@@ -193,6 +246,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
             if learnings:
                 sys_inst += f"\n\nREGRAS APRENDIDAS ANTERIORMENTE:\n{learnings}"
             session["messages"][0]["content"] = sys_inst
+            save_session(telefone, session)
             
         tools_config = get_openai_tools(agent)
         
@@ -210,7 +264,8 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
             total_completion_tokens += response.usage.completion_tokens
             
         msg = response.choices[0].message
-        session["messages"].append(msg)
+        session["messages"].append(_assistant_message_to_dict(msg))
+        save_session(telefone, session)
         
         # Se a IA respondeu com texto final
         if not msg.tool_calls:
@@ -241,6 +296,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                     session["current_agent"] = new_agent
                     tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
                     log_event("ai_handoff", to_agent=new_agent)
+                    save_session(telefone, session)
                 else:
                     tool_result = f"Erro: Agente {new_agent} não existe."
                     
@@ -257,6 +313,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                 tool_result = escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
                 # Limpa a sessão para não reter o estado de erro
                 session["messages"] = []
+                save_session(telefone, session)
                 return "Um momento! Estou transferindo você para um dos nossos atendentes humanos. 👩‍🍳"
                 
             elif function_name == "create_cake_order":
@@ -265,6 +322,7 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                     order = CakeOrderSchema(**arguments)
                     tool_result = create_cake_order(telefone, nome_cliente, cliente_id, order)
                     session["messages"] = [] # Limpa a sessão após o pedido ser concluído
+                    save_session(telefone, session)
                     return f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
                 except Exception as e:
                     tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(e)}"
@@ -276,3 +334,4 @@ async def process_message_with_ai(telefone: str, text: str, nome_cliente: str, c
                 "name": function_name,
                 "content": str(tool_result)
             })
+            save_session(telefone, session)

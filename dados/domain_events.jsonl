@@ -1,0 +1,5 @@
+{"order_id": -1, "phone": "5511888888888", "nome_cliente": "Cliente Cafe", "categoria": "cafeteria", "source": "cafeteria_order", "occurred_at": "2026-03-07T03:26:37.818937Z", "event_type": "OrderCreatedEvent"}
+{"payload": {"text": "Oi", "phone": "5511999999999", "chat_name": "Desconhecido", "message_id": "msg-2", "message_type": ""}, "occurred_at": "2026-03-07T03:26:37.893504Z", "event_type": "MessageReceivedEvent"}
+{"payload": {"text": "Oi", "phone": "5511999999999", "chat_name": "Desconhecido", "message_id": "msg-http-1", "message_type": ""}, "occurred_at": "2026-03-07T03:32:24.657936Z", "event_type": "MessageReceivedEvent"}
+{"order_id": -1, "phone": "5511888888888", "nome_cliente": "Cliente Cafe", "categoria": "cafeteria", "source": "cafeteria_order", "occurred_at": "2026-03-07T03:32:24.794060Z", "event_type": "OrderCreatedEvent"}
+{"payload": {"text": "Oi", "phone": "5511999999999", "chat_name": "Desconhecido", "message_id": "msg-2", "message_type": ""}, "occurred_at": "2026-03-07T03:32:24.883276Z", "event_type": "MessageReceivedEvent"}

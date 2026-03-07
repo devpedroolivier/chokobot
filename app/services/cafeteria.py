@@ -1,5 +1,5 @@
+from app.application.service_registry import get_order_gateway
 from app.utils.mensagens import responder_usuario
-from app.utils.banco import salvar_pedido_cafeteria_sqlite
 
 PRONTA_ENTREGA_BOLOS_MSG = (
     "🎂 Bolos Pronta Entrega:\n"
@@ -13,6 +13,7 @@ PRONTA_ENTREGA_BOLOS_MSG = (
 async def processar_cafeteria(telefone, texto, estado):
     subetapa = estado.get("subetapa")
     nome = estado.get("nome", "Nome não informado")
+    order_gateway = get_order_gateway()
 
     # 📋 Navegação de cardápios
     if subetapa == "aguardando_cardapio":
@@ -54,7 +55,7 @@ async def processar_cafeteria(telefone, texto, estado):
     # ☕ Pedido direto
     if "itens" in estado:
         if texto.lower() in ["finalizar", "só isso", "obrigado", "obrigada"]:
-            salvar_pedido_cafeteria_sqlite(telefone, estado["itens"], nome)
+            order_gateway.save_cafeteria_order(phone=telefone, itens=estado["itens"], nome_cliente=nome)
             await responder_usuario(telefone, "☕ Pedido finalizado! Em breve confirmaremos com você.")
             return "finalizar"
         else:

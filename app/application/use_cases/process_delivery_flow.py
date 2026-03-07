@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.models.entregas import salvar_entrega
+from app.application.service_registry import get_delivery_gateway
 from app.services.precos import montar_resumo
 from app.utils.mensagens import responder_usuario
 
@@ -10,6 +10,7 @@ from app.utils.mensagens import responder_usuario
 @dataclass
 class ProcessDeliveryFlow:
     async def execute(self, telefone: str, texto: str, estado: dict) -> str | None:
+        delivery_gateway = get_delivery_gateway()
         etapa = estado["etapa"]
         dados = estado["dados"]
         nome = estado["nome"]
@@ -84,7 +85,7 @@ class ProcessDeliveryFlow:
                 ref = dados.get("referencia", "")
                 endereco_final = f"{endereco_base} | Ref: {ref}" if ref else endereco_base
 
-                salvar_entrega(
+                delivery_gateway.create_delivery(
                     encomenda_id=encomenda_id,
                     tipo="entrega",
                     endereco=endereco_final,
