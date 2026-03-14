@@ -1,4 +1,5 @@
-from typing import Literal, Optional
+from datetime import datetime
+from typing import Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -8,70 +9,278 @@ from app.application.service_registry import (
     get_delivery_gateway,
     get_order_gateway,
 )
+from app.db.database import get_connection
 from app.security import ai_learning_enabled, security_audit
-from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido, _linha_canonica
+from app.services.encomendas_utils import (
+    LIMITE_HORARIO_ENTREGA,
+    _horario_entrega_permitido,
+    _linha_canonica,
+    _normaliza_tamanho,
+    _normaliza_produto,
+)
+from app.services.precos import (
+    DOCES_UNITARIOS,
+    DOCES_ALIASES,
+    KIT_FESTOU_PRECO,
+    calcular_total,
+    _canonical_doce,
+    _norm,
+)
 
+# ============================================================
+#  Constantes de validação
+# ============================================================
+
+MASSAS_VALIDAS = {"Branca", "Chocolate", "Mesclada"}
+
+RECHEIOS_VALIDOS = {
+    "Beijinho", "Brigadeiro", "Brigadeiro de Nutella",
+    "Brigadeiro Branco Gourmet", "Brigadeiro Branco de Ninho",
+    "Casadinho", "Doce de Leite",
+}
+
+MOUSSES_VALIDOS = {"Ninho", "Trufa Branca", "Chocolate", "Trufa Preta"}
+
+TAMANHOS_BOLO = {"B3", "B4", "B6", "B7", "P4", "P6"}
+
+LINHAS_VALIDAS = {"tradicional", "gourmet", "mesversario", "babycake", "torta", "simples"}
+
+CATEGORIAS_VALIDAS = {"tradicional", "ingles", "redondo", "torta", "mesversario", "simples", "babycake"}
+
+TAXA_ENTREGA_PADRAO = 10.0
+
+
+# ============================================================
+#  Helpers
+# ============================================================
+
+def _normalizar_data_iso(data_str: str) -> str:
+    """Converte DD/MM/YYYY → YYYY-MM-DD.  Se já estiver em ISO, retorna como está."""
+    try:
+        dt = datetime.strptime(data_str.strip(), "%d/%m/%Y")
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        return data_str
+
+
+def _match_closest(valor: str, validos: set[str]) -> str | None:
+    """Busca case-insensitive em um conjunto de valores válidos."""
+    if not valor:
+        return None
+    v = valor.strip()
+    for valid in validos:
+        if v.lower() == valid.lower():
+            return valid
+    return None
+
+
+def _validar_campos_bolo(dados: dict) -> list[str]:
+    """Valida campos do pedido e retorna lista de erros descritivos."""
+    erros: list[str] = []
+    linha = (dados.get("linha") or "").lower()
+    categoria = (dados.get("categoria") or "").lower()
+
+    if linha not in LINHAS_VALIDAS:
+        erros.append(f"Linha '{dados.get('linha')}' invalida. Opcoes: {', '.join(sorted(LINHAS_VALIDAS))}.")
+
+    if categoria not in CATEGORIAS_VALIDAS:
+        erros.append(f"Categoria '{dados.get('categoria')}' invalida. Opcoes: {', '.join(sorted(CATEGORIAS_VALIDAS))}.")
+
+    # --- Tradicional: precisa de tamanho, massa, recheio, mousse ---
+    if categoria == "tradicional":
+        tam = _normaliza_tamanho(dados.get("tamanho") or "")
+        if tam not in TAMANHOS_BOLO:
+            erros.append(f"Tamanho '{dados.get('tamanho')}' invalido. Use: B3, B4, B6 ou B7.")
+        if not _match_closest(dados.get("massa") or "", MASSAS_VALIDAS):
+            erros.append(f"Massa '{dados.get('massa')}' invalida. Opcoes: Branca, Chocolate ou Mesclada.")
+        if not dados.get("recheio"):
+            erros.append("Recheio e obrigatorio para linha tradicional.")
+        if not dados.get("mousse") and (dados.get("recheio") or "").lower() != "casadinho":
+            erros.append("Mousse e obrigatorio (exceto recheio Casadinho). Opcoes: Ninho, Trufa Branca, Chocolate, Trufa Preta.")
+
+    # --- Mesversário: precisa de tamanho P4/P6 ---
+    elif categoria == "mesversario":
+        tam = _normaliza_tamanho(dados.get("tamanho") or "")
+        if tam not in {"P4", "P6"}:
+            erros.append(f"Tamanho '{dados.get('tamanho')}' invalido para mesversario. Use: P4 ou P6.")
+
+    # --- Gourmet / Torta: precisa de produto ---
+    elif categoria in ("ingles", "redondo", "torta"):
+        if not dados.get("produto"):
+            erros.append(f"Produto/sabor e obrigatorio para categoria {categoria}.")
+
+    # --- Simples: precisa de produto (sabor+cobertura na descricao) ---
+    elif categoria == "simples":
+        pass  # descricao cobre
+
+    # --- Entrega: precisa de endereço ---
+    if dados.get("modo_recebimento") == "entrega":
+        if not dados.get("endereco"):
+            erros.append("Endereco e obrigatorio quando o modo de recebimento for entrega.")
+
+    return erros
+
+
+def _calcular_preco_pedido(dados: dict) -> Tuple[float, int]:
+    """Calcula preço a partir dos dados do CakeOrderSchema mapeados para calcular_total."""
+    categoria = (dados.get("categoria") or "").lower()
+
+    payload: dict = {
+        "categoria": categoria,
+        "kit_festou": dados.get("kit_festou", False),
+        "quantidade": dados.get("quantidade", 1),
+    }
+
+    if categoria == "tradicional":
+        payload["tamanho"] = _normaliza_tamanho(dados.get("tamanho") or "")
+        payload["fruta_ou_nozes"] = dados.get("adicional")
+    elif categoria in ("ingles", "redondo", "torta"):
+        payload["produto"] = dados.get("produto")
+    elif categoria == "mesversario":
+        payload["tamanho"] = _normaliza_tamanho(dados.get("tamanho") or "")
+    elif categoria == "simples":
+        payload["cobertura"] = dados.get("produto") or "Simples"
+
+    return calcular_total(payload)
+
+
+# ============================================================
+#  Schemas
+# ============================================================
 
 class PagamentoSchema(BaseModel):
-    forma: Literal["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"] = Field(..., description="Forma de pagamento escolhida")
+    forma: Literal["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"] = Field(
+        ..., description="Forma de pagamento escolhida"
+    )
     troco_para: Optional[float] = Field(None, description="Valor para troco, se a forma for Dinheiro")
+
 
 class CakeOrderSchema(BaseModel):
     linha: str = Field(..., description="Linha do bolo. Ex: tradicional, gourmet, mesversario, babycake, torta, simples")
-    categoria: str = Field(..., description="Categoria derivada da linha. Ex: tradicional, ingles, redondo, torta")
-    produto: Optional[str] = Field(None, description="Nome do produto específico (para gourmet, tortas, etc)")
-    tamanho: Optional[str] = Field(None, description="Tamanho do bolo. Ex: B3, B4, P4, P6")
-    massa: Optional[str] = Field(None, description="Sabor da massa")
-    recheio: Optional[str] = Field(None, description="Sabor do recheio principal")
-    mousse: Optional[str] = Field(None, description="Sabor do mousse/segundo recheio")
-    adicional: Optional[str] = Field(None, description="Fruta ou nozes adicionais")
-    descricao: str = Field(..., description="Descrição completa do bolo para o painel")
-    kit_festou: bool = Field(False, description="Se o cliente adicionou o kit festou (+25 brigadeiros e balão)")
+    categoria: str = Field(..., description="Categoria derivada da linha. Ex: tradicional, ingles, redondo, torta, mesversario, simples")
+    produto: Optional[str] = Field(None, description="Nome do produto/sabor (obrigatorio para gourmet, torta, simples)")
+    tamanho: Optional[str] = Field(None, description="Tamanho: B3, B4, B6, B7, P4 ou P6")
+    massa: Optional[str] = Field(None, description="Massa: Branca, Chocolate ou Mesclada (so para tradicional)")
+    recheio: Optional[str] = Field(None, description="Recheio principal (so para tradicional/mesversario)")
+    mousse: Optional[str] = Field(None, description="Mousse (so para tradicional, exceto recheio Casadinho)")
+    adicional: Optional[str] = Field(None, description="Fruta ou nozes adicionais (so para tradicional)")
+    descricao: str = Field(..., description="Descricao completa do bolo para o painel")
+    kit_festou: bool = Field(False, description="Se adicionou kit festou (+R$35)")
     quantidade: int = Field(1, description="Quantidade do item")
     data_entrega: str = Field(..., description="Data de entrega no formato DD/MM/AAAA")
-    horario_retirada: Optional[str] = Field(None, description="Horário de retirada/entrega no formato HH:MM")
-    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="Se o cliente vai retirar ou pedir entrega")
-    endereco: Optional[str] = Field(None, description="Endereço completo para entrega, obrigatório se modo for entrega")
-    taxa_entrega: float = Field(0.0, description="Taxa de entrega (0 se retirada)")
+    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
+    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
+    endereco: Optional[str] = Field(None, description="Endereco completo (obrigatorio se entrega)")
+    taxa_entrega: float = Field(0.0, description="Taxa de entrega")
     pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
+
+
+class SweetItemSchema(BaseModel):
+    nome: str = Field(..., description="Nome do doce. Ex: Brigadeiro Escama, Bombom Camafeu")
+    quantidade: int = Field(..., description="Quantidade do doce")
+
+
+class SweetOrderSchema(BaseModel):
+    itens: List[SweetItemSchema] = Field(..., description="Lista de doces com nome e quantidade")
+    data_entrega: str = Field(..., description="Data de entrega no formato DD/MM/AAAA")
+    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
+    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
+    endereco: Optional[str] = Field(None, description="Endereco completo (obrigatorio se entrega)")
+    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
+
+
+# ============================================================
+#  Tools
+# ============================================================
 
 def get_menu(category: str = "todas") -> str:
     """Retorna o cardapio completo ou filtrado entre pronta entrega e encomendas."""
     return get_catalog_gateway().get_menu(category)
 
+
 def get_learnings() -> str:
     """Lê as instruções e regras aprendidas previamente pela IA."""
     return get_catalog_gateway().get_learnings()
+
 
 def save_learning(aprendizado: str) -> str:
     """Salva uma nova regra de negócio, preferência do cliente ou correção aprendida para consultas futuras."""
     if not ai_learning_enabled():
         security_audit("ai_learning_blocked")
         return "Aprendizado persistente desativado neste ambiente."
-
     return get_catalog_gateway().save_learning(aprendizado)
+
 
 def escalate_to_human(telefone: str, motivo: str):
     """Aciona o atendimento humano, pausando o bot para esse telefone."""
     return get_attention_gateway().activate_human_handoff(telefone=telefone, motivo=motivo)
 
+
 def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_details: CakeOrderSchema) -> str:
-    """Valida e salva o pedido final no banco de dados e agenda a entrega se for o caso."""
+    """Valida, calcula preço e salva o pedido de bolo no banco de dados."""
     order_gateway = get_order_gateway()
     delivery_gateway = get_delivery_gateway()
     dados = order_details.model_dump()
     dados["linha"] = _linha_canonica(dados.get("linha"))
+    categoria = (dados.get("categoria") or "").lower()
+    dados["categoria"] = categoria
 
+    # --- Normalizar tamanho ---
+    if dados.get("tamanho"):
+        dados["tamanho"] = _normaliza_tamanho(dados["tamanho"])
+
+    # --- Normalizar massa ---
+    if dados.get("massa"):
+        matched = _match_closest(dados["massa"], MASSAS_VALIDAS)
+        if matched:
+            dados["massa"] = matched
+
+    # --- Normalizar produto (gourmet/torta) ---
+    if dados.get("produto") and dados["linha"] in ("gourmet", "torta"):
+        normalizado = _normaliza_produto(
+            "torta" if categoria == "torta" else ("redondo" if categoria == "redondo" else "gourmet"),
+            dados["produto"],
+        )
+        if normalizado:
+            dados["produto"] = normalizado
+
+    # --- Horário de entrega tem prioridade sobre outras validações ---
     if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
         return f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. Ajuste o horario ou altere para retirada."
 
+    # --- Validação de campos ---
+    erros = _validar_campos_bolo(dados)
+    if erros:
+        return "Erro de validacao:\n- " + "\n- ".join(erros)
+
+    # --- Horário de entrega ---
+    if dados["modo_recebimento"] == "entrega":
+        if dados.get("taxa_entrega", 0) == 0:
+            dados["taxa_entrega"] = TAXA_ENTREGA_PADRAO
+
+    # --- Calcular preço ---
+    try:
+        valor_total, serve_pessoas = _calcular_preco_pedido(dados)
+        if dados["modo_recebimento"] == "entrega":
+            valor_total += dados.get("taxa_entrega", 0)
+        dados["valor_total"] = valor_total
+        dados["serve_pessoas"] = serve_pessoas
+    except Exception as exc:
+        dados["valor_total"] = 0
+        dados["serve_pessoas"] = 0
+
+    # --- Normalizar data para ISO ---
+    dados["data_entrega"] = _normalizar_data_iso(dados["data_entrega"])
+
+    # --- Salvar pedido ---
     encomenda_id = order_gateway.create_order(
         phone=telefone,
         dados=dados,
         nome_cliente=nome_cliente,
         cliente_id=cliente_id,
     )
-    
+
+    # --- Salvar entrega ---
     if dados["modo_recebimento"] == "entrega":
         delivery_gateway.create_delivery(
             encomenda_id=encomenda_id,
@@ -87,5 +296,120 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
             data_agendada=dados["data_entrega"],
             status="Retirar na loja",
         )
-        
-    return f"Pedido salvo com sucesso! ID da Encomenda: {encomenda_id}"
+
+    preco_txt = f" | Valor: R${dados['valor_total']:.2f}" if dados.get("valor_total") else ""
+    return f"Pedido salvo com sucesso! ID da Encomenda: {encomenda_id}{preco_txt}"
+
+
+def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_details: SweetOrderSchema) -> str:
+    """Valida, calcula preço e salva o pedido de doces avulsos no banco de dados."""
+    order_gateway = get_order_gateway()
+    delivery_gateway = get_delivery_gateway()
+    dados = order_details.model_dump()
+
+    # --- Validar e calcular itens ---
+    itens_validados: List[Dict] = []
+    total_doces = 0.0
+    erros: list[str] = []
+
+    for item in dados.get("itens", []):
+        nome_raw = item.get("nome", "")
+        qtd = item.get("quantidade", 1)
+
+        nome_canonico = _canonical_doce(nome_raw)
+        if not nome_canonico:
+            erros.append(f"Doce nao reconhecido: '{nome_raw}'. Verifique o nome no cardapio.")
+            continue
+
+        preco_unit = DOCES_UNITARIOS[nome_canonico]
+        preco_total = round(preco_unit * qtd, 2)
+        total_doces += preco_total
+
+        itens_validados.append({
+            "nome": nome_canonico,
+            "qtd": qtd,
+            "preco": preco_total,
+            "unit": preco_unit,
+        })
+
+    if erros:
+        return "Erro de validacao:\n- " + "\n- ".join(erros)
+
+    if not itens_validados:
+        return "Nenhum doce valido foi informado."
+
+    # --- Validar entrega ---
+    if dados["modo_recebimento"] == "entrega":
+        if not dados.get("endereco"):
+            return "Endereco e obrigatorio quando o modo de recebimento for entrega."
+        if not _horario_entrega_permitido(dados.get("horario_retirada")):
+            return f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. Ajuste o horario ou altere para retirada."
+
+    taxa_entrega = TAXA_ENTREGA_PADRAO if dados["modo_recebimento"] == "entrega" else 0.0
+    valor_final = round(total_doces + taxa_entrega, 2)
+
+    # --- Normalizar data ---
+    data_iso = _normalizar_data_iso(dados["data_entrega"])
+
+    # --- Montar descrição ---
+    desc_itens = ", ".join(f"{it['nome']} x{it['qtd']}" for it in itens_validados)
+
+    # --- Salvar encomenda-pai ---
+    order_data = {
+        "categoria": "doces",
+        "linha": "doces",
+        "descricao": f"Doces Avulsos: {desc_itens}",
+        "data_entrega": data_iso,
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados["modo_recebimento"],
+        "valor_total": valor_final,
+        "quantidade": 1,
+        "pagamento": dados.get("pagamento", {}),
+        "taxa_entrega": taxa_entrega,
+    }
+
+    encomenda_id = order_gateway.create_order(
+        phone=telefone,
+        dados=order_data,
+        nome_cliente=nome_cliente,
+        cliente_id=cliente_id,
+    )
+
+    # --- Salvar itens na tabela encomenda_doces ---
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        for it in itens_validados:
+            cur.execute(
+                "INSERT INTO encomenda_doces (encomenda_id, nome, qtd, preco, unit) VALUES (?, ?, ?, ?, ?)",
+                (encomenda_id, it["nome"], it["qtd"], it["preco"], it["unit"]),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print(f"⚠️ Erro ao salvar itens de doces: {exc}")
+
+    # --- Salvar entrega ---
+    if dados["modo_recebimento"] == "entrega":
+        delivery_gateway.create_delivery(
+            encomenda_id=encomenda_id,
+            tipo="entrega",
+            data_agendada=data_iso,
+            status="pendente",
+            endereco=dados.get("endereco"),
+        )
+    else:
+        delivery_gateway.create_delivery(
+            encomenda_id=encomenda_id,
+            tipo="retirada",
+            data_agendada=data_iso,
+            status="Retirar na loja",
+        )
+
+    return (
+        f"Pedido de doces salvo com sucesso! ID: {encomenda_id}\n"
+        f"Itens: {desc_itens}\n"
+        f"Total doces: R${total_doces:.2f}\n"
+        + (f"Taxa entrega: R${taxa_entrega:.2f}\n" if taxa_entrega else "")
+        + f"Total final: R${valor_final:.2f}"
+    )

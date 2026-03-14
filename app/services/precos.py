@@ -141,6 +141,10 @@ def calcular_total(pedido: dict) -> Tuple[float, int]:
     elif categoria == "torta":
         item = TORTAS[pedido["produto"]]
         total += item["preco"]; serve = item["serve"]
+    elif categoria == "simples":
+        cobertura = pedido.get("cobertura") or pedido.get("produto") or "Simples"
+        total += calcular_preco_simples(cobertura)
+        serve = LINHA_SIMPLES["serve_pessoas"]
     else:
         raise ValueError(f"Categoria inválida: {categoria}")
 

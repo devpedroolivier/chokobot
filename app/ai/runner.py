@@ -5,15 +5,27 @@ from datetime import datetime
 from typing import Any, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from openai import AsyncOpenAI
+try:
+    from openai import AsyncOpenAI
+except ModuleNotFoundError:
+    AsyncOpenAI = None
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
-from app.ai.tools import CakeOrderSchema, create_cake_order, escalate_to_human, get_learnings, get_menu, save_learning
+from app.ai.tools import (
+    CakeOrderSchema,
+    SweetOrderSchema,
+    create_cake_order,
+    create_sweet_order,
+    escalate_to_human,
+    get_learnings,
+    get_menu,
+    save_learning,
+)
 from app.observability import increment_counter, log_event, observe_duration
 from app.security import ai_learning_enabled
 from app.services.estados import ai_sessions
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")) if AsyncOpenAI else None
 
 CONVERSATIONS = ai_sessions
 
@@ -156,7 +168,45 @@ def get_openai_tools(agent):
                 }
             }
         })
-        
+
+    if create_sweet_order in agent.tools:
+        openai_tools.append({
+            "type": "function",
+            "function": {
+                "name": "create_sweet_order",
+                "description": "Salva o pedido de doces avulsos em quantidade apos a confirmacao final do cliente.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "itens": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "nome": {"type": "string"},
+                                    "quantidade": {"type": "integer"},
+                                },
+                                "required": ["nome", "quantidade"],
+                            },
+                        },
+                        "data_entrega": {"type": "string", "description": "DD/MM/AAAA"},
+                        "horario_retirada": {"type": "string", "description": "HH:MM"},
+                        "modo_recebimento": {"type": "string", "enum": ["retirada", "entrega"]},
+                        "endereco": {"type": "string"},
+                        "pagamento": {
+                            "type": "object",
+                            "properties": {
+                                "forma": {"type": "string", "enum": ["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"]},
+                                "troco_para": {"type": "number"}
+                            },
+                            "required": ["forma"]
+                        }
+                    },
+                    "required": ["itens", "data_entrega", "modo_recebimento", "pagamento"]
+                }
+            }
+        })
+
     # Injeta automaticamente o roteamento como uma tool para TODOS os agentes (Handoff)
     openai_tools.append({
         "type": "function",
@@ -168,7 +218,7 @@ def get_openai_tools(agent):
                 "properties": {
                     "agent_name": {
                         "type": "string", 
-                        "enum": ["TriageAgent", "CakeOrderAgent", "KnowledgeAgent", "CafeteriaAgent"]
+                        "enum": ["TriageAgent", "CakeOrderAgent", "SweetOrderAgent", "KnowledgeAgent", "CafeteriaAgent"]
                     }
                 },
                 "required": ["agent_name"]
@@ -232,6 +282,9 @@ async def process_message_with_ai(
     total_prompt_tokens = 0
     total_completion_tokens = 0
     iteration_count = 0
+
+    if client is None:
+        return "Integracao de IA indisponivel no ambiente atual. Instale a dependencia 'openai' para ativar esse fluxo."
 
     # Loop de raciocínio da IA
     while True:
@@ -326,7 +379,17 @@ async def process_message_with_ai(
                     return f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
                 except Exception as e:
                     tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(e)}"
-            
+
+            elif function_name == "create_sweet_order":
+                try:
+                    order = SweetOrderSchema(**arguments)
+                    tool_result = create_sweet_order(telefone, nome_cliente, cliente_id, order)
+                    session["messages"] = []
+                    save_session(telefone, session)
+                    return f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+                except Exception as e:
+                    tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(e)}"
+
             # Adiciona o resultado da ferramenta na memória para a IA "ler"
             session["messages"].append({
                 "role": "tool",
