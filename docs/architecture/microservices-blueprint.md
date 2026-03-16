@@ -1,18 +1,31 @@
-# Microservices Blueprint
+# Arquitetura de Microsservicos
 
 ## Documentos relacionados
-- `docs/executive-implementation-plan.md`: roadmap executivo com sprints, backlog e impacto esperado
+- `../executive-implementation-plan.md`: roadmap executivo com sprints, backlog e impacto esperado
+- `event-contracts.md`: eventos canonicos, envelope e responsabilidade por servico
+- `tenant-structural-model.md`: decisao estrutural minima de multi-tenant antes da Sprint 5
 
 ## Objetivo
 Preparar o MVP atual para uma migracao por estrangulamento, preservando a logica de negocio existente e trocando apenas as fronteiras de infraestrutura.
 
-## Boundaries iniciais
+## Leitura correta do estado atual
+- O modo `split` entre `edge` e `conversation` ja existe no mesmo repositorio e ajuda a validar fronteiras.
+- O uso de `redis` no perfil `split` comprova viabilidade tecnica local, mas ainda nao caracteriza operacao distribuida pronta para producao.
+- O fallback local continua sendo parte da estrategia de transicao e precisa ser removido apenas depois de observabilidade, retries e contratos estaveis.
+
+## Limites iniciais
 - `edge-gateway`: webhook, auth, replay e normalizacao de payload
 - `conversation-service`: sessao, roteamento, IA e handoff
 - `catalog-service`: cardapio, regras de produto, pricing e learnings controlados
 - `orders-service`: encomendas, cafeteria e cestas
 - `delivery-service`: entrega, retirada e status
 - `backoffice-service`: painel interno, clientes e consultas operacionais
+
+## Contratos minimos antes da extracao
+- Cada servico extraido deve ter responsabilidade explicita sobre dados, APIs e eventos publicados.
+- Eventos entre servicos precisam de nome canonico, payload versionado e politica de idempotencia.
+- A estrategia de persistencia deve definir claramente o que continua compartilhado na transicao e o que passa a ser responsabilidade exclusiva do servico.
+- O modelo de `tenant` precisa existir no contrato antes das extracoes relevantes, mesmo que a ativacao comercial fique para uma fase posterior.
 
 ## Fundacao aplicada nesta etapa
 - Portas de aplicacao para `catalog`, `orders`, `delivery`, `messaging` e `attention`
@@ -31,10 +44,11 @@ Preparar o MVP atual para uma migracao por estrangulamento, preservando a logica
 ## Proximas fases
 1. Fazer o `edge-gateway` usar HTTP real contra `conversation-service` em ambiente separado
 2. Trocar event bus local por fila/outbox consumido por worker
-3. Extrair `catalog-service` e `backoffice-service`
-4. Extrair `orders-service` e `delivery-service`
-5. Publicar `delivery_status_updated` e demais eventos operacionais
-6. Remover o fallback local quando os serviços estiverem estabilizados
+3. Definir contratos canonicos de eventos, responsabilidade sobre dados e identificacao de `tenant`
+4. Extrair `catalog-service` e `backoffice-service`
+5. Extrair `orders-service` e `delivery-service`
+6. Publicar `delivery_status_updated` e demais eventos operacionais
+7. Remover o fallback local quando os servicos estiverem estabilizados
 
 ## Execucao
 - Monolito atual:

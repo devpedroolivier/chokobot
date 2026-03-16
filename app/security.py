@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import threading
 import time
 from collections.abc import Mapping
@@ -11,35 +10,30 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from app.observability import increment_counter, log_event
+from app.settings import get_settings
 
 
 _panel_basic = HTTPBasic(auto_error=False)
 _replay_lock = threading.Lock()
 _replay_cache: dict[str, float] = {}
 
-
-def _env_flag(name: str, default: str = "0") -> bool:
-    raw = os.getenv(name, default).strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
-
 def panel_auth_enabled() -> bool:
-    return _env_flag("PANEL_AUTH_ENABLED", "0")
+    return get_settings().panel_auth_enabled
 
 
 def webhook_verification_enabled() -> bool:
-    if os.getenv("WEBHOOK_SECRET", "").strip():
+    settings = get_settings()
+    if settings.webhook_secret:
         return True
-    return _env_flag("WEBHOOK_VERIFY_ENABLED", "0")
+    return settings.webhook_verify_enabled
 
 
 def ai_learning_enabled() -> bool:
-    return _env_flag("AI_SAVE_LEARNING_ENABLED", "0")
+    return get_settings().ai_save_learning_enabled
 
 
 def get_admin_phones() -> set[str]:
-    raw = os.getenv("ADMIN_PHONES", "")
-    return {item.strip() for item in raw.split(",") if item.strip()}
+    return set(get_settings().admin_phones)
 
 
 def hash_phone(phone: str | None) -> str:
@@ -69,8 +63,9 @@ def require_panel_auth(
     if not panel_auth_enabled():
         return
 
-    username = os.getenv("PANEL_AUTH_USERNAME", "")
-    password = os.getenv("PANEL_AUTH_PASSWORD", "")
+    settings = get_settings()
+    username = settings.panel_auth_username
+    password = settings.panel_auth_password
     if not username or not password:
         security_audit("panel_auth_misconfigured")
         raise HTTPException(
@@ -103,7 +98,7 @@ def verify_webhook_secret(secret_value: str | None) -> None:
     if not webhook_verification_enabled():
         return
 
-    expected = os.getenv("WEBHOOK_SECRET", "").strip()
+    expected = get_settings().webhook_secret
     if not expected:
         security_audit("webhook_secret_missing")
         raise HTTPException(
@@ -123,10 +118,7 @@ def verify_webhook_secret(secret_value: str | None) -> None:
 
 
 def webhook_replay_window_seconds() -> int:
-    try:
-        return max(1, int(os.getenv("WEBHOOK_REPLAY_WINDOW_SECONDS", "300")))
-    except ValueError:
-        return 300
+    return get_settings().webhook_replay_window_seconds
 
 
 def is_replay_event(message_id: str | None) -> bool:
@@ -165,4 +157,4 @@ def redact_payload(payload: Mapping | None) -> dict:
 
 
 def webhook_secret_header() -> str:
-    return os.getenv("WEBHOOK_SECRET_HEADER", "X-Webhook-Secret")
+    return get_settings().webhook_secret_header

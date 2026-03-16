@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.application.service_registry import get_delivery_gateway
+from app.observability import log_event
 from app.services.precos import montar_resumo
 from app.utils.mensagens import responder_usuario
 
@@ -15,7 +16,7 @@ class ProcessDeliveryFlow:
         dados = estado["dados"]
         nome = estado["nome"]
 
-        print(f"📍 ETAPA ATUAL (entrega): {etapa}")
+        log_event("delivery_flow_step", telefone=telefone, etapa=etapa, nome=nome)
 
         if etapa == 1:
             dados["endereco"] = texto.strip()
@@ -54,7 +55,11 @@ class ProcessDeliveryFlow:
                     f"{info_pagamento}\n\n💲 *Obs: já inclui a taxa de entrega de R$ {taxa_entrega:.2f}.*",
                 )
             except Exception as exc:
-                print(f"⚠️ Não foi possível montar o resumo: {exc}")
+                log_event(
+                    "delivery_flow_summary_failed",
+                    telefone=telefone,
+                    error_type=type(exc).__name__,
+                )
 
             estado["etapa"] = "confirmar_entrega"
             await responder_usuario(

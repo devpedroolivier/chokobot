@@ -32,7 +32,7 @@ class CommandBusTests(unittest.IsolatedAsyncioTestCase):
         get_command_bus.cache_clear()
         bus = get_command_bus()
 
-        with patch("app.handler.processar_mensagem", AsyncMock()) as mocked:
+        with patch("app.application.handlers.handle_inbound_message.process_inbound_message", AsyncMock()) as mocked:
             await bus.dispatch(HandleInboundMessageCommand(payload={"message": "oi"}))
 
         mocked.assert_awaited_once_with({"message": "oi"})

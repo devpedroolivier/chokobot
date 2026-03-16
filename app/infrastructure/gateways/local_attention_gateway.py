@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import datetime
-
-from app.services.estados import estados_atendimento
+from app.application.use_cases.manage_human_handoff import activate_human_handoff, deactivate_human_handoff
 
 
 class LocalAttentionGateway:
     def activate_human_handoff(self, *, telefone: str, motivo: str) -> str:
-        estados_atendimento[telefone] = {
-            "humano": True,
-            "inicio": datetime.datetime.now().isoformat(),
-            "motivo": motivo,
-        }
-        return f"Atendimento humano solicitado para {telefone}. Motivo: {motivo}"
+        return activate_human_handoff(telefone, motivo=motivo)
+
+    def deactivate_human_handoff(self, *, telefone: str) -> bool:
+        return deactivate_human_handoff(telefone)

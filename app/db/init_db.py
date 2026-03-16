@@ -1,6 +1,7 @@
 # app/db/init_db.py
 from pathlib import Path
 from app.db.database import get_connection
+from app.observability import log_event
 
 def ensure_views():
     """
@@ -16,7 +17,7 @@ def ensure_views():
     ]
     schema_path = next((p for p in candidates if p.exists()), None)
     if not schema_path:
-        print("[DB] ⚠️ schema.sql não encontrado; pulando ensure_views()")
+        log_event("db_schema_missing")
         return
 
     sql = schema_path.read_text(encoding="utf-8")
@@ -24,6 +25,6 @@ def ensure_views():
     try:
         with conn:
             conn.executescript(sql)
-        print(f"[DB] ✅ Views aplicadas a partir de: {schema_path.resolve()}")
+        log_event("db_views_applied", schema_path=str(schema_path.resolve()))
     finally:
         conn.close()

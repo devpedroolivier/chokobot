@@ -6,16 +6,18 @@ import os
 
 import httpx
 
-from app.config import ZAPI_ENDPOINT_TEXT, ZAPI_TOKEN
 from app.observability import increment_counter, log_event
 from app.security import hash_phone, preview_text
+from app.settings import get_settings
 
-
-HTTP_TIMEOUT_CONNECT = int(os.getenv("HTTP_TIMEOUT_CONNECT", "5"))
-HTTP_TIMEOUT_READ = int(os.getenv("HTTP_TIMEOUT_READ", "20"))
-HTTP_MAX_RETRIES = int(os.getenv("HTTP_MAX_RETRIES", "3"))
-HTTP_BACKOFF_FACTOR = float(os.getenv("HTTP_BACKOFF_FACTOR", "1"))
-OUTBOX_PATH = os.getenv("OUTBOX_PATH", "dados/outbox.jsonl")
+_settings = get_settings()
+HTTP_TIMEOUT_CONNECT = _settings.http_timeout_connect
+HTTP_TIMEOUT_READ = _settings.http_timeout_read
+HTTP_MAX_RETRIES = _settings.http_max_retries
+HTTP_BACKOFF_FACTOR = _settings.http_backoff_factor
+OUTBOX_PATH = _settings.outbox_path
+ZAPI_ENDPOINT_TEXT = _settings.zapi_endpoint_text
+ZAPI_TOKEN = _settings.zapi_token
 
 
 class ZapiMessagingGateway:
@@ -30,7 +32,7 @@ class ZapiMessagingGateway:
             increment_counter("outbox_events_total", status="queued")
             log_event("outbox_queued", phone_hash=hash_phone(phone), text=preview_text(mensagem, 80))
         except Exception as exc:
-            print(f"⚠️ Falha ao enfileirar mensagem: {exc}")
+            log_event("outbox_queue_failed", error_type=type(exc).__name__)
 
     async def send_text(self, phone: str, mensagem: str) -> bool:
         lock = self._locks_envio.setdefault(phone, asyncio.Lock())
@@ -48,9 +50,13 @@ class ZapiMessagingGateway:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 for attempt in range(1, HTTP_MAX_RETRIES + 1):
                     try:
-                        print(
-                            f"[ZAPI] sending attempt={attempt}/{HTTP_MAX_RETRIES} "
-                            f"phone_hash={hash_phone(phone)} text='{preview_text(mensagem, 120)}'"
+                        log_event(
+                            "provider_send_attempt",
+                            provider="zapi",
+                            attempt=attempt,
+                            max_attempts=HTTP_MAX_RETRIES,
+                            phone_hash=hash_phone(phone),
+                            text=preview_text(mensagem, 120),
                         )
                         increment_counter("provider_send_attempts_total", provider="zapi")
                         response = await client.post(ZAPI_ENDPOINT_TEXT, json=payload, headers=headers)
@@ -67,7 +73,12 @@ class ZapiMessagingGateway:
                             return True
 
                         increment_counter("provider_send_results_total", provider="zapi", status="http_error")
-                        print(f"[ZAPI] http_error status={status_code} phone_hash={hash_phone(phone)}")
+                        log_event(
+                            "provider_send_http_error",
+                            provider="zapi",
+                            status_code=status_code,
+                            phone_hash=hash_phone(phone),
+                        )
 
                         if status_code not in (429, 500, 502, 503, 504):
                             self._enqueue(phone, mensagem)
@@ -76,16 +87,31 @@ class ZapiMessagingGateway:
                     except (httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
                         last_exc = exc
                         increment_counter("provider_send_results_total", provider="zapi", status="timeout")
-                        print(f"⏱️ Timeout na tentativa {attempt}: {repr(exc)}")
+                        log_event(
+                            "provider_send_timeout",
+                            provider="zapi",
+                            attempt=attempt,
+                            error_type=type(exc).__name__,
+                        )
                     except httpx.HTTPError as exc:
                         last_exc = exc
                         increment_counter("provider_send_results_total", provider="zapi", status="transport_error")
-                        print(f"❌ Erro HTTP na tentativa {attempt}: {repr(exc)}")
+                        log_event(
+                            "provider_send_transport_error",
+                            provider="zapi",
+                            attempt=attempt,
+                            error_type=type(exc).__name__,
+                        )
 
                     if attempt < HTTP_MAX_RETRIES:
                         backoff = HTTP_BACKOFF_FACTOR * (2 ** (attempt - 1))
                         await asyncio.sleep(backoff)
 
-            print("❌ Falha definitiva ao enviar mensagem.", f"Último erro: {repr(last_exc)}")
+            log_event(
+                "provider_send_failed",
+                provider="zapi",
+                error_type=type(last_exc).__name__ if last_exc else None,
+                phone_hash=hash_phone(phone),
+            )
             self._enqueue(phone, mensagem)
             return False

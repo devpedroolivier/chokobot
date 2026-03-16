@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 from collections.abc import MutableMapping, Iterator
 from dataclasses import dataclass, field
+
+from app.observability import log_event
+from app.settings import get_settings
 
 
 class StateBackend:
@@ -180,12 +182,12 @@ class ConversationStateStore:
 
 
 def build_conversation_state_store() -> ConversationStateStore:
-    redis_url = os.getenv("REDIS_URL", "").strip()
+    redis_url = get_settings().redis_url
     if not redis_url:
         return ConversationStateStore(InMemoryStateBackend())
 
     try:
         return ConversationStateStore(RedisStateBackend(redis_url))
     except Exception as exc:
-        print(f"[STATE] Redis indisponível ({exc}); usando estado em memória.")
+        log_event("state_backend_fallback", backend="memory", reason=type(exc).__name__)
         return ConversationStateStore(InMemoryStateBackend())

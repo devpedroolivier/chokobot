@@ -1,4 +1,11 @@
-# Executive Implementation Plan
+# Plano Executivo de Implementacao
+
+## Resumo Executivo
+O Chokobot ja demonstra viabilidade funcional, mas ainda opera com fragilidades tipicas de um MVP: coexistencia de arquitetura legada com camadas novas, acesso a dados por multiplos estilos, dependencias de ambiente no nucleo de IA e lacunas operacionais em observabilidade, seguranca e estado distribuido.
+
+O foco deste plano e reduzir risco operacional antes de acelerar novas frentes de produto. A execucao proposta privilegia estabilizacao do ambiente, consolidacao arquitetural, padronizacao da camada de dados e preparo para operacao distribuida, preservando a logica de negocio atual.
+
+O resultado esperado nao e apenas um sistema mais organizado. E uma base de produto replicavel, com menor custo de manutencao, pronta para escalar tecnicamente e capaz de suportar evolucao multi-tenant sem reabrir decisoes estruturais fundamentais.
 
 ## Objetivo
 Evoluir o Chokobot de uma aplicacao funcional para uma base de produto replicavel, segura e preparada para escala, sem alterar as regras de negocio atuais.
@@ -6,7 +13,7 @@ Evoluir o Chokobot de uma aplicacao funcional para uma base de produto replicave
 Este plano foi adaptado ao estado atual do repositorio, considerando principalmente:
 - arquitetura hibrida entre legado e camadas modernas
 - uso misto de `sqlite3` direto e SQLAlchemy
-- split parcial entre `edge` e `conversation`
+- separacao parcial entre `edge` e `conversation`
 - estado conversacional local/Redis
 - observabilidade e seguranca ainda em nivel MVP
 
@@ -46,10 +53,23 @@ Este plano foi adaptado ao estado atual do repositorio, considerando principalme
 - `infrastructure/`: banco, gateways, mensageria, estado, templates
 - `docs/`: arquitetura, operacao, roadmap e runbooks
 
+## Decisoes Estruturais Antecipadas
+- O modelo de `tenant` precisa ser definido antes da consolidacao final da camada de dados, mesmo que a ativacao comercial multi-tenant aconteca depois.
+- Eventos entre servicos precisam de contrato canonico, versionamento e regras claras de idempotencia.
+- Cada servico extraido deve ter responsabilidade explicita sobre dados, APIs e operacao.
+- A separacao atual entre `edge` e `conversation` deve ser tratada como etapa de validacao arquitetural, nao como indicativo de prontidao produtiva.
+
 ### Diretrizes
 - `app/routes` e `app/models` passam a ser tratados como legado em transicao
 - novos fluxos e refactors entram pelo caminho `api -> application -> domain -> infrastructure`
 - o codigo de `services` deve ser reduzido progressivamente em favor de use cases menores
+
+## Prioridades Imediatas
+1. Tornar o repositorio reproduzivel para desenvolvimento, testes e entrega.
+2. Eliminar acoplamentos de ambiente no nucleo de IA e no carregamento da aplicacao.
+3. Formalizar contratos arquiteturais antes de expandir a extracao de servicos.
+4. Consolidar a camada de dados com migracoes e direcao clara para Postgres.
+5. Preparar estado distribuido, mensageria confiavel e trilhas minimas de seguranca operacional.
 
 ## Roadmap Executivo por Sprint
 
@@ -128,6 +148,8 @@ Objetivo: reduzir a divida estrutural mantendo a logica atual intacta.
 - quebrar fluxos grandes em modulos menores por responsabilidade
 - mover orquestracoes para `application/use_cases`
 - reforcar a adocao de providers em `service_registry`
+- definir contratos canonicos de eventos e responsabilidade inicial por limite de servico
+- definir o modelo estrutural de `tenant` para APIs, eventos e persistencia
 
 #### Impacto esperado
 - menor custo de manutencao
@@ -137,6 +159,7 @@ Objetivo: reduzir a divida estrutural mantendo a logica atual intacta.
 #### Criterios de saida
 - novos desenvolvimentos nao entram mais pelo legado
 - dependencias entre camadas ficam mais previsiveis
+- contratos principais de integracao documentados
 
 ### Sprint 5 - Camada de Dados Pronta para Escala
 Objetivo: consolidar o acesso a dados e preparar migracao segura para banco de producao.
@@ -147,6 +170,7 @@ Objetivo: consolidar o acesso a dados e preparar migracao segura para banco de p
 - criar baseline de migracao
 - reduzir DDL em startup
 - preparar `DATABASE_URL` de producao com Postgres
+- refletir `tenant_id` e isolamento previsto no desenho de schema e repositorios
 - revisar indices, constraints e consistencia de tabelas
 - documentar estrategia de migracao e rollback
 
@@ -158,6 +182,7 @@ Objetivo: consolidar o acesso a dados e preparar migracao segura para banco de p
 #### Criterios de saida
 - schema gerenciado por migracoes
 - nova persistencia centralizada em repositorios padronizados
+- decisoes de particionamento e isolamento por tenant registradas
 
 ### Sprint 6 - Estado Distribuido e Mensageria Confiavel
 Objetivo: remover fragilidade operacional em sessao, replay e envio de mensagens.
@@ -222,12 +247,13 @@ Objetivo: transformar a aplicacao em plataforma replicavel para varias clientes.
 #### Criterios de saida
 - configuracoes principais fora do codigo
 - tenant identificado em runtime e persistencia
+- onboarding de nova operacao sem customizacao estrutural no codigo
 
 ## Backlog Transversal
 - ampliar cobertura de testes de integracao
 - adicionar validacao estatica gradual
 - documentar runbooks operacionais
-- documentar padroes de logs, eventos e naming
+- documentar padroes de logs, eventos e nomenclatura
 - revisar experiencia do painel sem alterar fluxo funcional
 
 ## Ordem Recomendada de Execucao
@@ -243,17 +269,31 @@ Objetivo: transformar a aplicacao em plataforma replicavel para varias clientes.
 ## Dependencias Entre Sprints
 - Sprint 3 depende da padronizacao basica de ambiente da Sprint 1
 - Sprint 4 depende de testes minimamente estaveis
-- Sprint 5 depende da arquitetura mais consolidada
+- Sprint 5 depende da arquitetura mais consolidada e do modelo estrutural de tenant definido
 - Sprint 6 depende de direcao clara da camada de dados
 - Sprint 8 depende da base operacional e de seguranca estar madura
 
+## Riscos Principais
+- Avancar na extracao de servicos sem contratos claros pode deslocar a complexidade em vez de reduzi-la.
+- Manter `sqlite3` direto e SQLAlchemy crescendo em paralelo tende a aumentar custo de manutencao e risco de inconsistencias.
+- Adiar a definicao estrutural de `tenant` alem da consolidacao de dados pode forcar retrabalho em schema, eventos e autorizacao.
+- Tratar o modo `split` local como prova de prontidao produtiva pode mascarar lacunas de retries, observabilidade e operacao distribuida real.
+- Evoluir seguranca apenas no fim aumenta a superficie de retrabalho em autenticacao, auditoria e redacao de dados sensiveis.
+
+## Decisoes de Gestao Recomendadas
+- Nao aprovar expansao significativa de novas features antes da conclusao das Sprints 1 a 3.
+- Exigir contratos documentados para novos fluxos que cruzem limites de servico.
+- Considerar a Sprint 4 como marco formal de arquitetura, nao apenas como refatoracao interna.
+- Tratar a Sprint 5 como ponto sem retorno para padrao oficial de persistencia.
+- Medir sucesso por previsibilidade operacional e capacidade de replicacao, nao apenas por volume de features entregues.
+
 ## Indicadores de Sucesso
-- tempo de onboarding tecnico menor que 30 minutos
+- tempo de entrada tecnica menor que 30 minutos
 - testes executando de forma reprodutivel em CI
 - logs estruturados e pesquisaveis
 - schema controlado por migracoes
 - estado distribuido em producao
-- onboarding de nova cliente sem fork do projeto
+- entrada de nova cliente sem fork do projeto
 
 ## Fora de Escopo Neste Plano
 - mudar regras de atendimento

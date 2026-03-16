@@ -1,6 +1,6 @@
 import json
-import os
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -25,10 +25,56 @@ from app.ai.tools import (
 from app.observability import increment_counter, log_event, observe_duration
 from app.security import ai_learning_enabled
 from app.services.estados import ai_sessions
+from app.settings import get_settings
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")) if AsyncOpenAI else None
+client = None
 
 CONVERSATIONS = ai_sessions
+
+
+@dataclass(frozen=True)
+class AIRuntime:
+    get_menu: Any
+    get_learnings: Any
+    save_learning: Any
+    escalate_to_human: Any
+    create_cake_order: Any
+    create_sweet_order: Any
+
+
+def get_default_ai_runtime() -> AIRuntime:
+    return AIRuntime(
+        get_menu=get_menu,
+        get_learnings=get_learnings,
+        save_learning=save_learning,
+        escalate_to_human=escalate_to_human,
+        create_cake_order=create_cake_order,
+        create_sweet_order=create_sweet_order,
+    )
+
+
+def build_ai_client(api_key: str | None = None):
+    settings = get_settings()
+    resolved_api_key = api_key if api_key is not None else settings.openai_api_key
+    if AsyncOpenAI is None or not resolved_api_key:
+        return None
+    return AsyncOpenAI(api_key=resolved_api_key)
+
+
+def get_ai_client():
+    global client
+    if client is None:
+        client = build_ai_client()
+    return client
+
+
+def set_ai_client(ai_client) -> None:
+    global client
+    client = ai_client
+
+
+def reset_ai_client() -> None:
+    set_ai_client(None)
 
 
 def _assistant_message_to_dict(message) -> dict:
@@ -67,10 +113,11 @@ def get_or_create_session(telefone: str) -> Dict[str, Any]:
     return session
 
 # Mapeamento de funções reais para as definições de Tools da OpenAI
-def get_openai_tools(agent):
+def get_openai_tools(agent, runtime: AIRuntime | None = None):
+    runtime = runtime or get_default_ai_runtime()
     openai_tools = []
     
-    if get_menu in agent.tools:
+    if runtime.get_menu in agent.tools:
         openai_tools.append({
             "type": "function",
             "function": {
@@ -89,7 +136,7 @@ def get_openai_tools(agent):
             }
         })
         
-    if get_learnings in agent.tools:
+    if runtime.get_learnings in agent.tools:
         openai_tools.append({
             "type": "function",
             "function": {
@@ -99,7 +146,7 @@ def get_openai_tools(agent):
             }
         })
         
-    if save_learning in agent.tools and ai_learning_enabled():
+    if runtime.save_learning in agent.tools and ai_learning_enabled():
         openai_tools.append({
             "type": "function",
             "function": {
@@ -115,7 +162,7 @@ def get_openai_tools(agent):
             }
         })
         
-    if escalate_to_human in agent.tools:
+    if runtime.escalate_to_human in agent.tools:
         openai_tools.append({
             "type": "function",
             "function": {
@@ -131,7 +178,7 @@ def get_openai_tools(agent):
             }
         })
         
-    if create_cake_order in agent.tools:
+    if runtime.create_cake_order in agent.tools:
         openai_tools.append({
             "type": "function",
             "function": {
@@ -170,7 +217,7 @@ def get_openai_tools(agent):
             }
         })
 
-    if create_sweet_order in agent.tools:
+    if runtime.create_sweet_order in agent.tools:
         openai_tools.append({
             "type": "function",
             "function": {
@@ -231,7 +278,8 @@ def get_openai_tools(agent):
 
 
 def _current_timezone() -> ZoneInfo:
-    timezone_name = os.getenv("BOT_TIMEZONE") or os.getenv("TZ") or "America/Sao_Paulo"
+    settings = get_settings()
+    timezone_name = settings.bot_timezone or settings.tz or "America/Sao_Paulo"
     try:
         return ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
@@ -247,30 +295,120 @@ def build_system_time_context(now: datetime | None = None) -> str:
     return current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
 
 
+def build_system_instructions(agent, now: datetime | None = None, runtime: AIRuntime | None = None) -> str:
+    runtime = runtime or get_default_ai_runtime()
+    system_time_context = build_system_time_context(now)
+    instructions = agent.instructions + f"\n\n[CONTEXTO DO SISTEMA: {system_time_context}]"
+    learnings = runtime.get_learnings()
+    if learnings:
+        instructions += f"\n\nREGRAS APRENDIDAS ANTERIORMENTE:\n{learnings}"
+    return instructions
+
+
+def bootstrap_session(session: dict, now: datetime | None = None, runtime: AIRuntime | None = None) -> None:
+    agent = AGENTS_MAP.get(session["current_agent"], TriageAgent)
+    session["messages"].append({"role": "system", "content": build_system_instructions(agent, now, runtime)})
+
+
+def refresh_system_prompt(session: dict, agent, now: datetime | None = None, runtime: AIRuntime | None = None) -> None:
+    if session["messages"] and session["messages"][0]["role"] == "system":
+        session["messages"][0]["content"] = build_system_instructions(agent, now, runtime)
+
+
+async def request_ai_completion(ai_client, *, messages: list[dict], tools_config: list[dict]):
+    return await ai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        tools=tools_config if tools_config else None,
+        tool_choice="auto" if tools_config else "none",
+        temperature=0.1,
+    )
+
+
+def _finalize_ai_run(*, start_time: float, session: dict, iteration_count: int, prompt_tokens: int, completion_tokens: int) -> None:
+    end_time = time.time()
+    observe_duration("ai_run_duration_seconds", end_time - start_time, agent=session["current_agent"])
+    increment_counter("ai_runs_total", stage="completed", agent=session["current_agent"])
+    log_event(
+        "ai_run_completed",
+        agent=session["current_agent"],
+        iterations=iteration_count,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+
+
+def handle_tool_call(
+    *,
+    runtime: AIRuntime,
+    function_name: str,
+    arguments: dict,
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    session: dict,
+) -> tuple[bool, str]:
+    tool_result = ""
+
+    if function_name == "transfer_to_agent":
+        new_agent = arguments.get("agent_name")
+        if new_agent in AGENTS_MAP:
+            session["current_agent"] = new_agent
+            tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
+            log_event("ai_handoff", to_agent=new_agent)
+            save_session(telefone, session)
+        else:
+            tool_result = f"Erro: Agente {new_agent} não existe."
+    elif function_name == "get_menu":
+        tool_result = runtime.get_menu(arguments.get("category", "todas"))
+    elif function_name == "get_learnings":
+        tool_result = runtime.get_learnings()
+    elif function_name == "save_learning":
+        tool_result = runtime.save_learning(arguments.get("aprendizado"))
+    elif function_name == "escalate_to_human":
+        runtime.escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
+        session["messages"] = []
+        save_session(telefone, session)
+        return True, HUMAN_HANDOFF_MESSAGE
+    elif function_name == "create_cake_order":
+        try:
+            order = CakeOrderSchema(**arguments)
+            tool_result = runtime.create_cake_order(telefone, nome_cliente, cliente_id, order)
+            session["messages"] = []
+            save_session(telefone, session)
+            return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+        except Exception as exc:
+            tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
+    elif function_name == "create_sweet_order":
+        try:
+            order = SweetOrderSchema(**arguments)
+            tool_result = runtime.create_sweet_order(telefone, nome_cliente, cliente_id, order)
+            session["messages"] = []
+            save_session(telefone, session)
+            return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+        except Exception as exc:
+            tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
+
+    return False, str(tool_result)
+
+
 async def process_message_with_ai(
     telefone: str,
     text: str,
     nome_cliente: str,
     cliente_id: int,
     now: datetime | None = None,
+    ai_client=None,
+    runtime: AIRuntime | None = None,
 ) -> str:
     """Função principal que o handler vai chamar para processar a mensagem pela IA."""
     start_time = time.time()
     session = get_or_create_session(telefone)
-
-    data_hora_atual = build_system_time_context(now)
+    runtime = runtime or get_default_ai_runtime()
+    active_client = ai_client or get_ai_client()
     
     if not session["messages"]:
-        # Inicializa o prompt de sistema do agente atual
-        agent = AGENTS_MAP.get(session["current_agent"], TriageAgent)
-        system_instructions = agent.instructions + f"\n\n[CONTEXTO DO SISTEMA: {data_hora_atual}]"
-        
-        # Inject learnings on boot
-        learnings = get_learnings()
-        if learnings:
-            system_instructions += f"\n\nREGRAS APRENDIDAS ANTERIORMENTE:\n{learnings}"
-            
-        session["messages"].append({"role": "system", "content": system_instructions})
+        bootstrap_session(session, now, runtime)
         save_session(telefone, session)
     
     # Adiciona a mensagem do usuário
@@ -284,7 +422,7 @@ async def process_message_with_ai(
     total_completion_tokens = 0
     iteration_count = 0
 
-    if client is None:
+    if active_client is None:
         return "Integracao de IA indisponivel no ambiente atual. Instale a dependencia 'openai' para ativar esse fluxo."
 
     # Loop de raciocínio da IA
@@ -293,24 +431,12 @@ async def process_message_with_ai(
         current_agent_name = session["current_agent"]
         agent = AGENTS_MAP.get(current_agent_name, TriageAgent)
         
-        # Atualiza as instruções se trocar de agente
-        if session["messages"][0]["role"] == "system":
-            sys_inst = agent.instructions + f"\n\n[CONTEXTO DO SISTEMA: {data_hora_atual}]"
-            learnings = get_learnings()
-            if learnings:
-                sys_inst += f"\n\nREGRAS APRENDIDAS ANTERIORMENTE:\n{learnings}"
-            session["messages"][0]["content"] = sys_inst
-            save_session(telefone, session)
+        refresh_system_prompt(session, agent, now, runtime)
+        save_session(telefone, session)
             
-        tools_config = get_openai_tools(agent)
+        tools_config = get_openai_tools(agent, runtime)
         
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=session["messages"],
-            tools=tools_config if tools_config else None,
-            tool_choice="auto" if tools_config else "none",
-            temperature=0.1
-        )
+        response = await request_ai_completion(active_client, messages=session["messages"], tools_config=tools_config)
         
         # Coleta métricas de tokens
         if response.usage:
@@ -323,13 +449,10 @@ async def process_message_with_ai(
         
         # Se a IA respondeu com texto final
         if not msg.tool_calls:
-            end_time = time.time()
-            observe_duration("ai_run_duration_seconds", end_time - start_time, agent=session["current_agent"])
-            increment_counter("ai_runs_total", stage="completed", agent=session["current_agent"])
-            log_event(
-                "ai_run_completed",
-                agent=session["current_agent"],
-                iterations=iteration_count,
+            _finalize_ai_run(
+                start_time=start_time,
+                session=session,
+                iteration_count=iteration_count,
                 prompt_tokens=total_prompt_tokens,
                 completion_tokens=total_completion_tokens,
             )
@@ -342,54 +465,17 @@ async def process_message_with_ai(
             
             increment_counter("ai_tool_calls_total", tool_name=function_name, agent=session["current_agent"])
             log_event("ai_tool_called", tool_name=function_name, agent=session["current_agent"])
-            tool_result = ""
-            
-            if function_name == "transfer_to_agent":
-                new_agent = arguments.get("agent_name")
-                if new_agent in AGENTS_MAP:
-                    session["current_agent"] = new_agent
-                    tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
-                    log_event("ai_handoff", to_agent=new_agent)
-                    save_session(telefone, session)
-                else:
-                    tool_result = f"Erro: Agente {new_agent} não existe."
-                    
-            elif function_name == "get_menu":
-                tool_result = get_menu(arguments.get("category", "todas"))
-                
-            elif function_name == "get_learnings":
-                tool_result = get_learnings()
-                
-            elif function_name == "save_learning":
-                tool_result = save_learning(arguments.get("aprendizado"))
-                
-            elif function_name == "escalate_to_human":
-                tool_result = escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
-                # Limpa a sessão para não reter o estado de erro
-                session["messages"] = []
-                save_session(telefone, session)
-                return HUMAN_HANDOFF_MESSAGE
-                
-            elif function_name == "create_cake_order":
-                # Instancia o Pydantic model (validação)
-                try:
-                    order = CakeOrderSchema(**arguments)
-                    tool_result = create_cake_order(telefone, nome_cliente, cliente_id, order)
-                    session["messages"] = [] # Limpa a sessão após o pedido ser concluído
-                    save_session(telefone, session)
-                    return f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
-                except Exception as e:
-                    tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(e)}"
-
-            elif function_name == "create_sweet_order":
-                try:
-                    order = SweetOrderSchema(**arguments)
-                    tool_result = create_sweet_order(telefone, nome_cliente, cliente_id, order)
-                    session["messages"] = []
-                    save_session(telefone, session)
-                    return f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
-                except Exception as e:
-                    tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(e)}"
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name=function_name,
+                arguments=arguments,
+                telefone=telefone,
+                nome_cliente=nome_cliente,
+                cliente_id=cliente_id,
+                session=session,
+            )
+            if should_return:
+                return tool_result
 
             # Adiciona o resultado da ferramenta na memória para a IA "ler"
             session["messages"].append({

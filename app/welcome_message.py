@@ -20,8 +20,7 @@ Tom de voz da Trufinha:
 """
 
 HUMAN_HANDOFF_MESSAGE = (
-    "Perfeito! Vou te encaminhar para uma atendente 😊\n"
-    "Enquanto isso, a Trufinha fica em silêncio por aqui."
+    "Um momento! Estou transferindo você para um dos nossos atendentes humanos. 👩‍🍳"
 )
 
 BOT_REACTIVATED_MESSAGE = (

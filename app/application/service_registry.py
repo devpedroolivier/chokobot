@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
 
 from app.application.command_bus import LocalCommandBus
 from app.application.commands import GenerateAiReplyCommand, HandleInboundMessageCommand
@@ -13,6 +12,8 @@ from app.application.ports.conversation_gateway import ConversationGateway
 from app.application.ports.delivery_gateway import DeliveryGateway
 from app.application.ports.messaging_gateway import MessagingGateway
 from app.application.ports.order_gateway import OrderGateway
+from app.domain.repositories.customer_repository import CustomerRepository
+from app.settings import get_settings
 
 
 @lru_cache
@@ -51,6 +52,13 @@ def get_attention_gateway() -> AttentionGateway:
 
 
 @lru_cache
+def get_customer_repository() -> CustomerRepository:
+    from app.infrastructure.repositories.sqlite_customer_repository import SQLiteCustomerRepository
+
+    return SQLiteCustomerRepository()
+
+
+@lru_cache
 def get_command_bus() -> LocalCommandBus:
     from app.application.handlers.generate_ai_reply import generate_ai_reply
     from app.application.handlers.handle_inbound_message import handle_inbound_message
@@ -73,7 +81,7 @@ def get_event_bus() -> LocalEventBus:
 
 @lru_cache
 def get_conversation_gateway() -> ConversationGateway:
-    conversation_service_url = os.getenv("CONVERSATION_SERVICE_URL", "").strip()
+    conversation_service_url = get_settings().conversation_service_url
     if conversation_service_url:
         from app.infrastructure.gateways.http_conversation_gateway import HttpConversationGateway
 

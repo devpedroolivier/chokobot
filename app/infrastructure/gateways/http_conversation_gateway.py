@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import os
-
 import httpx
+
+from app.settings import get_settings
 
 
 class HttpConversationGateway:
     def __init__(self, base_url: str | None = None, client_factory=None):
-        self.base_url = (base_url or os.getenv("CONVERSATION_SERVICE_URL", "")).rstrip("/")
+        settings = get_settings()
+        self.base_url = (base_url or settings.conversation_service_url).rstrip("/")
         if not self.base_url:
             raise ValueError("CONVERSATION_SERVICE_URL is required for HttpConversationGateway")
-        self.timeout = float(os.getenv("CONVERSATION_SERVICE_TIMEOUT", "10"))
+        self.timeout = settings.conversation_service_timeout
         self._client_factory = client_factory
 
     def _build_client(self):

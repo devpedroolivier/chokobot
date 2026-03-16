@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import contextvars
+import json
+import sys
 import threading
 import time
 import uuid
 from collections import defaultdict
+from datetime import datetime, timezone
 
 
 _request_id: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -87,10 +90,15 @@ def render_metrics() -> str:
 
 
 def log_event(event: str, **fields) -> None:
-    payload = {"event": event, "request_id": get_request_id()}
+    payload = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "level": "INFO",
+        "event": event,
+        "request_id": get_request_id(),
+    }
     payload.update({key: value for key, value in fields.items() if value is not None})
-    parts = [f"{key}={payload[key]}" for key in sorted(payload)]
-    print("[LOG] " + " ".join(parts))
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+    sys.stdout.flush()
 
 
 def now_monotonic() -> float:

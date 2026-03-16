@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from app.security import ai_learning_enabled, security_audit
 from app.services.precos import KIT_FESTOU_PRECO, TRADICIONAL_BASE
+from app.settings import get_settings
 
 
 class LocalCatalogGateway:
     def _learnings_path(self) -> Path:
-        return Path(os.getenv("AI_LEARNINGS_PATH", "app/ai/knowledge/learnings.md"))
+        return Path(get_settings().ai_learnings_path)
 
     def _load_menu_text(self) -> str:
         return Path("app/ai/knowledge/menus.md").read_text(encoding="utf-8")
@@ -42,6 +42,7 @@ class LocalCatalogGateway:
     def _build_ready_delivery_summary(self) -> str:
         b3 = TRADICIONAL_BASE["B3"]
         b4 = TRADICIONAL_BASE["B4"]
+        cafeteria_url = get_settings().cafeteria_url
         return (
             "🛍️ Pronta Entrega\n"
             "- Mostrar apenas itens prontos do dia, cafeteria e bolos de pronta entrega.\n"
@@ -52,7 +53,7 @@ class LocalCatalogGateway:
             f"🎉 Kit Festou opcional: +R${KIT_FESTOU_PRECO:.2f}\n"
             "- Regra atual: pronta entrega segue como retirada na loja no fluxo interno.\n\n"
             "☕ Cafeteria e Vitrine\n"
-            "- Cardapio Cafeteria: http://bit.ly/44ZlKlZ\n"
+            f"- Cardapio Cafeteria: {cafeteria_url}\n"
             "- A vitrine pode variar no dia.\n"
             "- Entregas sao realizadas ate 17:30.\n"
         )

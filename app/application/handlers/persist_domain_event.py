@@ -5,9 +5,10 @@ import os
 from dataclasses import asdict
 
 from app.observability import increment_counter, log_event
+from app.settings import get_settings
 
 
-OUTBOX_EVENTS_PATH = os.getenv("OUTBOX_EVENTS_PATH", "dados/domain_events.jsonl")
+OUTBOX_EVENTS_PATH = get_settings().outbox_events_path
 
 
 def persist_domain_event(event) -> None:

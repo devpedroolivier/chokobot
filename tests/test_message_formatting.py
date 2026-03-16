@@ -49,7 +49,8 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn(VOICE_GUIDELINES.strip(), CAFETERIA_PROMPT)
 
     def test_mensagens_fixas_seguem_nova_voz(self):
-        self.assertIn("encaminhar para uma atendente", HUMAN_HANDOFF_MESSAGE)
+        self.assertIn("transferindo você", HUMAN_HANDOFF_MESSAGE)
+        self.assertIn("atendentes humanos", HUMAN_HANDOFF_MESSAGE)
         self.assertIn("Trufinha voltou por aqui", BOT_REACTIVATED_MESSAGE)
 
 

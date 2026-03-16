@@ -26,7 +26,7 @@ class StoreClosureTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {"STORE_CLOSED": "1"}, clear=False):
             with patch("app.handler.responder_usuario", AsyncMock()) as mocked_reply:
                 with patch("app.handler.gerar_resposta_ia", AsyncMock(return_value="fluxo normal")) as mocked_ai:
-                    with patch("app.models.clientes.salvar_cliente", return_value=1):
+                    with patch("app.handler.save_customer_contact", return_value=1):
                         await processar_mensagem(payload)
 
         mocked_reply.assert_awaited_once()

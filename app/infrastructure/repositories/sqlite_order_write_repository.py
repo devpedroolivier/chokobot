@@ -6,6 +6,7 @@ import sqlite3
 
 from app.db.database import get_connection
 from app.domain.repositories.order_write_repository import OrderWriteRepository
+from app.observability import log_event
 
 
 def _get_id_from_row(row):
@@ -106,10 +107,15 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
             cur = conn.cursor()
             cur.execute(sql, [values_map.get(c) for c in cols])
             conn.commit()
-            print(f"☕ Pedido cafeteria salvo — Cliente: {nome_cliente} ({phone}), Itens: {itens_str}")
+            log_event(
+                "cafeteria_order_saved",
+                phone=phone,
+                nome_cliente=nome_cliente,
+                itens=itens_str,
+            )
         except Exception as exc:
             conn.rollback()
-            print(f"❌ Erro ao salvar pedido cafeteria: {exc}")
+            log_event("cafeteria_order_save_failed", error_type=type(exc).__name__, phone=phone)
         finally:
             conn.close()
 
@@ -167,15 +173,18 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
             cur.execute(sql, [values_map.get(c) for c in cols])
             encomenda_id = cur.lastrowid
             conn.commit()
-            print(
-                f"📝 Encomenda salva com sucesso — ID {encomenda_id}, "
-                f"Cliente: {nome_cliente} ({phone}), Categoria: {payload.get('categoria', 'n/d')}, "
-                f"Valor: R${float(payload.get('valor_total') or 0):.2f}"
+            log_event(
+                "order_saved",
+                order_id=encomenda_id,
+                phone=phone,
+                nome_cliente=nome_cliente,
+                categoria=payload.get("categoria", "n/d"),
+                valor_total=float(payload.get("valor_total") or 0),
             )
             return encomenda_id
         except Exception as exc:
             conn.rollback()
-            print(f"❌ Erro ao salvar encomenda: {exc}")
+            log_event("order_save_failed", error_type=type(exc).__name__, phone=phone)
             return -1
         finally:
             conn.close()

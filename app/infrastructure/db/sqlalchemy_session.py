@@ -1,12 +1,10 @@
-from __future__ import annotations
-
-import os
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
+from app.settings import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.getenv('DB_PATH', 'dados/chokobot.db')}")
+
+DATABASE_URL = get_settings().database_url
 
 
 class Base(DeclarativeBase):

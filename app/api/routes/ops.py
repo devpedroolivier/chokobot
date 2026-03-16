@@ -1,13 +1,10 @@
-from __future__ import annotations
-
-import os
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from fastapi.responses import PlainTextResponse
 
 from app.db.database import get_connection
 from app.observability import increment_counter, render_metrics
+from app.settings import get_settings
 
 router = APIRouter()
 
@@ -17,7 +14,7 @@ def liveness_payload() -> dict:
 
 
 def readiness_payload() -> tuple[dict, int]:
-    db_path = os.getenv("DB_PATH", "dados/chokobot.db")
+    db_path = get_settings().db_path
     try:
         conn = get_connection()
         try:

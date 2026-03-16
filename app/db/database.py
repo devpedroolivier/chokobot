@@ -1,10 +1,11 @@
-# app/db/database.py
-import os, sqlite3
+import os
+import sqlite3
 
 from app.observability import increment_counter, log_event
+from app.settings import get_settings
 
 def get_db_path() -> str:
-    return os.getenv("DB_PATH", "dados/chokobot.db")
+    return get_settings().db_path
 
 def get_connection():
     db_path = get_db_path()
