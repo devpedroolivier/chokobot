@@ -25,8 +25,7 @@ STORE_CLOSED_NOTICE = (
 
 
 def is_store_closed() -> bool:
-    value = os.getenv("STORE_CLOSED", "0").strip().lower()
-    return value in {"1", "true", "yes", "on", "sim"}
+    return False
 
 
 def get_store_closed_notice() -> str:

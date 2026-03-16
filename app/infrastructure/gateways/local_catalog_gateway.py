@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from app.config import get_store_closed_notice, is_store_closed
 from app.security import ai_learning_enabled, security_audit
 from app.services.precos import KIT_FESTOU_PRECO, TRADICIONAL_BASE
 
@@ -71,19 +70,16 @@ class LocalCatalogGateway:
         try:
             text = self._load_menu_text()
             normalized = self._normalize_category(category)
-            aviso = get_store_closed_notice()
 
             if normalized == "pronta_entrega":
-                conteudo = self._build_ready_delivery_summary()
-                return f"{aviso}\n\n{conteudo}" if is_store_closed() else conteudo
+                return self._build_ready_delivery_summary()
 
             if normalized == "encomendas":
                 encomendas = self._slice_section(text, "## Encomendas", "## Entregas e Pagamento")
                 pagamentos = self._slice_section(text, "## Entregas e Pagamento")
-                conteudo = f"{encomendas}\n\n{pagamentos}".strip()
-                return f"{aviso}\n\n{conteudo}" if is_store_closed() else conteudo
+                return f"{encomendas}\n\n{pagamentos}".strip()
 
-            return f"{aviso}\n\n{text}" if is_store_closed() else text
+            return text
         except Exception as exc:
             return "Erro ao carregar cardapio: " + str(exc)
 

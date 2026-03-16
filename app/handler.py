@@ -25,7 +25,7 @@ from app.services.estados import (
     set_recent_message,
     set_bot_ativo,
 )
-from app.config import CAFETERIA_URL, DOCES_URL, get_store_closed_notice, is_store_closed
+from app.config import CAFETERIA_URL, DOCES_URL
 
 
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
@@ -130,14 +130,6 @@ async def processar_mensagem(mensagem: dict):
         )
         return
     set_recent_message(telefone, texto, agora)
-
-    if is_store_closed():
-        print(
-            f"[HANDLER] loja_fechada phone_hash={hash_phone(telefone)} "
-            f"text='{preview_text(texto)}'"
-        )
-        await responder_usuario(telefone, get_store_closed_notice())
-        return
 
     # ====== CRIAR CLIENTE (necessário para todos os fluxos) ======
     from app.models.clientes import salvar_cliente
