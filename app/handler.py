@@ -26,6 +26,7 @@ from app.services.estados import (
     set_bot_ativo,
 )
 from app.config import CAFETERIA_URL, DOCES_URL
+from app.welcome_message import BOT_REACTIVATED_MESSAGE, WELCOME_MESSAGE
 
 
 CANCELAR_OPCOES = ["cancelar", "sair", "parar", "desistir"]
@@ -44,8 +45,7 @@ MENU_OPTIONS = [
 ]
 MENU_PROMPT = "Escolha uma opção:\n" + "\n".join(MENU_OPTIONS)
 MAIN_MENU_GREETING = (
-    "🍫 Olá! Bem-vindo(a) à *Chokodelícia* 🍫\n"
-    "Sou a *Trufinha* 🍬, assistente virtual da nossa Cafeteria e Doceria!"
+    WELCOME_MESSAGE
 )
 MAIN_MENU_MESSAGE = f"{MAIN_MENU_GREETING}\n\n{MENU_PROMPT}"
 MENU_PRINCIPAL_MESSAGE = f"🍫 *Menu Principal*\n{MENU_PROMPT}"
@@ -146,14 +146,14 @@ async def processar_mensagem(mensagem: dict):
         # Se passou de 30 minutos desde a última mensagem, reativa automaticamente
         if (agora - ultimo_contato) > timedelta(minutes=30):
             estados_atendimento.pop(telefone, None)
-            await responder_usuario(telefone, "🤖 Oi! Como ficamos um tempinho sem nos falar, a Trufinha (IA) foi reativada. Se precisar de algo, estou aqui!")
+            await responder_usuario(telefone, BOT_REACTIVATED_MESSAGE)
             # O código continua e a IA vai processar a mensagem atual normalmente
         else:
             if texto in REATIVAR_BOT_OPCOES:
                 estados_atendimento.pop(telefone, None)
                 await responder_usuario(
                     telefone,
-                    "🤖 Bot reativado. Como posso ajudar?"
+                    BOT_REACTIVATED_MESSAGE
                 )
                 return
             else:

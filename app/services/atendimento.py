@@ -9,6 +9,7 @@ from app.services.estados import (
     estados_cafeteria,
     estados_entrega,
 )
+from app.welcome_message import BOT_REACTIVATED_MESSAGE, HUMAN_HANDOFF_MESSAGE
 
 def salvar_atendimento_txt(telefone: str, nome: str) -> None:
     """
@@ -51,8 +52,7 @@ async def processar_atendimento(telefone: str, nome: str = "Cliente") -> None:
     # 4) Confirmação ao cliente
     await responder_usuario(
         telefone,
-        "👩‍🍳 Certo! Vou te transferir para uma atendente.\n"
-        "A partir de agora o bot ficará em silêncio pra vocês conversarem tranquilamente. 🙂"
+        HUMAN_HANDOFF_MESSAGE
     )
 
 async def encerrar_atendimento(telefone: str) -> None:
@@ -68,6 +68,7 @@ async def encerrar_atendimento(telefone: str) -> None:
 
     await responder_usuario(
         telefone,
-        "🤖 Bot reativado. Podemos continuar pelo menu?\n"
+        f"{BOT_REACTIVATED_MESSAGE}\n"
+        "Se quiser, podemos continuar por aqui:\n"
         "1️⃣ Ver cardápio\n2️⃣ Encomendar bolos\n3️⃣ Pedidos da cafeteria\n4️⃣ Entregas\n5️⃣ Falar com atendente"
     )

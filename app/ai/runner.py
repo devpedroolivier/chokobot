@@ -11,6 +11,7 @@ except ModuleNotFoundError:
     AsyncOpenAI = None
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
+from app.welcome_message import HUMAN_HANDOFF_MESSAGE
 from app.ai.tools import (
     CakeOrderSchema,
     SweetOrderSchema,
@@ -367,7 +368,7 @@ async def process_message_with_ai(
                 # Limpa a sessão para não reter o estado de erro
                 session["messages"] = []
                 save_session(telefone, session)
-                return "Um momento! Estou transferindo você para um dos nossos atendentes humanos. 👩‍🍳"
+                return HUMAN_HANDOFF_MESSAGE
                 
             elif function_name == "create_cake_order":
                 # Instancia o Pydantic model (validação)
