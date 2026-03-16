@@ -1,5 +1,8 @@
 # Microservices Blueprint
 
+## Documentos relacionados
+- `docs/executive-implementation-plan.md`: roadmap executivo com sprints, backlog e impacto esperado
+
 ## Objetivo
 Preparar o MVP atual para uma migracao por estrangulamento, preservando a logica de negocio existente e trocando apenas as fronteiras de infraestrutura.
 
