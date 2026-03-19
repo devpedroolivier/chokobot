@@ -5,8 +5,15 @@ WELCOME_MESSAGE = (
     "🎂 Bolos pronta entrega para hoje\n"
     "🍰🍬 Encomendas de bolos e docinhos\n"
     "☕🥐 Itens da cafeteria (croissant, cappuccino, combos e bolos de fatia)\n"
-    "🎁 Presentes especiais (cestas, caixas ou flores)\n\n"
+    "🎁 Presentes especiais (cestas, caixas ou flores)\n"
+    "🐇 Cardápio Páscoa Inesquecível\n\n"
     "Me conta o que você está procurando 😊"
+)
+
+EASTER_CATALOG_MESSAGE = (
+    "Olá! 😊\n"
+    "Para fazer seu pedido de Páscoa, é só acessar o link abaixo e escolher seu ovo ou mimos e presentes:\n\n"
+    "🔗 https://pascoachoko.goomer.app"
 )
 
 VOICE_GUIDELINES = """

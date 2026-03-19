@@ -1,6 +1,7 @@
 import json
 import re
 import time
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
@@ -12,7 +13,7 @@ except ModuleNotFoundError:
     AsyncOpenAI = None
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
-from app.welcome_message import HUMAN_HANDOFF_MESSAGE
+from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
 from app.ai.tools import (
     CakeOrderSchema,
     SweetOrderSchema,
@@ -151,6 +152,21 @@ def _requests_human_handoff(text: str) -> bool:
         r"\btransfer(e|ir) .* (humano|atendente)\b",
         r"\bdesativar (o )?(chat|bot)\b",
         r"\bquero (um )?humano\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _normalize_intent_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text or "")
+    return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+
+
+def _requests_easter_catalog(text: str) -> bool:
+    normalized = _normalize_intent_text(text)
+    patterns = (
+        r"\bpascoa\b",
+        r"\bovo(s)?\s+de\s+pascoa\b",
+        r"\bcardapio\s+de\s+pascoa\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 
@@ -516,6 +532,10 @@ async def process_message_with_ai(
         increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
         log_event("ai_human_guard_handoff", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
         return HUMAN_HANDOFF_MESSAGE
+
+    if _requests_easter_catalog(text):
+        log_event("ai_easter_catalog_link_sent", phone_hash=telefone[-4:] if telefone else "anon")
+        return EASTER_CATALOG_MESSAGE
 
     if _should_force_same_day_cafeteria_handoff(session, text, now):
         previous_agent = session["current_agent"]
