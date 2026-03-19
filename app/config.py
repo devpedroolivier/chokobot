@@ -1,8 +1,11 @@
+import os
+
 from app.settings import DEFAULT_STORE_CLOSED_NOTICE, get_settings
 
 
 def is_store_closed() -> bool:
-    return False
+    raw = os.getenv("STORE_CLOSED", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def get_store_closed_notice() -> str:

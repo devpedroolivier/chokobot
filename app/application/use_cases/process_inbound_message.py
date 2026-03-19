@@ -7,6 +7,7 @@ from app.application.commands import GenerateAiReplyCommand
 from app.application.events import AiReplyGeneratedEvent
 from app.application.service_registry import get_command_bus, get_customer_repository, get_event_bus
 from app.application.use_cases.manage_human_handoff import build_reactivation_message, deactivate_human_handoff
+from app.config import get_store_closed_notice, is_store_closed
 from app.observability import log_event
 from app.security import get_admin_phones, hash_phone, preview_text
 from app.services.estados import (
@@ -103,6 +104,12 @@ async def process_inbound_message(
     set_recent_message(telefone, texto, agora)
 
     cliente_id = save_customer_fn(telefone, nome_cliente)
+
+    if is_store_closed():
+        notice = get_store_closed_notice()
+        log_event("handler_store_closed_notice_sent", phone_hash=hash_phone(telefone))
+        await responder_usuario_fn(telefone, notice)
+        return
 
     if telefone in estados_atendimento:
         estado = estados_atendimento[telefone]

@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,6 +31,7 @@ from app.settings import get_settings
 client = None
 
 CONVERSATIONS = ai_sessions
+DELIVERY_CUTOFF = (17, 30)
 
 
 @dataclass(frozen=True)
@@ -97,6 +99,93 @@ def _assistant_message_to_dict(message) -> dict:
     if tool_calls:
         payload["tool_calls"] = tool_calls
     return payload
+
+
+def _normalize_reference_time(now: datetime | None = None) -> datetime:
+    current_time = now or current_local_datetime()
+    timezone = _current_timezone()
+    if current_time.tzinfo is None:
+        return current_time.replace(tzinfo=timezone)
+    return current_time.astimezone(timezone)
+
+
+def _is_after_delivery_cutoff(now: datetime | None = None) -> bool:
+    current_time = _normalize_reference_time(now)
+    return (current_time.hour, current_time.minute) > DELIVERY_CUTOFF
+
+
+def _same_day_reference_tokens(now: datetime | None = None) -> tuple[str, ...]:
+    current_time = _normalize_reference_time(now)
+    return (
+        current_time.strftime("%d/%m/%Y"),
+        current_time.strftime("%d/%m"),
+        current_time.strftime("%d-%m-%Y"),
+        current_time.strftime("%d-%m"),
+    )
+
+
+def _mentions_same_day(text: str, now: datetime | None = None) -> bool:
+    normalized = (text or "").casefold()
+    if re.search(r"\b(hoje|hj)\b", normalized):
+        return True
+    return any(token in normalized for token in _same_day_reference_tokens(now))
+
+
+def _mentions_order_intent(text: str) -> bool:
+    normalized = (text or "").casefold()
+    return bool(
+        re.search(
+            r"\b(bolo|encomenda\w*|torta|mesvers[aá]rio|baby\s*cake|babycake|gourmet|b3|b4|b6|b7|p4|p6)\b",
+            normalized,
+        )
+    )
+
+
+def _requests_human_handoff(text: str) -> bool:
+    normalized = (text or "").casefold()
+    patterns = (
+        r"\bfalar com (um )?(humano|atendente|pessoa)\b",
+        r"\bquero falar com (um )?(humano|atendente|pessoa)\b",
+        r"\b(atendente|humano) real\b",
+        r"\bme passa para (um )?(humano|atendente)\b",
+        r"\btransfer(e|ir) .* (humano|atendente)\b",
+        r"\bdesativar (o )?(chat|bot)\b",
+        r"\bquero (um )?humano\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _response_conflicts_with_cutoff(reply: str | None, *, user_text: str, now: datetime | None = None) -> bool:
+    if not reply or _is_after_delivery_cutoff(now) or not _mentions_same_day(user_text, now):
+        return False
+
+    normalized = reply.casefold()
+    if re.search(r"(j[aá]\s+)?passou\s+das?\s+17[:h]30", normalized):
+        return True
+    if re.search(r"encomendas?\s+para\s+hoje\s+se\s+encerraram", normalized):
+        return True
+    return False
+
+
+def _build_time_conflict_retry_instruction(now: datetime | None = None) -> str:
+    current_time = _normalize_reference_time(now)
+    return (
+        "CORRECAO DE SISTEMA: use exclusivamente o horario oficial de Brasilia. "
+        f"Agora sao {current_time.strftime('%H:%M')} em Brasilia e ainda NAO passou das 17:30. "
+        "Reescreva a resposta sem afirmar que o horario limite de hoje foi ultrapassado."
+    )
+
+
+def _should_force_same_day_cafeteria_handoff(session: dict, user_text: str, now: datetime | None = None) -> bool:
+    if not _is_after_delivery_cutoff(now) or not _mentions_same_day(user_text, now):
+        return False
+
+    current_agent = session.get("current_agent")
+    if current_agent == "CakeOrderAgent":
+        return True
+    if current_agent == "TriageAgent" and _mentions_order_intent(user_text):
+        return True
+    return False
 
 
 def save_session(telefone: str, session: dict) -> None:
@@ -291,8 +380,13 @@ def current_local_datetime() -> datetime:
 
 
 def build_system_time_context(now: datetime | None = None) -> str:
-    current_time = now or current_local_datetime()
-    return current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
+    current_time = _normalize_reference_time(now)
+    cutoff_status = "depois do limite" if _is_after_delivery_cutoff(current_time) else "antes do limite"
+    return (
+        current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
+        + " Horario oficial de Brasilia (America/Sao_Paulo)."
+        + f" Status do corte das 17:30: {cutoff_status}."
+    )
 
 
 def build_system_instructions(agent, now: datetime | None = None, runtime: AIRuntime | None = None) -> str:
@@ -414,6 +508,28 @@ async def process_message_with_ai(
     # Adiciona a mensagem do usuário
     session["messages"].append({"role": "user", "content": text})
     save_session(telefone, session)
+
+    if _requests_human_handoff(text):
+        runtime.escalate_to_human(telefone, "Cliente pediu humano")
+        session["messages"] = []
+        save_session(telefone, session)
+        increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
+        log_event("ai_human_guard_handoff", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
+        return HUMAN_HANDOFF_MESSAGE
+
+    if _should_force_same_day_cafeteria_handoff(session, text, now):
+        previous_agent = session["current_agent"]
+        session["current_agent"] = "CafeteriaAgent"
+        refresh_system_prompt(session, AGENTS_MAP["CafeteriaAgent"], now, runtime)
+        save_session(telefone, session)
+        increment_counter("ai_time_guard_handoffs_total", from_agent=previous_agent, to_agent="CafeteriaAgent")
+        log_event(
+            "ai_time_guard_handoff",
+            from_agent=previous_agent,
+            to_agent="CafeteriaAgent",
+            phone_hash=telefone[-4:] if telefone else "anon",
+            current_time=_normalize_reference_time(now).strftime("%Y-%m-%d %H:%M:%S %z"),
+        )
     
     log_event("ai_run_started", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
     increment_counter("ai_runs_total", stage="started", agent=session["current_agent"])
@@ -421,6 +537,8 @@ async def process_message_with_ai(
     total_prompt_tokens = 0
     total_completion_tokens = 0
     iteration_count = 0
+    time_conflict_retry_used = False
+    transient_system_note = None
 
     if active_client is None:
         return "Integracao de IA indisponivel no ambiente atual. Instale a dependencia 'openai' para ativar esse fluxo."
@@ -435,8 +553,12 @@ async def process_message_with_ai(
         save_session(telefone, session)
             
         tools_config = get_openai_tools(agent, runtime)
-        
-        response = await request_ai_completion(active_client, messages=session["messages"], tools_config=tools_config)
+        request_messages = list(session["messages"])
+        if transient_system_note:
+            request_messages.append({"role": "system", "content": transient_system_note})
+
+        response = await request_ai_completion(active_client, messages=request_messages, tools_config=tools_config)
+        transient_system_note = None
         
         # Coleta métricas de tokens
         if response.usage:
@@ -444,7 +566,25 @@ async def process_message_with_ai(
             total_completion_tokens += response.usage.completion_tokens
             
         msg = response.choices[0].message
-        session["messages"].append(_assistant_message_to_dict(msg))
+        assistant_message = _assistant_message_to_dict(msg)
+
+        if (
+            not msg.tool_calls
+            and not time_conflict_retry_used
+            and _response_conflicts_with_cutoff(msg.content, user_text=text, now=now)
+        ):
+            time_conflict_retry_used = True
+            transient_system_note = _build_time_conflict_retry_instruction(now)
+            increment_counter("ai_time_guard_retries_total", agent=session["current_agent"])
+            log_event(
+                "ai_time_guard_retry",
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
+                current_time=_normalize_reference_time(now).strftime("%Y-%m-%d %H:%M:%S %z"),
+            )
+            continue
+
+        session["messages"].append(assistant_message)
         save_session(telefone, session)
         
         # Se a IA respondeu com texto final

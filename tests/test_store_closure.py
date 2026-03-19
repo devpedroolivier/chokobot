@@ -15,7 +15,7 @@ class StoreClosureTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         clear_runtime_state()
 
-    async def test_handler_ignores_store_closed_flag_and_keeps_flow_running(self):
+    async def test_handler_respects_store_closed_flag_and_skips_ai_flow(self):
         payload = {
             "id": "msg-closed-1",
             "phone": "5511999999999",
@@ -31,8 +31,8 @@ class StoreClosureTests(unittest.IsolatedAsyncioTestCase):
 
         mocked_reply.assert_awaited_once()
         sent_message = mocked_reply.await_args.args[1]
-        self.assertEqual(sent_message, "fluxo normal")
-        mocked_ai.assert_awaited_once()
+        self.assertEqual(sent_message, get_store_closed_notice())
+        mocked_ai.assert_not_awaited()
 
     def test_menu_does_not_include_closure_notice_even_when_flag_is_set(self):
         gateway = LocalCatalogGateway()
@@ -43,9 +43,9 @@ class StoreClosureTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Aviso Importante", menu)
         self.assertNotIn("Loja *FECHADA*", menu)
 
-    def test_store_closed_flag_is_disabled(self):
+    def test_store_closed_flag_is_enabled(self):
         with patch.dict(os.environ, {"STORE_CLOSED": "1"}, clear=False):
-            self.assertFalse(is_store_closed())
+            self.assertTrue(is_store_closed())
 
     def test_notice_converts_escaped_newlines_from_env(self):
         with patch.dict(
