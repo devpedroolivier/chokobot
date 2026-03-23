@@ -55,6 +55,7 @@ class AppSettings:
     db_path: str
     database_url: str
     redis_url: str
+    state_backend_fallback_enabled: bool
     outbox_path: str
     outbox_events_path: str
     ai_learnings_path: str
@@ -73,6 +74,7 @@ class AppSettings:
     panel_auth_enabled: bool
     panel_auth_username: str
     panel_auth_password: str
+    admin_frontend_url: str
     ai_save_learning_enabled: bool
     http_timeout_connect: int
     http_timeout_read: int
@@ -105,6 +107,7 @@ def get_settings() -> AppSettings:
         db_path=db_path,
         database_url=database_url,
         redis_url=_env_str("REDIS_URL"),
+        state_backend_fallback_enabled=_env_bool("STATE_BACKEND_FALLBACK_ENABLED", True),
         outbox_path=_env_str("OUTBOX_PATH", "dados/outbox.jsonl"),
         outbox_events_path=_env_str("OUTBOX_EVENTS_PATH", "dados/domain_events.jsonl"),
         ai_learnings_path=_env_str("AI_LEARNINGS_PATH", "app/ai/knowledge/learnings.md"),
@@ -123,6 +126,7 @@ def get_settings() -> AppSettings:
         panel_auth_enabled=_env_bool("PANEL_AUTH_ENABLED", False),
         panel_auth_username=_env_str("PANEL_AUTH_USERNAME"),
         panel_auth_password=_env_str("PANEL_AUTH_PASSWORD"),
+        admin_frontend_url=_env_str("ADMIN_FRONTEND_URL"),
         ai_save_learning_enabled=_env_bool("AI_SAVE_LEARNING_ENABLED", False),
         http_timeout_connect=max(1, _env_int("HTTP_TIMEOUT_CONNECT", 5)),
         http_timeout_read=max(1, _env_int("HTTP_TIMEOUT_READ", 20)),

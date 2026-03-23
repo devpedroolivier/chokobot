@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Awaitable, Callable
 
-from app.application.service_registry import get_delivery_gateway, get_order_gateway
+from app.application.service_registry import (
+    get_customer_process_repository,
+    get_delivery_gateway,
+    get_order_gateway,
+)
 from app.observability import log_event
 from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido, _parse_hora, _valida_data
 from app.utils.mensagens import responder_usuario
@@ -47,6 +51,42 @@ CESTAS_BOX_CATALOGO = {
         "serve": 2,
     },
 }
+
+
+def _build_cesta_process_payload(dados: dict) -> dict:
+    return {
+        "categoria": "cesta_box",
+        "cesta_nome": dados.get("cesta_nome"),
+        "descricao": dados.get("cesta_descricao") or dados.get("cesta_nome") or "Cesta box",
+        "data_entrega": dados.get("data_entrega"),
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados.get("modo_recebimento"),
+        "endereco": dados.get("endereco", ""),
+        "valor_total": dados.get("cesta_preco", 0.0) + dados.get("taxa_entrega", 0.0),
+        "pagamento": dados.get("pagamento", {}),
+    }
+
+
+def _sync_cesta_process(
+    process_repository,
+    *,
+    phone: str,
+    customer_id: int,
+    stage: str,
+    dados: dict,
+    status: str = "active",
+    order_id: int | None = None,
+) -> None:
+    process_repository.upsert_process(
+        phone=phone,
+        customer_id=customer_id,
+        process_type="cesta_box_order",
+        stage=stage,
+        status=status,
+        source="cesta_box",
+        draft_payload=_build_cesta_process_payload(dados),
+        order_id=order_id,
+    )
 
 
 def montar_menu_cestas() -> str:
@@ -101,9 +141,11 @@ async def salvar_pedido_cesta(
     responder_usuario_fn: ResponderUsuarioFn = responder_usuario,
     order_gateway=None,
     delivery_gateway=None,
+    customer_process_repository=None,
 ) -> None:
     order_gateway = order_gateway or get_order_gateway()
     delivery_gateway = delivery_gateway or get_delivery_gateway()
+    process_repository = customer_process_repository or get_customer_process_repository()
 
     try:
         pedido_final = {
@@ -137,6 +179,15 @@ async def salvar_pedido_cesta(
 
         total = dados.get("cesta_preco", 0.0) + dados.get("taxa_entrega", 0.0)
         log_event("cesta_box_order_saved", telefone=telefone, encomenda_id=encomenda_id)
+        _sync_cesta_process(
+            process_repository,
+            phone=telefone,
+            customer_id=cliente_id,
+            stage="pedido_confirmado",
+            dados=dados,
+            status="converted",
+            order_id=encomenda_id,
+        )
         await responder_usuario_fn(
             telefone,
             f"✅ *Pedido confirmado com sucesso!* ✅\n"
@@ -163,9 +214,11 @@ async def process_cesta_box_flow(
     responder_usuario_fn: ResponderUsuarioFn = responder_usuario,
     order_gateway=None,
     delivery_gateway=None,
+    customer_process_repository=None,
 ):
     etapa = estado.get("etapa", "selecao")
     dados = estado.setdefault("dados", {})
+    process_repository = customer_process_repository or get_customer_process_repository()
 
     if etapa == "selecao":
         escolha = (texto or "").strip().lower()
@@ -181,6 +234,13 @@ async def process_cesta_box_flow(
         dados["cesta_descricao"] = cesta_info["descricao"]
         dados["cesta_serve"] = cesta_info["serve"]
         dados["categoria"] = "cesta_box"
+        _sync_cesta_process(
+            process_repository,
+            phone=telefone,
+            customer_id=cliente_id,
+            stage="coletando_dados",
+            dados=dados,
+        )
 
         estado["etapa"] = "data_entrega"
         await responder_usuario_fn(
@@ -203,6 +263,13 @@ async def process_cesta_box_flow(
             return None
 
         dados["data_entrega"] = texto_limpo
+        _sync_cesta_process(
+            process_repository,
+            phone=telefone,
+            customer_id=cliente_id,
+            stage="coletando_dados",
+            dados=dados,
+        )
         estado["etapa"] = "hora_retirada"
         await responder_usuario_fn(telefone, "⏰ Informe o *horário de retirada/entrega* (HH:MM ou 24h):")
         return None
@@ -213,6 +280,13 @@ async def process_cesta_box_flow(
             return None
 
         dados["horario_retirada"] = (texto or "").strip()
+        _sync_cesta_process(
+            process_repository,
+            phone=telefone,
+            customer_id=cliente_id,
+            stage="coletando_dados",
+            dados=dados,
+        )
         estado["etapa"] = "modo_recebimento"
         await responder_usuario_fn(
             telefone,
@@ -228,6 +302,13 @@ async def process_cesta_box_flow(
         if modo in ["1", "retirada"]:
             dados["modo_recebimento"] = "retirada"
             dados["endereco"] = ""
+            _sync_cesta_process(
+                process_repository,
+                phone=telefone,
+                customer_id=cliente_id,
+                stage="aguardando_confirmacao",
+                dados=dados,
+            )
             estado["etapa"] = "confirmar_pedido"
             await montar_resumo_e_confirmar(
                 telefone,
@@ -249,6 +330,13 @@ async def process_cesta_box_flow(
 
             dados["modo_recebimento"] = "entrega"
             dados["taxa_entrega"] = 10.0
+            _sync_cesta_process(
+                process_repository,
+                phone=telefone,
+                customer_id=cliente_id,
+                stage="coletando_dados",
+                dados=dados,
+            )
             estado["etapa"] = "endereco"
             await responder_usuario_fn(
                 telefone,
@@ -270,6 +358,13 @@ async def process_cesta_box_flow(
             return None
 
         dados["endereco"] = endereco
+        _sync_cesta_process(
+            process_repository,
+            phone=telefone,
+            customer_id=cliente_id,
+            stage="aguardando_confirmacao",
+            dados=dados,
+        )
         estado["etapa"] = "confirmar_pedido"
         await montar_resumo_e_confirmar(
             telefone,
@@ -285,6 +380,13 @@ async def process_cesta_box_flow(
         if resposta in ["1", "sim", "confirmar"]:
             if "pagamento" not in dados:
                 dados["pagamento"] = {}
+                _sync_cesta_process(
+                    process_repository,
+                    phone=telefone,
+                    customer_id=cliente_id,
+                    stage="pagamento_pendente",
+                    dados=dados,
+                )
                 await responder_usuario_fn(
                     telefone,
                     "💳 *Forma de pagamento*\n"
@@ -330,6 +432,13 @@ async def process_cesta_box_flow(
 
         forma = formas_pagamento[escolha]
         dados["pagamento"]["forma"] = forma
+        _sync_cesta_process(
+            process_repository,
+            phone=telefone,
+            customer_id=cliente_id,
+            stage="pagamento_pendente",
+            dados=dados,
+        )
 
         if forma == "Dinheiro":
             estado["etapa"] = "pagamento_troco"
@@ -353,6 +462,7 @@ async def process_cesta_box_flow(
             responder_usuario_fn=responder_usuario_fn,
             order_gateway=order_gateway,
             delivery_gateway=delivery_gateway,
+            customer_process_repository=process_repository,
         )
         return "finalizar"
 
@@ -384,6 +494,7 @@ async def process_cesta_box_flow(
             responder_usuario_fn=responder_usuario_fn,
             order_gateway=order_gateway,
             delivery_gateway=delivery_gateway,
+            customer_process_repository=process_repository,
         )
         return "finalizar"
 

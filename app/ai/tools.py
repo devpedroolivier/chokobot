@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.application.service_registry import (
     get_attention_gateway,
     get_catalog_gateway,
+    get_customer_process_repository,
     get_delivery_gateway,
     get_order_gateway,
 )
@@ -144,6 +145,189 @@ def _calcular_preco_pedido(dados: dict) -> Tuple[float, int]:
     return calcular_total(payload)
 
 
+def _build_cake_process_payload(dados: dict) -> dict:
+    return {
+        "categoria": dados.get("categoria"),
+        "linha": dados.get("linha"),
+        "produto": dados.get("produto"),
+        "descricao": dados.get("descricao"),
+        "data_entrega": dados.get("data_entrega"),
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados.get("modo_recebimento"),
+        "endereco": dados.get("endereco"),
+        "pagamento": dados.get("pagamento"),
+        "quantidade": dados.get("quantidade"),
+        "valor_total": dados.get("valor_total"),
+    }
+
+
+def _build_sweet_process_payload(
+    *,
+    data_entrega: str,
+    horario_retirada: str | None,
+    modo_recebimento: str,
+    endereco: str | None,
+    pagamento: dict,
+    itens_validados: list[dict],
+    valor_total: float,
+) -> dict:
+    return {
+        "categoria": "doces",
+        "descricao": "Doces avulsos",
+        "itens": [f"{item['nome']} x{item['qtd']}" for item in itens_validados],
+        "data_entrega": data_entrega,
+        "horario_retirada": horario_retirada,
+        "modo_recebimento": modo_recebimento,
+        "endereco": endereco,
+        "pagamento": pagamento,
+        "valor_total": valor_total,
+    }
+
+
+def _sync_ai_process(
+    *,
+    phone: str,
+    customer_id: int,
+    process_type: str,
+    stage: str,
+    status: str,
+    draft_payload: dict,
+    source: str,
+    order_id: int | None = None,
+) -> None:
+    get_customer_process_repository().upsert_process(
+        phone=phone,
+        customer_id=customer_id,
+        process_type=process_type,
+        stage=stage,
+        status=status,
+        source=source,
+        draft_payload=draft_payload,
+        order_id=order_id,
+    )
+
+
+def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | None, str | None]:
+    dados = order_details.model_dump()
+    dados["linha"] = _linha_canonica(dados.get("linha"))
+    categoria = (dados.get("categoria") or "").lower()
+    dados["categoria"] = categoria
+
+    if dados.get("tamanho"):
+        dados["tamanho"] = _normaliza_tamanho(dados["tamanho"])
+
+    if dados.get("massa"):
+        matched = _match_closest(dados["massa"], MASSAS_VALIDAS)
+        if matched:
+            dados["massa"] = matched
+
+    if dados.get("produto") and dados["linha"] in ("gourmet", "torta"):
+        normalizado = _normaliza_produto(
+            "torta" if categoria == "torta" else ("redondo" if categoria == "redondo" else "gourmet"),
+            dados["produto"],
+        )
+        if normalizado:
+            dados["produto"] = normalizado
+
+    if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
+        return None, (
+            f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. "
+            "Ajuste o horario ou altere para retirada."
+        )
+
+    erros = _validar_campos_bolo(dados)
+    if erros:
+        return None, "Erro de validacao:\n- " + "\n- ".join(erros)
+
+    try:
+        valor_total, serve_pessoas = _calcular_preco_pedido(dados)
+        if dados["modo_recebimento"] == "entrega":
+            valor_total += dados.get("taxa_entrega", 0) or TAXA_ENTREGA_PADRAO
+        dados["valor_total"] = valor_total
+        dados["serve_pessoas"] = serve_pessoas
+    except Exception:
+        dados["valor_total"] = 0
+        dados["serve_pessoas"] = 0
+
+    if dados["modo_recebimento"] == "entrega" and dados.get("taxa_entrega", 0) == 0:
+        dados["taxa_entrega"] = TAXA_ENTREGA_PADRAO
+
+    dados["data_entrega"] = _normalizar_data_iso(dados["data_entrega"])
+    return dados, None
+
+
+def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict | None, str | None]:
+    dados = order_details.model_dump()
+    itens_validados: List[Dict] = []
+    total_doces = 0.0
+    erros: list[str] = []
+
+    for item in dados.get("itens", []):
+        nome_raw = item.get("nome", "")
+        qtd = item.get("quantidade", 1)
+
+        nome_canonico = _canonical_doce(nome_raw)
+        if not nome_canonico:
+            erros.append(f"Doce nao reconhecido: '{nome_raw}'. Verifique o nome no cardapio.")
+            continue
+
+        preco_unit = DOCES_UNITARIOS[nome_canonico]
+        preco_total = round(preco_unit * qtd, 2)
+        total_doces += preco_total
+
+        itens_validados.append(
+            {
+                "nome": nome_canonico,
+                "qtd": qtd,
+                "preco": preco_total,
+                "unit": preco_unit,
+            }
+        )
+
+    if erros:
+        return None, "Erro de validacao:\n- " + "\n- ".join(erros)
+
+    if not itens_validados:
+        return None, "Nenhum doce valido foi informado."
+
+    if dados["modo_recebimento"] == "entrega":
+        if not dados.get("endereco"):
+            return None, "Endereco e obrigatorio quando o modo de recebimento for entrega."
+        if not _horario_entrega_permitido(dados.get("horario_retirada")):
+            return None, (
+                f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. "
+                "Ajuste o horario ou altere para retirada."
+            )
+
+    taxa_entrega = TAXA_ENTREGA_PADRAO if dados["modo_recebimento"] == "entrega" else 0.0
+    valor_final = round(total_doces + taxa_entrega, 2)
+    data_iso = _normalizar_data_iso(dados["data_entrega"])
+    desc_itens = ", ".join(f"{it['nome']} x{it['qtd']}" for it in itens_validados)
+    order_data = {
+        "categoria": "doces",
+        "linha": "doces",
+        "descricao": f"Doces Avulsos: {desc_itens}",
+        "data_entrega": data_iso,
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados["modo_recebimento"],
+        "valor_total": valor_final,
+        "quantidade": 1,
+        "pagamento": dados.get("pagamento", {}),
+        "taxa_entrega": taxa_entrega,
+        "endereco": dados.get("endereco"),
+    }
+    return {
+        "dados": dados,
+        "itens_validados": itens_validados,
+        "total_doces": total_doces,
+        "taxa_entrega": taxa_entrega,
+        "valor_final": valor_final,
+        "data_iso": data_iso,
+        "desc_itens": desc_itens,
+        "order_data": order_data,
+    }, None
+
+
 # ============================================================
 #  Schemas
 # ============================================================
@@ -220,57 +404,10 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
     """Valida, calcula preço e salva o pedido de bolo no banco de dados."""
     order_gateway = get_order_gateway()
     delivery_gateway = get_delivery_gateway()
-    dados = order_details.model_dump()
-    dados["linha"] = _linha_canonica(dados.get("linha"))
-    categoria = (dados.get("categoria") or "").lower()
-    dados["categoria"] = categoria
-
-    # --- Normalizar tamanho ---
-    if dados.get("tamanho"):
-        dados["tamanho"] = _normaliza_tamanho(dados["tamanho"])
-
-    # --- Normalizar massa ---
-    if dados.get("massa"):
-        matched = _match_closest(dados["massa"], MASSAS_VALIDAS)
-        if matched:
-            dados["massa"] = matched
-
-    # --- Normalizar produto (gourmet/torta) ---
-    if dados.get("produto") and dados["linha"] in ("gourmet", "torta"):
-        normalizado = _normaliza_produto(
-            "torta" if categoria == "torta" else ("redondo" if categoria == "redondo" else "gourmet"),
-            dados["produto"],
-        )
-        if normalizado:
-            dados["produto"] = normalizado
-
-    # --- Horário de entrega tem prioridade sobre outras validações ---
-    if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
-        return f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. Ajuste o horario ou altere para retirada."
-
-    # --- Validação de campos ---
-    erros = _validar_campos_bolo(dados)
-    if erros:
-        return "Erro de validacao:\n- " + "\n- ".join(erros)
-
-    # --- Horário de entrega ---
-    if dados["modo_recebimento"] == "entrega":
-        if dados.get("taxa_entrega", 0) == 0:
-            dados["taxa_entrega"] = TAXA_ENTREGA_PADRAO
-
-    # --- Calcular preço ---
-    try:
-        valor_total, serve_pessoas = _calcular_preco_pedido(dados)
-        if dados["modo_recebimento"] == "entrega":
-            valor_total += dados.get("taxa_entrega", 0)
-        dados["valor_total"] = valor_total
-        dados["serve_pessoas"] = serve_pessoas
-    except Exception as exc:
-        dados["valor_total"] = 0
-        dados["serve_pessoas"] = 0
-
-    # --- Normalizar data para ISO ---
-    dados["data_entrega"] = _normalizar_data_iso(dados["data_entrega"])
+    dados, error = _prepare_cake_order_data(order_details)
+    if error:
+        return error
+    assert dados is not None
 
     # --- Salvar pedido ---
     encomenda_id = order_gateway.create_order(
@@ -297,6 +434,17 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
             status="Retirar na loja",
         )
 
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="ai_cake_order",
+        stage="pedido_confirmado",
+        status="converted",
+        source="ai_cake_order",
+        draft_payload=_build_cake_process_payload(dados),
+        order_id=encomenda_id,
+    )
+
     preco_txt = f" | Valor: R${dados['valor_total']:.2f}" if dados.get("valor_total") else ""
     return f"Pedido salvo com sucesso! ID da Encomenda: {encomenda_id}{preco_txt}"
 
@@ -305,68 +453,18 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
     """Valida, calcula preço e salva o pedido de doces avulsos no banco de dados."""
     order_gateway = get_order_gateway()
     delivery_gateway = get_delivery_gateway()
-    dados = order_details.model_dump()
-
-    # --- Validar e calcular itens ---
-    itens_validados: List[Dict] = []
-    total_doces = 0.0
-    erros: list[str] = []
-
-    for item in dados.get("itens", []):
-        nome_raw = item.get("nome", "")
-        qtd = item.get("quantidade", 1)
-
-        nome_canonico = _canonical_doce(nome_raw)
-        if not nome_canonico:
-            erros.append(f"Doce nao reconhecido: '{nome_raw}'. Verifique o nome no cardapio.")
-            continue
-
-        preco_unit = DOCES_UNITARIOS[nome_canonico]
-        preco_total = round(preco_unit * qtd, 2)
-        total_doces += preco_total
-
-        itens_validados.append({
-            "nome": nome_canonico,
-            "qtd": qtd,
-            "preco": preco_total,
-            "unit": preco_unit,
-        })
-
-    if erros:
-        return "Erro de validacao:\n- " + "\n- ".join(erros)
-
-    if not itens_validados:
-        return "Nenhum doce valido foi informado."
-
-    # --- Validar entrega ---
-    if dados["modo_recebimento"] == "entrega":
-        if not dados.get("endereco"):
-            return "Endereco e obrigatorio quando o modo de recebimento for entrega."
-        if not _horario_entrega_permitido(dados.get("horario_retirada")):
-            return f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. Ajuste o horario ou altere para retirada."
-
-    taxa_entrega = TAXA_ENTREGA_PADRAO if dados["modo_recebimento"] == "entrega" else 0.0
-    valor_final = round(total_doces + taxa_entrega, 2)
-
-    # --- Normalizar data ---
-    data_iso = _normalizar_data_iso(dados["data_entrega"])
-
-    # --- Montar descrição ---
-    desc_itens = ", ".join(f"{it['nome']} x{it['qtd']}" for it in itens_validados)
-
-    # --- Salvar encomenda-pai ---
-    order_data = {
-        "categoria": "doces",
-        "linha": "doces",
-        "descricao": f"Doces Avulsos: {desc_itens}",
-        "data_entrega": data_iso,
-        "horario_retirada": dados.get("horario_retirada"),
-        "modo_recebimento": dados["modo_recebimento"],
-        "valor_total": valor_final,
-        "quantidade": 1,
-        "pagamento": dados.get("pagamento", {}),
-        "taxa_entrega": taxa_entrega,
-    }
+    prepared, error = _prepare_sweet_order_data(order_details)
+    if error:
+        return error
+    assert prepared is not None
+    dados = prepared["dados"]
+    itens_validados = prepared["itens_validados"]
+    total_doces = prepared["total_doces"]
+    taxa_entrega = prepared["taxa_entrega"]
+    valor_final = prepared["valor_final"]
+    data_iso = prepared["data_iso"]
+    desc_itens = prepared["desc_itens"]
+    order_data = prepared["order_data"]
 
     encomenda_id = order_gateway.create_order(
         phone=telefone,
@@ -406,10 +504,89 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
             status="Retirar na loja",
         )
 
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="ai_sweet_order",
+        stage="pedido_confirmado",
+        status="converted",
+        source="ai_sweet_order",
+        draft_payload=_build_sweet_process_payload(
+            data_entrega=data_iso,
+            horario_retirada=dados.get("horario_retirada"),
+            modo_recebimento=dados["modo_recebimento"],
+            endereco=dados.get("endereco"),
+            pagamento=dados.get("pagamento", {}),
+            itens_validados=itens_validados,
+            valor_total=valor_final,
+        ),
+        order_id=encomenda_id,
+    )
+
     return (
         f"Pedido de doces salvo com sucesso! ID: {encomenda_id}\n"
         f"Itens: {desc_itens}\n"
         f"Total doces: R${total_doces:.2f}\n"
         + (f"Taxa entrega: R${taxa_entrega:.2f}\n" if taxa_entrega else "")
         + f"Total final: R${valor_final:.2f}"
+    )
+
+
+def save_cake_order_draft_process(
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    order_details: CakeOrderSchema,
+) -> str:
+    dados, error = _prepare_cake_order_data(order_details)
+    if error:
+        return error
+    assert dados is not None
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="ai_cake_order",
+        stage="aguardando_confirmacao",
+        status="active",
+        source="ai_cake_order",
+        draft_payload=_build_cake_process_payload(dados),
+    )
+    preco_txt = f" Valor estimado: R${dados['valor_total']:.2f}." if dados.get("valor_total") else ""
+    return (
+        "Pedido em rascunho salvo no atendimento e aguardando confirmacao final explicita do cliente."
+        f"{preco_txt} Peca a confirmacao antes de concluir."
+    )
+
+
+def save_sweet_order_draft_process(
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    order_details: SweetOrderSchema,
+) -> str:
+    prepared, error = _prepare_sweet_order_data(order_details)
+    if error:
+        return error
+    assert prepared is not None
+    dados = prepared["dados"]
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="ai_sweet_order",
+        stage="aguardando_confirmacao",
+        status="active",
+        source="ai_sweet_order",
+        draft_payload=_build_sweet_process_payload(
+            data_entrega=prepared["data_iso"],
+            horario_retirada=dados.get("horario_retirada"),
+            modo_recebimento=dados["modo_recebimento"],
+            endereco=dados.get("endereco"),
+            pagamento=dados.get("pagamento", {}),
+            itens_validados=prepared["itens_validados"],
+            valor_total=prepared["valor_final"],
+        ),
+    )
+    return (
+        "Pedido de doces em rascunho salvo no atendimento e aguardando confirmacao final explicita do cliente. "
+        "Peca a confirmacao antes de concluir."
     )

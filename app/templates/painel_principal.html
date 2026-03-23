@@ -2,151 +2,528 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Painel Dinâmico - Chokodelícia</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Operacional - Chokodelícia</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #fbf7f2;
+      --paper: #ffffff;
+      --line: #eadfd2;
+      --text: #33231d;
+      --muted: #7f6a61;
+      --accent: #bb5a3c;
+      --accent-soft: #f6dfd4;
+      --pending: #f7ecd0;
+      --progress: #dce9ff;
+      --ready: #dff0e7;
+      --done: #ece7e1;
+      --danger: #f6d3d9;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(246, 223, 212, 0.7), transparent 26%),
+        linear-gradient(180deg, #fbf7f2 0%, #fffdfb 100%);
+      color: var(--text);
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 45px rgba(80, 50, 39, 0.08);
+      backdrop-filter: blur(12px);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .badge-pending { background: #fff4cd; color: #8b5d08; }
+    .badge-progress { background: #dce9ff; color: #1d4ed8; }
+    .badge-scheduled { background: #efe2ff; color: #7c3aed; }
+    .badge-pickup { background: #dff0e7; color: #166534; }
+    .badge-done { background: #ece7e1; color: #5f4b42; }
+
+    .pill-overdue {
+      background: var(--danger);
+      color: #9f1239;
+    }
+
+    .pill-today {
+      background: #fbe9a8;
+      color: #8a5b00;
+    }
+
+    .pill-upcoming {
+      background: #dff0e7;
+      color: #166534;
+    }
+
+    .kanban-column {
+      min-height: 420px;
+      transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    }
+
+    .kanban-column.is-drop-target {
+      background: #fff7f1;
+      border-color: #d9b5a4;
+      transform: translateY(-2px);
+    }
+
+    .kanban-card {
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+      cursor: grab;
+    }
+
+    .kanban-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(80, 50, 39, 0.08);
+    }
+
+    .kanban-card.is-dragging {
+      opacity: 0.45;
+      cursor: grabbing;
+    }
+
+    .kanban-card.card-overdue {
+      border-color: #d45a74;
+      background: linear-gradient(180deg, #fff8fa 0%, #fff 100%);
+      box-shadow: 0 16px 30px rgba(159, 18, 57, 0.10);
+    }
+
+    .kanban-card.card-today {
+      border-color: #d7a748;
+      background: linear-gradient(180deg, #fffaf0 0%, #fff 100%);
+      box-shadow: 0 16px 30px rgba(138, 91, 0, 0.08);
+    }
+
+    .kanban-card.card-upcoming {
+      border-color: #88b49b;
+    }
+
+    .status-chip {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      transition: all 0.18s ease;
+    }
+
+    .status-chip:hover {
+      border-color: #d4b7a8;
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    .status-chip.is-active {
+      border-color: transparent;
+      background: var(--text);
+      color: #fff;
+    }
+
+    .stage-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.32rem 0.72rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .stage-cake { background: #fde6df; color: #a63d22; }
+    .stage-sweet { background: #ffe7ef; color: #a11d48; }
+    .stage-cafe { background: #f4ead8; color: #8a5b00; }
+    .stage-gift { background: #efe2ff; color: #6d28d9; }
+    .stage-delivery { background: #dce9ff; color: #1d4ed8; }
+    .stage-human { background: #ece7e1; color: #5f4b42; }
+
+    .sync-metric-warning { background: #fff4cd; color: #8b5d08; }
+    .sync-metric-accent { background: #f6dfd4; color: #a63d22; }
+    .sync-metric-success { background: #dff0e7; color: #166534; }
+    .sync-metric-muted { background: #ece7e1; color: #5f4b42; }
+
+    .alert-card {
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      padding: 1rem 1.1rem;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .alert-danger { background: #fff3f5; border-color: #f0b7c3; }
+    .alert-warning { background: #fff8e8; border-color: #ecd39b; }
+    .alert-muted { background: #f5f1ec; border-color: #ddd0c4; }
+
+    .line-clamp-3 {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-pink-50 via-white to-pink-100 min-h-screen text-gray-800">
-
-  <div class="container mx-auto px-6 py-10">
-    <!-- Cabeçalho -->
-    <div class="flex justify-between items-center mb-8">
-      <h1 class="text-3xl font-bold text-pink-700 flex items-center gap-2">
-        🍰 Painel Dinâmico
-        <span class="text-gray-400 text-sm font-normal">Chokodelícia</span>
-      </h1>
-      <div class="flex items-center gap-4">
-        <a href="/painel/encomendas/exportar" class="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm transition">
-          📄 Exportar TXT
-        </a>
-      </div>
-    </div>
-
-    <!-- Indicadores -->
-    <div class="grid grid-cols-3 gap-4 mb-10 text-center">
-      <div class="bg-white shadow rounded-xl p-4">
-        <h2 class="text-sm text-gray-500">Total de Pedidos</h2>
-        <p id="totalPedidos" class="text-2xl font-bold text-pink-600">{{ encomendas|length }}</p>
-      </div>
-      <div class="bg-white shadow rounded-xl p-4">
-        <h2 class="text-sm text-gray-500">Pendentes</h2>
-        <p id="totalPendentes" class="text-2xl font-bold text-yellow-600">
-          {{ encomendas|selectattr('status', 'equalto', 'pendente')|list|length }}
-        </p>
-      </div>
-      <div class="bg-white shadow rounded-xl p-4">
-        <h2 class="text-sm text-gray-500">Entregues</h2>
-        <p id="totalEntregues" class="text-2xl font-bold text-green-600">
-          {{ encomendas|selectattr('status', 'equalto', 'entregue')|list|length }}
-        </p>
-      </div>
-    </div>
-
-    <!-- Cards de Encomendas -->
-    <div id="gridEncomendas" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {% for e in encomendas %}
-      <div class="bg-white rounded-2xl shadow p-5 border-l-4 transition
-                  {% if e.status == 'pendente' %} border-yellow-400 hover:shadow-yellow-200
-                  {% elif e.status == 'em preparo' %} border-blue-400 hover:shadow-blue-200
-                  {% elif e.status == 'entregue' %} border-green-400 hover:shadow-green-200
-                  {% else %} border-gray-300 {% endif %}"
-          data-status="{{ e.status or 'pendente' }}">
-
-        <div class="flex justify-between items-start mb-2">
-          <h3 class="font-bold text-pink-700">{{ e.cliente_nome }}</h3>
-          <span class="px-2 py-1 rounded text-xs
-            {% if e.status == 'pendente' %} bg-yellow-100 text-yellow-800
-            {% elif e.status == 'em preparo' %} bg-blue-100 text-blue-800
-            {% elif e.status == 'entregue' %} bg-green-100 text-green-800
-            {% else %} bg-gray-100 text-gray-700 {% endif %}">
-            {{ e.status or 'pendente' }}
-          </span>
+<body class="min-h-screen">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <header class="panel mb-6 rounded-[28px] px-6 py-6">
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">Dashboard Minimalista</p>
+          <h1 class="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Acompanhamento de Pedidos</h1>
+          <p class="mt-2 text-sm text-[color:var(--muted)]">
+            Visão rápida da operação atual da confeitaria.
+          </p>
+          <p class="mt-1 text-xs uppercase tracking-[0.18em] text-[color:var(--accent)]">
+            referência {{ dashboard.reference_date }} • atualizado às {{ dashboard.generated_at }}
+          </p>
         </div>
-
-        <p class="text-sm text-gray-700">
-          <strong>Categoria:</strong>
-          <a href="/painel/encomendas/{{ e.id }}"
-            class="text-pink-600 hover:underline hover:text-pink-800 transition">
-            {{ e.categoria or 'Ver detalhes' }}
+        <div class="flex flex-wrap gap-2">
+          <a href="/painel/encomendas" class="rounded-full bg-[color:var(--text)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90">
+            Lista completa
           </a>
-        </p>
-        <p class="text-sm text-gray-700"><strong>Data:</strong> {{ e.data_entrega or '-' }}</p>
-        <p class="text-sm text-gray-700"><strong>Horário:</strong> {{ e.horario or '-' }}</p>
-        <p class="text-sm text-gray-700"><strong>Valor:</strong> R$ {{ e.valor_total or '0,00' }}</p>
-
-        <div class="mt-4 text-right">
-          {% if e.status != 'entregue' %}
-          <button
-            class="btn-finalizar bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition"
-            data-id="{{ e.id }}">
-            ✅ Finalizar
-          </button>
-          {% else %}
-          <span class="text-gray-400 text-xs italic">Concluído</span>
-          {% endif %}
+          <a href="/painel/clientes" class="rounded-full border border-[color:var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--text)] transition hover:bg-[color:var(--accent-soft)]">
+            Clientes
+          </a>
         </div>
       </div>
-      {% else %}
-      <p class="col-span-3 text-center text-gray-500">Nenhuma encomenda encontrada.</p>
+    </header>
+
+    <section class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {% for metric in dashboard.metrics %}
+      <article class="panel rounded-[24px] p-5">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">{{ metric.label }}</p>
+        <p class="mt-3 text-3xl font-black">{{ metric.value }}</p>
+        <p class="mt-2 text-sm text-[color:var(--muted)]">{{ metric.hint }}</p>
+      </article>
       {% endfor %}
-    </div>
+    </section>
+
+    <section class="mb-6">
+      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">Painel de Sync</p>
+          <h2 class="mt-1 text-2xl font-bold">Atendimento x Operação</h2>
+        </div>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {% for metric in sync_overview.metrics %}
+        <article class="panel rounded-[24px] p-5">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">{{ metric.label }}</p>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <p class="text-3xl font-black">{{ metric.value }}</p>
+            <span class="badge sync-metric-{{ metric.tone }}">{{ metric.label }}</span>
+          </div>
+          <p class="mt-2 text-sm text-[color:var(--muted)]">{{ metric.hint }}</p>
+        </article>
+        {% endfor %}
+      </div>
+
+      {% if sync_overview.alerts %}
+      <div class="mt-4 grid gap-3 xl:grid-cols-3">
+        {% for alert in sync_overview.alerts %}
+        <article class="alert-card alert-{{ alert.tone }}">
+          <p class="text-sm font-bold">{{ alert.title }}</p>
+          <p class="mt-1 text-sm text-[color:var(--muted)]">{{ alert.description }}</p>
+        </article>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="mb-6">
+      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">Sync de Atendimento</p>
+          <h2 class="mt-1 text-2xl font-bold">Processos aguardando fechamento</h2>
+        </div>
+        <div class="rounded-full bg-[color:var(--accent-soft)] px-4 py-2 text-sm font-semibold text-[color:var(--accent)]">
+          {{ process_cards|length }} processo(s) ativos
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        {% for section in process_sections %}
+        <div>
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-lg font-bold">{{ section.title }}</p>
+              <p class="text-sm text-[color:var(--muted)]">{{ section.description }}</p>
+            </div>
+            <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[color:var(--muted)] border border-[color:var(--line)]">
+              {{ section.count }}
+            </span>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {% for card in section.cards %}
+            <article class="panel rounded-[24px] p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="font-bold">{{ card.cliente_nome }}</p>
+                  <p class="mt-1 text-xs uppercase tracking-[0.18em] text-[color:var(--muted)]">{{ card.process_label }}</p>
+                </div>
+                <div class="flex flex-col items-end gap-2">
+                  <span class="stage-pill {{ card.origin_class }}">{{ card.origin_label }}</span>
+                  <span class="stage-pill {{ card.stage_class }}">{{ card.stage_label }}</span>
+                </div>
+              </div>
+
+              <p class="mt-4 text-sm text-[color:var(--text)]">{{ card.summary }}</p>
+
+              <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                <span class="badge {{ card.owner_class }}">{{ card.owner_label }}</span>
+                <span class="badge bg-[color:var(--accent-soft)] text-[color:var(--accent)]">{{ card.action_label }}</span>
+                {% for missing in card.missing_items %}
+                <span class="badge bg-[color:var(--done)] text-[color:var(--muted)]">{{ missing }}</span>
+                {% endfor %}
+              </div>
+
+              <p class="mt-3 text-xs text-[color:var(--muted)]">{{ card.owner_hint }}</p>
+
+              <div class="mt-4 flex items-center justify-between text-xs text-[color:var(--muted)]">
+                <span>{{ card.phone }}</span>
+                <span>{{ card.updated_label }}</span>
+              </div>
+            </article>
+            {% else %}
+            <div class="panel rounded-[24px] px-4 py-8 text-center text-sm text-[color:var(--muted)] md:col-span-2 xl:col-span-3">
+              Nenhum processo nesta faixa.
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="mb-6">
+      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">WPP ao vivo</p>
+          <h2 class="mt-1 text-2xl font-bold">Pedidos em andamento no WhatsApp</h2>
+        </div>
+        <div class="rounded-full bg-[color:var(--accent-soft)] px-4 py-2 text-sm font-semibold text-[color:var(--accent)]">
+          {{ whatsapp_cards|length }} conversa(s) ativa(s)
+        </div>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {% for card in whatsapp_cards %}
+        <article class="panel rounded-[24px] p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="font-bold">{{ card.cliente_nome }}</p>
+              <p class="mt-1 text-xs uppercase tracking-[0.18em] text-[color:var(--muted)]">WhatsApp</p>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+              {% if card.is_human_handoff %}
+              <span class="stage-pill stage-human">Handoff humano</span>
+              {% endif %}
+              <span class="stage-pill {{ card.owner_class }}">{{ card.owner_label }}</span>
+              <span class="stage-pill {{ card.stage_class }}">{{ card.stage_label }}</span>
+            </div>
+          </div>
+
+          <p class="mt-4 line-clamp-3 text-sm text-[color:var(--text)]">{{ card.last_message }}</p>
+
+          <div class="mt-4 flex items-center justify-between text-xs text-[color:var(--muted)]">
+            <span>{{ card.agent }}</span>
+            <span>{{ card.last_seen_label }}</span>
+          </div>
+        </article>
+        {% else %}
+        <div class="panel rounded-[24px] px-4 py-8 text-center text-sm text-[color:var(--muted)] md:col-span-2 xl:col-span-4">
+          Nenhum pedido em andamento no WhatsApp neste momento.
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">Kanban Operacional</p>
+        <h2 class="mt-1 text-2xl font-bold">Fila atual da confeitaria</h2>
+      </div>
+      <div class="rounded-full bg-[color:var(--accent-soft)] px-4 py-2 text-sm font-semibold text-[color:var(--accent)]">
+        {{ dashboard.operational_orders|length }} pedidos ativos no board
+      </div>
+    </section>
+
+    <section class="grid gap-4 xl:grid-cols-4">
+      {% for column in dashboard.kanban_columns %}
+      <article class="panel kanban-column rounded-[28px] p-4 sm:p-5" data-status-target="{{ column.key }}">
+        <div class="mb-4 border-b border-[color:var(--line)] pb-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-lg font-bold">{{ column.title }}</p>
+              <p class="text-sm text-[color:var(--muted)]">{{ column.description }}</p>
+            </div>
+            <span class="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[color:var(--accent)]">
+              {{ column["items"]|length }}
+            </span>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          {% for item in column["items"] %}
+          <div
+            class="kanban-card rounded-[22px] border border-[color:var(--line)] bg-white p-4{% if item.schedule_bucket == 'overdue' %} card-overdue{% elif item.schedule_bucket == 'today' %} card-today{% elif item.schedule_bucket == 'upcoming' %} card-upcoming{% endif %}"
+            data-order-id="{{ item.id }}"
+            data-order-status="{{ item.status_slug }}"
+            data-ready-status="{{ item.ready_status }}"
+            draggable="{{ 'true' if item.status_slug != 'entregue' else 'false' }}"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-[color:var(--muted)]">#{{ item.id }}</p>
+                <p class="mt-1 font-bold">{{ item.cliente_nome }}</p>
+              </div>
+              <span class="{{ item.status_badge_class }}">{{ item.status_label }}</span>
+            </div>
+
+            <p class="mt-3 text-sm font-medium">{{ item.produto }}</p>
+            <p class="mt-1 text-sm text-[color:var(--muted)]">{{ item.categoria_label }}</p>
+
+            <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+              {% if item.schedule_bucket == 'overdue' %}
+              <span class="badge pill-overdue">Atrasado</span>
+              {% elif item.schedule_bucket == 'today' %}
+              <span class="badge pill-today">Hoje</span>
+              {% elif item.schedule_bucket == 'upcoming' %}
+              <span class="badge pill-upcoming">Próximos dias</span>
+              {% endif %}
+              <span class="badge bg-[color:var(--done)] text-[color:var(--muted)]">{{ item.tipo_label }}</span>
+            </div>
+
+            <div class="mt-4 space-y-1 text-sm text-[color:var(--muted)]">
+              <p><strong class="text-[color:var(--text)]">Data:</strong> {{ item.data_label }}</p>
+              <p><strong class="text-[color:var(--text)]">Horário:</strong> {{ item.horario }}</p>
+              <p><strong class="text-[color:var(--text)]">Valor:</strong> {{ item.valor_label }}</p>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <a href="/painel/encomendas/{{ item.id }}" class="rounded-full border border-[color:var(--line)] px-3 py-2 text-xs font-semibold text-[color:var(--text)] transition hover:bg-[color:var(--accent-soft)]">
+                Detalhes
+              </a>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-2 text-xs font-semibold">
+              <button class="status-chip rounded-full px-3 py-2 {% if item.status_slug == 'pendente' %}is-active{% endif %}" data-status-action data-order-id="{{ item.id }}" data-status-value="pendente">
+                Pendente
+              </button>
+              <button class="status-chip rounded-full px-3 py-2 {% if item.status_slug == 'em_preparo' %}is-active{% endif %}" data-status-action data-order-id="{{ item.id }}" data-status-value="em preparo">
+                Em preparo
+              </button>
+              <button class="status-chip rounded-full px-3 py-2 {% if item.status_slug in ['agendada', 'retirada'] %}is-active{% endif %}" data-status-action data-order-id="{{ item.id }}" data-status-value="{{ item.ready_status }}">
+                {{ item.ready_label }}
+              </button>
+              <button class="status-chip rounded-full px-3 py-2 {% if item.status_slug == 'entregue' %}is-active{% endif %}" data-status-action data-order-id="{{ item.id }}" data-status-value="entregue">
+                Concluir
+              </button>
+            </div>
+          </div>
+          {% else %}
+          <div class="rounded-[22px] border border-dashed border-[color:var(--line)] bg-white/60 px-4 py-10 text-center text-sm text-[color:var(--muted)]">
+            Nenhum pedido nesta etapa.
+          </div>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </section>
   </div>
 
   <script>
-    // Atualiza status sem recarregar
-    document.querySelectorAll(".btn-finalizar").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.id;
-        btn.disabled = true;
-        btn.textContent = "⏳ Atualizando...";
+    async function updateOrderStatus(orderId, status) {
+      const response = await fetch(`/painel/encomendas/${orderId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `status=${encodeURIComponent(status)}`
+      });
+
+      if (!response.ok) {
+        throw new Error("status update failed");
+      }
+
+      window.location.reload();
+    }
+
+    document.querySelectorAll("[data-status-action]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const { orderId, statusValue } = button.dataset;
+        button.disabled = true;
 
         try {
-          const response = await fetch(`/painel/encomendas/${id}/status`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: "status=entregue"
-          });
-
-          if (response.ok) {
-            const card = btn.closest("div[data-status]");
-            card.dataset.status = "entregue";
-
-            // Atualiza visual
-            const statusSpan = card.querySelector("span");
-            statusSpan.textContent = "entregue";
-            statusSpan.className = "px-2 py-1 rounded text-xs bg-green-100 text-green-800";
-
-            btn.outerHTML = `<span class="text-gray-400 text-xs italic">Concluído</span>`;
-            atualizarContadores();
-          } else {
-            btn.textContent = "❌ Erro";
-            btn.disabled = false;
-          }
-        } catch (err) {
-          console.error("Erro:", err);
-          btn.textContent = "⚠️ Falha";
-          btn.disabled = false;
+          await updateOrderStatus(orderId, statusValue);
+        } catch (error) {
+          console.error(error);
+          button.disabled = false;
         }
       });
     });
 
-    // Atualiza contadores no topo
-    function atualizarContadores() {
-      const cards = document.querySelectorAll("#gridEncomendas > div[data-status]");
-      let total = 0, pendentes = 0, entregues = 0;
+    let draggedCard = null;
 
-      cards.forEach(card => {
-        const status = card.dataset.status;
-        if (!status) return;
-        total++;
-        if (status === "pendente") pendentes++;
-        if (status === "entregue") entregues++;
+    function resolveDropStatus(columnKey, card) {
+      if (columnKey === "pendente") return "pendente";
+      if (columnKey === "em_preparo") return "em preparo";
+      if (columnKey === "saida") return card.dataset.readyStatus || "agendada";
+      if (columnKey === "entregue") return "entregue";
+      return null;
+    }
+
+    document.querySelectorAll(".kanban-card[draggable='true']").forEach((card) => {
+      card.addEventListener("dragstart", () => {
+        draggedCard = card;
+        card.classList.add("is-dragging");
       });
 
-      document.getElementById("totalPedidos").textContent = total;
-      document.getElementById("totalPendentes").textContent = pendentes;
-      document.getElementById("totalEntregues").textContent = entregues;
-    }
-  </script>
+      card.addEventListener("dragend", () => {
+        card.classList.remove("is-dragging");
+        draggedCard = null;
+        document.querySelectorAll(".kanban-column").forEach((column) => {
+          column.classList.remove("is-drop-target");
+        });
+      });
+    });
 
+    document.querySelectorAll(".kanban-column").forEach((column) => {
+      column.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (draggedCard) {
+          column.classList.add("is-drop-target");
+        }
+      });
+
+      column.addEventListener("dragleave", () => {
+        column.classList.remove("is-drop-target");
+      });
+
+      column.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        column.classList.remove("is-drop-target");
+
+        if (!draggedCard) {
+          return;
+        }
+
+        const nextStatus = resolveDropStatus(column.dataset.statusTarget, draggedCard);
+        if (!nextStatus) {
+          return;
+        }
+
+        try {
+          await updateOrderStatus(draggedCard.dataset.orderId, nextStatus);
+        } catch (error) {
+          console.error(error);
+        }
+      });
+    });
+  </script>
 </body>
 </html>

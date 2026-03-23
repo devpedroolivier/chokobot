@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Awaitable, Callable
 
-from app.application.service_registry import get_order_gateway
+from app.application.service_registry import get_customer_process_repository, get_order_gateway
 from app.utils.mensagens import responder_usuario
 
 PRONTA_ENTREGA_BOLOS_MSG = (
@@ -23,10 +23,12 @@ async def process_cafeteria_flow(
     *,
     responder_usuario_fn: ResponderUsuarioFn = responder_usuario,
     order_gateway=None,
+    customer_process_repository=None,
 ):
     subetapa = estado.get("subetapa")
     nome = estado.get("nome", "Nome não informado")
     order_gateway = order_gateway or get_order_gateway()
+    process_repository = customer_process_repository or get_customer_process_repository()
 
     if subetapa == "aguardando_cardapio":
         if texto == "1":
@@ -69,11 +71,36 @@ async def process_cafeteria_flow(
 
     if "itens" in estado:
         if texto.lower() in ["finalizar", "só isso", "obrigado", "obrigada"]:
+            payload = {
+                "categoria": "cafeteria",
+                "descricao": ", ".join(estado["itens"]),
+                "itens": list(estado["itens"]),
+            }
             order_gateway.save_cafeteria_order(phone=telefone, itens=estado["itens"], nome_cliente=nome)
+            process_repository.upsert_process(
+                phone=telefone,
+                process_type="cafeteria_order",
+                stage="pedido_confirmado",
+                status="converted",
+                source="cafeteria",
+                draft_payload=payload,
+            )
             await responder_usuario_fn(telefone, "☕ Pedido finalizado! Em breve confirmaremos com você.")
             return "finalizar"
 
         estado["itens"].append(texto)
+        process_repository.upsert_process(
+            phone=telefone,
+            process_type="cafeteria_order",
+            stage="montando_pedido",
+            status="active",
+            source="cafeteria",
+            draft_payload={
+                "categoria": "cafeteria",
+                "descricao": ", ".join(estado["itens"]),
+                "itens": list(estado["itens"]),
+            },
+        )
         await responder_usuario_fn(
             telefone,
             "✅ Pedido registrado! Digite outro item ou *finalizar* para encerrar.",

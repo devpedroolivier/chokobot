@@ -23,6 +23,14 @@ class AIRunnerToolWiringTests(unittest.TestCase):
 
         self.assertIn("SweetOrderAgent", allowed_agents)
 
+    def test_sweet_tool_description_requires_explicit_confirmation(self):
+        tools = get_openai_tools(SweetOrderAgent)
+        sweet_tool = next(tool for tool in tools if tool["function"]["name"] == "create_sweet_order")
+        description = sweet_tool["function"]["description"]
+
+        self.assertIn("confirmacao final explicita", description)
+        self.assertIn("ultima mensagem do cliente", description)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,13 +8,6 @@ from app.domain.repositories.delivery_write_repository import DeliveryWriteRepos
 from app.observability import log_event
 
 
-def _existing_columns(conn: sqlite3.Connection, table: str, candidates: list[str]) -> list[str]:
-    cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({table});")
-    existing = {r[1] for r in cur.fetchall()}
-    return [c for c in candidates if c in existing]
-
-
 class SQLiteDeliveryWriteRepository(DeliveryWriteRepository):
     def save_delivery(
         self,
@@ -29,22 +22,21 @@ class SQLiteDeliveryWriteRepository(DeliveryWriteRepository):
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
 
-        candidate_cols = ["encomenda_id", "tipo", "endereco", "data_agendada", "status", "criado_em"]
-        cols = _existing_columns(conn, "entregas", candidate_cols)
-        values_map = {
-            "encomenda_id": encomenda_id,
-            "tipo": tipo,
-            "endereco": endereco,
-            "data_agendada": data_agendada,
-            "status": status,
-            "criado_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        placeholders = ", ".join("?" for _ in cols)
-        sql = f"INSERT INTO entregas ({', '.join(cols)}) VALUES ({placeholders})"
-
         try:
-            cur.execute(sql, [values_map.get(c) for c in cols])
+            cur.execute(
+                """
+                INSERT INTO entregas (encomenda_id, tipo, endereco, data_agendada, status, atualizado_em)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    encomenda_id,
+                    tipo,
+                    endereco,
+                    data_agendada,
+                    status,
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                ),
+            )
             conn.commit()
             log_event(
                 "delivery_saved",

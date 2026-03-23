@@ -3,34 +3,45 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.db.database import get_connection
-from app.domain.repositories.customer_repository import CustomerRepository
+from app.domain.repositories.customer_repository import CustomerRecord, CustomerRepository
+
+
+def _map_customer(row) -> CustomerRecord | None:
+    if row is None:
+        return None
+    return CustomerRecord(
+        id=row["id"],
+        nome=row["nome"],
+        telefone=row["telefone"],
+        criado_em=row["criado_em"],
+    )
 
 
 class SQLiteCustomerRepository(CustomerRepository):
-    def list_customers(self) -> list:
+    def list_customers(self) -> list[CustomerRecord]:
         conn = get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM clientes ORDER BY criado_em DESC")
-            return cursor.fetchall()
+            return [_map_customer(row) for row in cursor.fetchall()]
         finally:
             conn.close()
 
-    def get_customer(self, customer_id: int):
+    def get_customer(self, customer_id: int) -> CustomerRecord | None:
         conn = get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM clientes WHERE id = ?", (customer_id,))
-            return cursor.fetchone()
+            return _map_customer(cursor.fetchone())
         finally:
             conn.close()
 
-    def get_customer_by_phone(self, telefone: str):
+    def get_customer_by_phone(self, telefone: str) -> CustomerRecord | None:
         conn = get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM clientes WHERE telefone = ?", (telefone,))
-            return cursor.fetchone()
+            return _map_customer(cursor.fetchone())
         finally:
             conn.close()
 

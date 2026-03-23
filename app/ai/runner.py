@@ -1,11 +1,8 @@
 import json
-import re
 import time
-import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 try:
     from openai import AsyncOpenAI
@@ -13,10 +10,20 @@ except ModuleNotFoundError:
     AsyncOpenAI = None
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
+from app.ai.policies import (
+    build_system_time_context,
+    build_time_conflict_retry_instruction as _build_time_conflict_retry_instruction,
+    current_local_datetime,
+    normalize_reference_time as _normalize_reference_time,
+    requests_easter_catalog as _requests_easter_catalog,
+    requests_human_handoff as _requests_human_handoff,
+    response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
+    should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
+)
+from app.ai.tool_execution import handle_tool_call
+from app.ai.tool_registry import build_openai_tools
 from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
 from app.ai.tools import (
-    CakeOrderSchema,
-    SweetOrderSchema,
     create_cake_order,
     create_sweet_order,
     escalate_to_human,
@@ -25,14 +32,12 @@ from app.ai.tools import (
     save_learning,
 )
 from app.observability import increment_counter, log_event, observe_duration
-from app.security import ai_learning_enabled
 from app.services.estados import ai_sessions
 from app.settings import get_settings
 
 client = None
 
 CONVERSATIONS = ai_sessions
-DELIVERY_CUTOFF = (17, 30)
 
 
 @dataclass(frozen=True)
@@ -102,108 +107,6 @@ def _assistant_message_to_dict(message) -> dict:
     return payload
 
 
-def _normalize_reference_time(now: datetime | None = None) -> datetime:
-    current_time = now or current_local_datetime()
-    timezone = _current_timezone()
-    if current_time.tzinfo is None:
-        return current_time.replace(tzinfo=timezone)
-    return current_time.astimezone(timezone)
-
-
-def _is_after_delivery_cutoff(now: datetime | None = None) -> bool:
-    current_time = _normalize_reference_time(now)
-    return (current_time.hour, current_time.minute) > DELIVERY_CUTOFF
-
-
-def _same_day_reference_tokens(now: datetime | None = None) -> tuple[str, ...]:
-    current_time = _normalize_reference_time(now)
-    return (
-        current_time.strftime("%d/%m/%Y"),
-        current_time.strftime("%d/%m"),
-        current_time.strftime("%d-%m-%Y"),
-        current_time.strftime("%d-%m"),
-    )
-
-
-def _mentions_same_day(text: str, now: datetime | None = None) -> bool:
-    normalized = (text or "").casefold()
-    if re.search(r"\b(hoje|hj)\b", normalized):
-        return True
-    return any(token in normalized for token in _same_day_reference_tokens(now))
-
-
-def _mentions_order_intent(text: str) -> bool:
-    normalized = (text or "").casefold()
-    return bool(
-        re.search(
-            r"\b(bolo|encomenda\w*|torta|mesvers[aá]rio|baby\s*cake|babycake|gourmet|b3|b4|b6|b7|p4|p6)\b",
-            normalized,
-        )
-    )
-
-
-def _requests_human_handoff(text: str) -> bool:
-    normalized = (text or "").casefold()
-    patterns = (
-        r"\bfalar com (um )?(humano|atendente|pessoa)\b",
-        r"\bquero falar com (um )?(humano|atendente|pessoa)\b",
-        r"\b(atendente|humano) real\b",
-        r"\bme passa para (um )?(humano|atendente)\b",
-        r"\btransfer(e|ir) .* (humano|atendente)\b",
-        r"\bdesativar (o )?(chat|bot)\b",
-        r"\bquero (um )?humano\b",
-    )
-    return any(re.search(pattern, normalized) for pattern in patterns)
-
-
-def _normalize_intent_text(text: str) -> str:
-    normalized = unicodedata.normalize("NFKD", text or "")
-    return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
-
-
-def _requests_easter_catalog(text: str) -> bool:
-    normalized = _normalize_intent_text(text)
-    patterns = (
-        r"\bpascoa\b",
-        r"\bovo(s)?\s+de\s+pascoa\b",
-        r"\bcardapio\s+de\s+pascoa\b",
-    )
-    return any(re.search(pattern, normalized) for pattern in patterns)
-
-
-def _response_conflicts_with_cutoff(reply: str | None, *, user_text: str, now: datetime | None = None) -> bool:
-    if not reply or _is_after_delivery_cutoff(now) or not _mentions_same_day(user_text, now):
-        return False
-
-    normalized = reply.casefold()
-    if re.search(r"(j[aá]\s+)?passou\s+das?\s+17[:h]30", normalized):
-        return True
-    if re.search(r"encomendas?\s+para\s+hoje\s+se\s+encerraram", normalized):
-        return True
-    return False
-
-
-def _build_time_conflict_retry_instruction(now: datetime | None = None) -> str:
-    current_time = _normalize_reference_time(now)
-    return (
-        "CORRECAO DE SISTEMA: use exclusivamente o horario oficial de Brasilia. "
-        f"Agora sao {current_time.strftime('%H:%M')} em Brasilia e ainda NAO passou das 17:30. "
-        "Reescreva a resposta sem afirmar que o horario limite de hoje foi ultrapassado."
-    )
-
-
-def _should_force_same_day_cafeteria_handoff(session: dict, user_text: str, now: datetime | None = None) -> bool:
-    if not _is_after_delivery_cutoff(now) or not _mentions_same_day(user_text, now):
-        return False
-
-    current_agent = session.get("current_agent")
-    if current_agent == "CakeOrderAgent":
-        return True
-    if current_agent == "TriageAgent" and _mentions_order_intent(user_text):
-        return True
-    return False
-
-
 def save_session(telefone: str, session: dict) -> None:
     CONVERSATIONS[telefone] = session
 
@@ -220,189 +123,7 @@ def get_or_create_session(telefone: str) -> Dict[str, Any]:
 # Mapeamento de funções reais para as definições de Tools da OpenAI
 def get_openai_tools(agent, runtime: AIRuntime | None = None):
     runtime = runtime or get_default_ai_runtime()
-    openai_tools = []
-    
-    if runtime.get_menu in agent.tools:
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": "get_menu",
-                "description": "Busca os cardapios, produtos e precos da Chokodelicia. Use `category=\"pronta_entrega\"` para vitrine/cafeteria/doces e `category=\"encomendas\"` para bolos personalizados, tortas e cestas.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "category": {
-                            "type": "string",
-                            "description": "Categoria do menu: pronta_entrega, encomendas ou todas",
-                        }
-                    },
-                    "required": []
-                }
-            }
-        })
-        
-    if runtime.get_learnings in agent.tools:
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": "get_learnings",
-                "description": "Lê as regras e instruções que você aprendeu com os clientes no passado.",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
-        })
-        
-    if runtime.save_learning in agent.tools and ai_learning_enabled():
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": "save_learning",
-                "description": "Salva uma nova regra ou correção ensinada pelo cliente (loop de aprendizagem).",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "aprendizado": {"type": "string", "description": "A regra exata a ser salva."}
-                    },
-                    "required": ["aprendizado"]
-                }
-            }
-        })
-        
-    if runtime.escalate_to_human in agent.tools:
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": "escalate_to_human",
-                "description": "Transfere a conversa imediatamente para um humano se o cliente pedir ou se o agente não souber resolver.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "motivo": {"type": "string", "description": "Por que está transferindo para humano"}
-                    },
-                    "required": ["motivo"]
-                }
-            }
-        })
-        
-    if runtime.create_cake_order in agent.tools:
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": "create_cake_order",
-                "description": "Salva o pedido de bolo de encomenda após o cliente confirmar TODOS os detalhes.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "linha": {"type": "string", "description": "tradicional, gourmet, mesversario, babycake, torta, simples"},
-                        "categoria": {"type": "string", "description": "tradicional, ingles, redondo, torta"},
-                        "produto": {"type": "string"},
-                        "tamanho": {"type": "string"},
-                        "massa": {"type": "string"},
-                        "recheio": {"type": "string"},
-                        "mousse": {"type": "string"},
-                        "adicional": {"type": "string"},
-                        "descricao": {"type": "string"},
-                        "kit_festou": {"type": "boolean"},
-                        "quantidade": {"type": "integer"},
-                        "data_entrega": {"type": "string", "description": "DD/MM/AAAA"},
-                        "horario_retirada": {"type": "string", "description": "HH:MM"},
-                        "modo_recebimento": {"type": "string", "enum": ["retirada", "entrega"]},
-                        "endereco": {"type": "string"},
-                        "taxa_entrega": {"type": "number"},
-                        "pagamento": {
-                            "type": "object",
-                            "properties": {
-                                "forma": {"type": "string", "enum": ["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"]},
-                                "troco_para": {"type": "number"}
-                            },
-                            "required": ["forma"]
-                        }
-                    },
-                    "required": ["linha", "categoria", "descricao", "data_entrega", "modo_recebimento", "pagamento"]
-                }
-            }
-        })
-
-    if runtime.create_sweet_order in agent.tools:
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": "create_sweet_order",
-                "description": "Salva o pedido de doces avulsos em quantidade apos a confirmacao final do cliente.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "itens": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "nome": {"type": "string"},
-                                    "quantidade": {"type": "integer"},
-                                },
-                                "required": ["nome", "quantidade"],
-                            },
-                        },
-                        "data_entrega": {"type": "string", "description": "DD/MM/AAAA"},
-                        "horario_retirada": {"type": "string", "description": "HH:MM"},
-                        "modo_recebimento": {"type": "string", "enum": ["retirada", "entrega"]},
-                        "endereco": {"type": "string"},
-                        "pagamento": {
-                            "type": "object",
-                            "properties": {
-                                "forma": {"type": "string", "enum": ["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"]},
-                                "troco_para": {"type": "number"}
-                            },
-                            "required": ["forma"]
-                        }
-                    },
-                    "required": ["itens", "data_entrega", "modo_recebimento", "pagamento"]
-                }
-            }
-        })
-
-    # Injeta automaticamente o roteamento como uma tool para TODOS os agentes (Handoff)
-    openai_tools.append({
-        "type": "function",
-        "function": {
-            "name": "transfer_to_agent",
-            "description": "Transfere a conversa para outro agente especializado.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "agent_name": {
-                        "type": "string", 
-                        "enum": ["TriageAgent", "CakeOrderAgent", "SweetOrderAgent", "KnowledgeAgent", "CafeteriaAgent"]
-                    }
-                },
-                "required": ["agent_name"]
-            }
-        }
-    })
-
-    return openai_tools
-
-
-def _current_timezone() -> ZoneInfo:
-    settings = get_settings()
-    timezone_name = settings.bot_timezone or settings.tz or "America/Sao_Paulo"
-    try:
-        return ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
-        return ZoneInfo("America/Sao_Paulo")
-
-
-def current_local_datetime() -> datetime:
-    return datetime.now(_current_timezone())
-
-
-def build_system_time_context(now: datetime | None = None) -> str:
-    current_time = _normalize_reference_time(now)
-    cutoff_status = "depois do limite" if _is_after_delivery_cutoff(current_time) else "antes do limite"
-    return (
-        current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
-        + " Horario oficial de Brasilia (America/Sao_Paulo)."
-        + f" Status do corte das 17:30: {cutoff_status}."
-    )
+    return build_openai_tools(agent, runtime)
 
 
 def build_system_instructions(agent, now: datetime | None = None, runtime: AIRuntime | None = None) -> str:
@@ -446,60 +167,6 @@ def _finalize_ai_run(*, start_time: float, session: dict, iteration_count: int, 
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
     )
-
-
-def handle_tool_call(
-    *,
-    runtime: AIRuntime,
-    function_name: str,
-    arguments: dict,
-    telefone: str,
-    nome_cliente: str,
-    cliente_id: int,
-    session: dict,
-) -> tuple[bool, str]:
-    tool_result = ""
-
-    if function_name == "transfer_to_agent":
-        new_agent = arguments.get("agent_name")
-        if new_agent in AGENTS_MAP:
-            session["current_agent"] = new_agent
-            tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
-            log_event("ai_handoff", to_agent=new_agent)
-            save_session(telefone, session)
-        else:
-            tool_result = f"Erro: Agente {new_agent} não existe."
-    elif function_name == "get_menu":
-        tool_result = runtime.get_menu(arguments.get("category", "todas"))
-    elif function_name == "get_learnings":
-        tool_result = runtime.get_learnings()
-    elif function_name == "save_learning":
-        tool_result = runtime.save_learning(arguments.get("aprendizado"))
-    elif function_name == "escalate_to_human":
-        runtime.escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
-        session["messages"] = []
-        save_session(telefone, session)
-        return True, HUMAN_HANDOFF_MESSAGE
-    elif function_name == "create_cake_order":
-        try:
-            order = CakeOrderSchema(**arguments)
-            tool_result = runtime.create_cake_order(telefone, nome_cliente, cliente_id, order)
-            session["messages"] = []
-            save_session(telefone, session)
-            return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
-        except Exception as exc:
-            tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
-    elif function_name == "create_sweet_order":
-        try:
-            order = SweetOrderSchema(**arguments)
-            tool_result = runtime.create_sweet_order(telefone, nome_cliente, cliente_id, order)
-            session["messages"] = []
-            save_session(telefone, session)
-            return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
-        except Exception as exc:
-            tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
-
-    return False, str(tool_result)
 
 
 async def process_message_with_ai(
@@ -633,9 +300,15 @@ async def process_message_with_ai(
                 nome_cliente=nome_cliente,
                 cliente_id=cliente_id,
                 session=session,
+                save_session_fn=save_session,
             )
             if should_return:
+                if function_name == "transfer_to_agent":
+                    log_event("ai_handoff", to_agent=session["current_agent"])
                 return tool_result
+
+            if function_name == "transfer_to_agent":
+                log_event("ai_handoff", to_agent=session["current_agent"])
 
             # Adiciona o resultado da ferramenta na memória para a IA "ler"
             session["messages"].append({

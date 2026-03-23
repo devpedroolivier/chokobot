@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 # app/services/encomendas.py
 from datetime import datetime
-from app.application.service_registry import get_delivery_gateway, get_order_gateway
+from app.application.service_registry import (
+    get_customer_process_repository,
+    get_delivery_gateway,
+    get_order_gateway,
+)
 from app.utils.mensagens import responder_usuario
 from app.services.estados import estados_entrega
 from app.config import DOCES_URL  # mantido por compatibilidade
@@ -166,9 +170,9 @@ def _prepara_dados_para_salvar(dados: dict) -> dict:
 
 async def _iniciar_entrega(telefone, dados, nome_cliente, cliente_id):
     """
-    Prepara o pedido para entrega, salva no banco e inicia o fluxo de endereço.
+    Prepara o pedido para entrega e inicia o fluxo de endereço.
+    A persistência da encomenda acontece apenas após a confirmação final.
     """
-    order_gateway = get_order_gateway()
     if not _horario_entrega_permitido(dados.get("horario_retirada")):
         await responder_usuario(
             telefone,
@@ -196,20 +200,22 @@ async def _iniciar_entrega(telefone, dados, nome_cliente, cliente_id):
     dados["taxa_entrega"] = taxa
 
     dados = _prepara_dados_para_salvar(dados)
-    print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
-    encomenda_id = order_gateway.create_order(
+    get_customer_process_repository().upsert_process(
         phone=telefone,
-        dados=dados,
-        nome_cliente=nome_cliente,
-        cliente_id=cliente_id,
+        customer_id=cliente_id,
+        process_type="delivery_order",
+        stage="coletando_endereco",
+        status="active",
+        source="legacy_delivery",
+        draft_payload=dados,
     )
 
     estados_entrega[telefone] = {
         "etapa": 1,
+        "cliente_id": cliente_id,
         "dados": {
-            "encomenda_id": encomenda_id,
             "data": dados["data_entrega"],
-            "pedido": pedido,
+            "pedido": dados,
             "endereco": "",
             "referencia": "",
         },

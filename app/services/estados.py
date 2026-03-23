@@ -8,6 +8,7 @@ estados_entrega = _store.estados_entrega
 estados_cestas_box = _store.estados_cestas_box
 estados_atendimento = _store.estados_atendimento
 ai_sessions = _store.ai_sessions
+recent_messages = _store.recent_messages
 
 
 def is_bot_ativo() -> bool:

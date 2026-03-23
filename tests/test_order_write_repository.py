@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from app.db.init_db import ensure_views
 from app.db.database import get_connection
 from app.infrastructure.gateways.local_order_gateway import LocalOrderGateway
 from app.infrastructure.repositories.sqlite_order_write_repository import SQLiteOrderWriteRepository
+from app.infrastructure.repositories.sqlite_delivery_write_repository import SQLiteDeliveryWriteRepository
 
 
 class OrderWriteRepositoryTests(unittest.TestCase):
@@ -93,6 +95,72 @@ class OrderWriteRepositoryTests(unittest.TestCase):
         self.assertEqual(pedido["nome"], "Cliente Cafe")
         self.assertIn("cafe", pedido["pedido"])
         self.assertIn("bolo", pedido["pedido"])
+
+    def test_save_order_payload_fails_fast_on_incompatible_schema(self):
+        repository = SQLiteOrderWriteRepository()
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript(
+            """
+            CREATE TABLE clientes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                telefone TEXT NOT NULL
+            );
+            CREATE TABLE encomendas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                produto TEXT,
+                data_entrega TEXT
+            );
+            """
+        )
+
+        with patch("app.infrastructure.repositories.sqlite_order_write_repository.get_connection", return_value=conn):
+            order_id = repository.save_order_payload(
+                phone="5511999999999",
+                nome_cliente="Cliente Teste",
+                cliente_id=None,
+                dados={
+                    "categoria": "tradicional",
+                    "linha": "tradicional",
+                    "massa": "Chocolate",
+                    "recheio": "Brigadeiro",
+                    "mousse": "Ninho",
+                    "tamanho": "B3",
+                    "data_entrega": "08/03/2026",
+                    "horario_retirada": "14:00",
+                    "descricao": "Bolo tradicional",
+                    "valor_total": 120.0,
+                    "pagamento": {"forma": "PIX"},
+                },
+            )
+
+        self.assertEqual(order_id, -1)
+
+    def test_save_delivery_raises_on_incompatible_schema(self):
+        repository = SQLiteDeliveryWriteRepository()
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript(
+            """
+            CREATE TABLE entregas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                encomenda_id INTEGER NOT NULL,
+                status TEXT
+            );
+            """
+        )
+
+        with patch("app.infrastructure.repositories.sqlite_delivery_write_repository.get_connection", return_value=conn):
+            with self.assertRaises(sqlite3.OperationalError):
+                repository.save_delivery(
+                    encomenda_id=1,
+                    tipo="entrega",
+                    endereco="Rua Teste, 123",
+                    data_agendada="2026-03-20",
+                    status="pendente",
+                )
 
 
 if __name__ == "__main__":

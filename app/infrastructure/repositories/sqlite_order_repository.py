@@ -20,7 +20,8 @@ class SQLiteOrderRepository(OrderRepository):
                     e.horario,
                     e.valor_total,
                     COALESCE(d.status, 'pendente') AS status,
-                    COALESCE(d.tipo, 'entrega') AS tipo
+                    COALESCE(d.tipo, 'entrega') AS tipo,
+                    e.criado_em
                 FROM encomendas e
                 LEFT JOIN clientes c ON e.cliente_id = c.id
                 LEFT JOIN entregas d ON d.encomenda_id = e.id
@@ -39,6 +40,7 @@ class SQLiteOrderRepository(OrderRepository):
                     valor_total=row["valor_total"],
                     status=row["status"],
                     tipo=row["tipo"],
+                    criado_em=row["criado_em"],
                 )
                 for row in rows
             ]

@@ -3,6 +3,7 @@ from app.models.encomendas_doces import criar_tabela_encomenda_doces
 from app.models.entregas import criar_tabela_entregas
 from app.models.atendimentos import criar_tabela_atendimentos
 from app.models.cafeteria import criar_tabela_pedidos_cafeteria
+from app.models.customer_processes import criar_tabela_customer_processes
 from app.db.database import get_connection
 
 def criar_tabelas():
@@ -16,4 +17,5 @@ def criar_tabelas():
     criar_tabela_entregas(conn)
     criar_tabela_atendimentos(conn)
     criar_tabela_pedidos_cafeteria(conn)
+    criar_tabela_customer_processes(conn)
     conn.close()

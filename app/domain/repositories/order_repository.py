@@ -15,6 +15,7 @@ class OrderPanelItem:
     valor_total: float | None
     status: str
     tipo: str
+    criado_em: str | None
 
 
 class OrderRepository(Protocol):

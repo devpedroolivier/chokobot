@@ -182,12 +182,17 @@ class ConversationStateStore:
 
 
 def build_conversation_state_store() -> ConversationStateStore:
-    redis_url = get_settings().redis_url
+    settings = get_settings()
+    redis_url = settings.redis_url
     if not redis_url:
         return ConversationStateStore(InMemoryStateBackend())
 
     try:
         return ConversationStateStore(RedisStateBackend(redis_url))
     except Exception as exc:
+        if not settings.state_backend_fallback_enabled:
+            raise RuntimeError(
+                f"Redis state backend unavailable and fallback is disabled: {type(exc).__name__}"
+            ) from exc
         log_event("state_backend_fallback", backend="memory", reason=type(exc).__name__)
         return ConversationStateStore(InMemoryStateBackend())

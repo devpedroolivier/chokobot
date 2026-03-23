@@ -1,10 +1,16 @@
 import os
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 os.environ.setdefault("ZAPI_TOKEN", "test-token")
 os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
+from app.infrastructure.state.conversation_state_store import (
+    ConversationStateStore,
+    InMemoryStateBackend,
+    build_conversation_state_store,
+)
 from app.services.estados import (
     ai_sessions,
     clear_runtime_state,
@@ -42,6 +48,46 @@ class RuntimeStateStoreTests(unittest.TestCase):
         self.assertIn("5511999999999", ai_sessions)
         ai_sessions.clear()
         self.assertNotIn("5511999999999", ai_sessions)
+
+    def test_state_store_falls_back_to_memory_when_enabled(self):
+        fake_settings = type(
+            "Settings",
+            (),
+            {"redis_url": "redis://localhost:6379/0", "state_backend_fallback_enabled": True},
+        )()
+
+        with patch(
+            "app.infrastructure.state.conversation_state_store.get_settings",
+            return_value=fake_settings,
+        ):
+            with patch(
+                "app.infrastructure.state.conversation_state_store.RedisStateBackend",
+                side_effect=RuntimeError("redis_down"),
+            ):
+                store = build_conversation_state_store()
+
+        self.assertIsInstance(store, ConversationStateStore)
+        self.assertIsInstance(store.backend, InMemoryStateBackend)
+
+    def test_state_store_raises_when_fallback_is_disabled(self):
+        fake_settings = type(
+            "Settings",
+            (),
+            {"redis_url": "redis://localhost:6379/0", "state_backend_fallback_enabled": False},
+        )()
+
+        with patch(
+            "app.infrastructure.state.conversation_state_store.get_settings",
+            return_value=fake_settings,
+        ):
+            with patch(
+                "app.infrastructure.state.conversation_state_store.RedisStateBackend",
+                side_effect=RuntimeError("redis_down"),
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    build_conversation_state_store()
+
+        self.assertIn("fallback is disabled", str(ctx.exception))
 
 
 if __name__ == "__main__":

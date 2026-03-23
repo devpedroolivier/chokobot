@@ -1,13 +1,91 @@
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-import os
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
 from app.api.dependencies import get_order_repository
+from app.application.use_cases.panel_orders import build_create_order_payload, export_orders_txt
 from app.domain.repositories.order_repository import OrderRepository
+from app.infrastructure.web.admin_frontend import resolve_admin_frontend_url
 from app.infrastructure.web.templates import templates
 from app.security import require_panel_auth
 
 router = APIRouter(dependencies=[Depends(require_panel_auth)])
+
+
+class OrderCreatePayload(BaseModel):
+    nome: str
+    telefone: str
+    produto: str = ""
+    categoria: str = ""
+    linha: str = ""
+    tamanho: str = ""
+    massa: str = ""
+    recheio: str = ""
+    mousse: str = ""
+    adicional: str = ""
+    fruta_ou_nozes: str = ""
+    valor_total: str = "0"
+    data_entrega: str
+    horario: str = ""
+    horario_retirada: str = ""
+
+
+def build_orders_snapshot_payload(
+    rows: list[tuple],
+    *,
+    statuses_by_id: dict[int, str] | None = None,
+) -> dict:
+    items = []
+    for row in rows:
+        order_id = int(row[0])
+        items.append(
+            {
+                "id": order_id,
+                "cliente_nome": row[1],
+                "cliente_telefone": row[2],
+                "categoria": row[3],
+                "massa": row[4],
+                "recheio": row[5],
+                "mousse": row[6],
+                "adicional": row[7],
+                "tamanho": row[8],
+                "gourmet": row[9],
+                "entrega": row[10],
+                "criado_em": row[11],
+                "status": (statuses_by_id or {}).get(order_id, "pendente"),
+            }
+        )
+    return {"items": items, "count": len(items)}
+
+
+def build_order_details_snapshot_payload(order_details: dict | None) -> dict:
+    if order_details is None:
+        return {"item": None}
+
+    return {
+        "item": {
+            "id": order_details.get("id"),
+            "cliente_nome": order_details.get("cliente_nome"),
+            "categoria": order_details.get("categoria"),
+            "produto": order_details.get("produto"),
+            "tamanho": order_details.get("tamanho"),
+            "massa": order_details.get("massa"),
+            "recheio": order_details.get("recheio"),
+            "mousse": order_details.get("mousse"),
+            "adicional": order_details.get("adicional"),
+            "descricao": order_details.get("descricao"),
+            "fruta_ou_nozes": order_details.get("fruta_ou_nozes"),
+            "kit_festou": order_details.get("kit_festou"),
+            "quantidade": order_details.get("quantidade"),
+            "serve_pessoas": order_details.get("serve_pessoas"),
+            "data_entrega": order_details.get("data_entrega"),
+            "horario": order_details.get("horario"),
+            "horario_retirada": order_details.get("horario_retirada"),
+            "valor_total": order_details.get("valor_total"),
+            "status": order_details.get("status"),
+            "criado_em": order_details.get("criado_em"),
+        }
+    }
 
 
 @router.get("/painel/encomendas", response_class=HTMLResponse)
@@ -15,6 +93,10 @@ async def listar_encomendas(
     request: Request,
     repository: OrderRepository = Depends(get_order_repository),
 ):
+    frontend_url = resolve_admin_frontend_url("/encomendas")
+    if frontend_url:
+        return RedirectResponse(url=frontend_url, status_code=302)
+
     encomendas = repository.list_for_orders_page()
     return templates.TemplateResponse(
         "encomendas.html",
@@ -22,25 +104,34 @@ async def listar_encomendas(
     )
 
 
+@router.get("/painel/api/encomendas")
+async def listar_encomendas_snapshot(
+    repository: OrderRepository = Depends(get_order_repository),
+):
+    statuses_by_id = {
+        item.id: item.status
+        for item in repository.list_for_main_panel()
+    }
+    payload = build_orders_snapshot_payload(
+        repository.list_for_orders_page(),
+        statuses_by_id=statuses_by_id,
+    )
+    return JSONResponse(payload)
+
+
 @router.get("/painel/encomendas/exportar")
 async def exportar_encomendas_txt(
     repository: OrderRepository = Depends(get_order_repository),
 ):
-    registros = repository.export_rows()
-
-    os.makedirs("dados", exist_ok=True)
-    caminho = "dados/export_encomendas.txt"
-
-    with open(caminho, "w", encoding="utf-8") as f:
-        for r in registros:
-            cliente, produto, data, valor, status = r
-            f.write(f"{cliente} | {produto or '-'} | {data or '-'} | R${valor or '0,00'} | {status}\n")
-
-    return FileResponse(caminho, filename="encomendas.txt", media_type="text/plain")
+    caminho = export_orders_txt(repository, "dados/export_encomendas.txt")
+    return FileResponse(str(caminho), filename="encomendas.txt", media_type="text/plain")
 
 
 @router.get("/painel/encomendas/novo", response_class=HTMLResponse)
 def novo_encomenda_form(request: Request):
+    frontend_url = resolve_admin_frontend_url("/encomendas/nova")
+    if frontend_url:
+        return RedirectResponse(url=frontend_url, status_code=302)
     return templates.TemplateResponse(
         "encomendas_form.html",
         {"request": request, "encomenda": None},
@@ -66,23 +157,24 @@ def salvar_encomenda_form(
     horario_retirada: str = Form(""),
     repository: OrderRepository = Depends(get_order_repository),
 ):
-    categoria_final = categoria or linha or "tradicional"
-    adicional_final = adicional or fruta_ou_nozes
-    horario_final = horario or horario_retirada
-
     repository.create_order(
-        nome=nome,
-        telefone=telefone,
-        categoria=categoria_final,
-        produto=produto,
-        tamanho=tamanho,
-        massa=massa,
-        recheio=recheio,
-        mousse=mousse,
-        adicional=adicional_final,
-        horario=horario_final,
-        valor_total=valor_total,
-        data_entrega=data_entrega,
+        **build_create_order_payload(
+            nome=nome,
+            telefone=telefone,
+            produto=produto,
+            categoria=categoria,
+            linha=linha,
+            tamanho=tamanho,
+            massa=massa,
+            recheio=recheio,
+            mousse=mousse,
+            adicional=adicional,
+            fruta_ou_nozes=fruta_ou_nozes,
+            valor_total=valor_total,
+            data_entrega=data_entrega,
+            horario=horario,
+            horario_retirada=horario_retirada,
+        )
     )
     return RedirectResponse(url="/painel/encomendas", status_code=303)
 
@@ -102,6 +194,10 @@ async def detalhes_encomenda(
     id: int,
     repository: OrderRepository = Depends(get_order_repository),
 ):
+    frontend_url = resolve_admin_frontend_url(f"/encomendas/{id}")
+    if frontend_url:
+        return RedirectResponse(url=frontend_url, status_code=302)
+
     encomenda = repository.get_order_details(id)
     if encomenda is None:
         return HTMLResponse("<h3>Encomenda não encontrada.</h3>", status_code=404)
@@ -110,3 +206,61 @@ async def detalhes_encomenda(
         "encomenda_detalhes.html",
         {"request": request, "encomenda": encomenda},
     )
+
+
+@router.get("/painel/api/encomendas/{id}")
+async def detalhes_encomenda_snapshot(
+    id: int,
+    repository: OrderRepository = Depends(get_order_repository),
+):
+    payload = build_order_details_snapshot_payload(repository.get_order_details(id))
+    status_code = 404 if payload["item"] is None else 200
+    return JSONResponse(payload, status_code=status_code)
+
+
+@router.post("/painel/api/encomendas")
+def criar_encomenda_snapshot(
+    payload: OrderCreatePayload,
+    repository: OrderRepository = Depends(get_order_repository),
+):
+    if not payload.nome.strip() or not payload.telefone.strip() or not payload.data_entrega.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_order_payload")
+
+    order_id = repository.create_order(
+        **build_create_order_payload(
+            nome=payload.nome,
+            telefone=payload.telefone,
+            produto=payload.produto,
+            categoria=payload.categoria,
+            linha=payload.linha,
+            tamanho=payload.tamanho,
+            massa=payload.massa,
+            recheio=payload.recheio,
+            mousse=payload.mousse,
+            adicional=payload.adicional,
+            fruta_ou_nozes=payload.fruta_ou_nozes,
+            valor_total=payload.valor_total,
+            data_entrega=payload.data_entrega,
+            horario=payload.horario,
+            horario_retirada=payload.horario_retirada,
+        )
+    )
+    return JSONResponse(
+        {
+            "ok": True,
+            "id": order_id,
+            "item": build_order_details_snapshot_payload(repository.get_order_details(order_id))["item"],
+        },
+        status_code=201,
+    )
+
+
+@router.delete("/painel/api/encomendas/{id}")
+def excluir_encomenda_snapshot(
+    id: int,
+    repository: OrderRepository = Depends(get_order_repository),
+):
+    if repository.get_order_details(id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="order_not_found")
+    repository.delete_order(id)
+    return JSONResponse({"ok": True, "id": id})

@@ -18,13 +18,6 @@ def _get_id_from_row(row):
         return row[0] if len(row) else None
 
 
-def _existing_columns(conn: sqlite3.Connection, table: str, candidates: list[str]) -> list[str]:
-    cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({table});")
-    existing = {r[1] for r in cur.fetchall()}
-    return [c for c in candidates if c in existing]
-
-
 class SQLiteOrderWriteRepository(OrderWriteRepository):
     def _get_or_create_customer_id(
         self,
@@ -93,19 +86,14 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
             data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             itens_str = ", ".join(itens or [])
 
-            cols = _existing_columns(conn, "pedidos_cafeteria", ["cliente_id", "itens", "pedido", "criado_em"])
-            placeholders = ", ".join("?" for _ in cols)
-            sql = f"INSERT INTO pedidos_cafeteria ({', '.join(cols)}) VALUES ({placeholders})"
-
-            values_map = {
-                "cliente_id": cliente_id,
-                "itens": itens_str,
-                "pedido": itens_str,
-                "criado_em": data_hora,
-            }
-
             cur = conn.cursor()
-            cur.execute(sql, [values_map.get(c) for c in cols])
+            cur.execute(
+                """
+                INSERT INTO pedidos_cafeteria (cliente_id, pedido, criado_em)
+                VALUES (?, ?, ?)
+                """,
+                (cliente_id, itens_str, data_hora),
+            )
             conn.commit()
             log_event(
                 "cafeteria_order_saved",
@@ -138,39 +126,43 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
             )
 
             payload = self._order_payload(dados, resolved_cliente_id)
-            candidate_cols = [
-                "cliente_id",
-                "categoria",
-                "linha",
-                "massa",
-                "recheio",
-                "mousse",
-                "adicional",
-                "tamanho",
-                "gourmet",
-                "entrega",
-                "data_entrega",
-                "horario_retirada",
-                "descricao",
-                "valor_total",
-                "serve_pessoas",
-                "produto",
-                "quantidade",
-                "kit_festou",
-                "fruta_ou_nozes",
-                "forma_pagamento",
-                "troco_para",
-                "horario",
-            ]
-            cols = _existing_columns(conn, "encomendas", candidate_cols)
-            values_map = dict(payload)
-            values_map.setdefault("horario", payload.get("horario_retirada"))
-
-            placeholders = ", ".join("?" for _ in cols)
-            sql = f"INSERT INTO encomendas ({', '.join(cols)}) VALUES ({placeholders})"
-
             cur = conn.cursor()
-            cur.execute(sql, [values_map.get(c) for c in cols])
+            cur.execute(
+                """
+                INSERT INTO encomendas (
+                    cliente_id,
+                    categoria,
+                    produto,
+                    tamanho,
+                    massa,
+                    recheio,
+                    mousse,
+                    adicional,
+                    kit_festou,
+                    quantidade,
+                    data_entrega,
+                    horario,
+                    valor_total,
+                    serve_pessoas
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    resolved_cliente_id,
+                    payload.get("categoria"),
+                    payload.get("produto"),
+                    payload.get("tamanho"),
+                    payload.get("massa"),
+                    payload.get("recheio"),
+                    payload.get("mousse"),
+                    payload.get("adicional"),
+                    payload.get("kit_festou"),
+                    payload.get("quantidade"),
+                    payload.get("data_entrega"),
+                    payload.get("horario_retirada"),
+                    payload.get("valor_total"),
+                    payload.get("serve_pessoas"),
+                ),
+            )
             encomenda_id = cur.lastrowid
             conn.commit()
             log_event(

@@ -12,7 +12,9 @@ from app.application.ports.conversation_gateway import ConversationGateway
 from app.application.ports.delivery_gateway import DeliveryGateway
 from app.application.ports.messaging_gateway import MessagingGateway
 from app.application.ports.order_gateway import OrderGateway
+from app.domain.repositories.customer_process_repository import CustomerProcessRepository
 from app.domain.repositories.customer_repository import CustomerRepository
+from app.domain.repositories.order_repository import OrderRepository
 from app.settings import get_settings
 
 
@@ -56,6 +58,20 @@ def get_customer_repository() -> CustomerRepository:
     from app.infrastructure.repositories.sqlite_customer_repository import SQLiteCustomerRepository
 
     return SQLiteCustomerRepository()
+
+
+@lru_cache
+def get_customer_process_repository() -> CustomerProcessRepository:
+    from app.infrastructure.repositories.sqlite_customer_process_repository import SQLiteCustomerProcessRepository
+
+    return SQLiteCustomerProcessRepository()
+
+
+@lru_cache
+def get_order_repository() -> OrderRepository:
+    from app.infrastructure.repositories.sqlite_order_repository import SQLiteOrderRepository
+
+    return SQLiteOrderRepository()
 
 
 @lru_cache

@@ -71,7 +71,7 @@
           </td>
           <td class="p-3">{{ e[11] or '-' }}</td>
           <td class="p-3 space-x-2">
-            <a href="/painel/encomendas/{{ e[0] }}/editar" class="text-blue-600 hover:underline">Editar</a>
+            <a href="/painel/encomendas/{{ e[0] }}" class="text-blue-600 hover:underline">Detalhes</a>
             <form method="post" action="/painel/encomendas/{{ e[0] }}/excluir" class="inline">
               <button type="submit" class="text-red-600 hover:underline" onclick="return confirm('Deseja excluir esta encomenda?')">
                 Excluir

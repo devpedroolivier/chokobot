@@ -13,6 +13,12 @@ Base FastAPI para operacao do Chokobot, com modo monolitico e modo `split` entre
 cp .env.example .env
 ```
 
+Para ligar o admin moderno em `Next.js`, crie tambem o ambiente do frontend:
+
+```bash
+cp frontend/.env.local.example frontend/.env.local
+```
+
 2. Instale as dependencias:
 
 ```bash
@@ -29,6 +35,12 @@ make test
 
 ```bash
 make run
+```
+
+5. Se for usar o admin moderno, suba o frontend:
+
+```bash
+cd frontend && npm install && npm run dev
 ```
 
 ## Comandos principais
@@ -57,15 +69,36 @@ Arquivos como `tests/test_ai_advanced.py`, `tests/test_ai_agent.py`, `tests/test
 
 ## Ambientes e portas
 - Monolito via Docker Compose: `http://localhost:8003`
+- Admin moderno `Next.js` local: `http://localhost:3000`
 - `edge` no perfil `split`: `http://localhost:8004`
 - `conversation` no perfil `split`: `http://localhost:8005`
 - Redis no perfil `split`: `6379`
+
+## Admin moderno
+Variaveis minimas para o fluxo novo:
+
+- FastAPI `.env`:
+  - `PANEL_AUTH_ENABLED=1`
+  - `PANEL_AUTH_USERNAME=...`
+  - `PANEL_AUTH_PASSWORD=...`
+  - `ADMIN_FRONTEND_URL=http://localhost:3000`
+- Next.js `frontend/.env.local`:
+  - `PANEL_BACKEND_URL=http://localhost:8000`
+  - `ADMIN_SESSION_SECRET=...`
+
+Fluxo esperado:
+- o login acontece no Next em `/login`
+- o Next valida as credenciais contra o painel FastAPI
+- a sessao fica em cookie HTTP-only no frontend
+- quando `ADMIN_FRONTEND_URL` estiver configurado, `/painel`, `/painel/clientes` e `/painel/encomendas` no FastAPI redirecionam para o admin moderno
 
 ## Estrutura
 - `app/`: aplicacao FastAPI e modulos de dominio
 - `tests/`: testes automatizados e alguns cenarios exploratorios legados
 - `scripts/`: utilitarios de operacao e execucao
 - `docs/`: arquitetura, roadmap e planos de execucao
+- `docs/project-general-analysis.md`: analise consolidada do estado atual e prioridades de melhoria
+- `docs/admin-modernization-rollout.md`: consolidado do rollout do admin moderno, validacoes e pendencias
 - `dados/`: artefatos locais de runtime
 
 ## Observacoes
