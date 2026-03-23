@@ -34,6 +34,19 @@ npm install
 npm run dev
 ```
 
+## Docker
+
+The project root `docker-compose.yml` can now publish the admin frontend as a dedicated
+service on port `3000`.
+
+Important variables for containerized deployment:
+
+- `ADMIN_SESSION_SECRET`
+- `ADMIN_FRONTEND_URL` on the FastAPI side, pointing to the public admin URL
+- `PANEL_AUTH_ENABLED=1`
+- `PANEL_AUTH_USERNAME`
+- `PANEL_AUTH_PASSWORD`
+
 ## Current Scope
 
 - consumes `GET /painel/api/snapshot`

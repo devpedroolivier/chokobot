@@ -43,6 +43,12 @@ make run
 cd frontend && npm install && npm run dev
 ```
 
+Ou suba backend + admin moderno via Docker Compose:
+
+```bash
+docker compose up --build -d
+```
+
 ## Comandos principais
 - `make install`: instala dependencias da aplicacao
 - `make install-dev`: instala dependencias da aplicacao e de desenvolvimento
@@ -81,7 +87,8 @@ Variaveis minimas para o fluxo novo:
   - `PANEL_AUTH_ENABLED=1`
   - `PANEL_AUTH_USERNAME=...`
   - `PANEL_AUTH_PASSWORD=...`
-  - `ADMIN_FRONTEND_URL=http://localhost:3000`
+  - `ADMIN_SESSION_SECRET=...`
+  - `ADMIN_FRONTEND_URL=http://SEU_HOST:3000`
 - Next.js `frontend/.env.local`:
   - `PANEL_BACKEND_URL=http://localhost:8000`
   - `ADMIN_SESSION_SECRET=...`
@@ -91,6 +98,13 @@ Fluxo esperado:
 - o Next valida as credenciais contra o painel FastAPI
 - a sessao fica em cookie HTTP-only no frontend
 - quando `ADMIN_FRONTEND_URL` estiver configurado, `/painel`, `/painel/clientes` e `/painel/encomendas` no FastAPI redirecionam para o admin moderno
+
+Publicacao no servidor com Docker Compose:
+- o servico `chokobot` continua exposto em `8003`
+- o servico `chokobot-admin` sobe o Next.js em `3000`
+- dentro do Compose, o admin usa `PANEL_BACKEND_URL=http://chokobot:8000`
+- para acesso externo, configure `ADMIN_FRONTEND_URL` com uma URL publica real do servidor
+- nao use `http://localhost:3000` em producao remota
 
 ## Estrutura
 - `app/`: aplicacao FastAPI e modulos de dominio

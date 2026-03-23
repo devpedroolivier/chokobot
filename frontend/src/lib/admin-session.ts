@@ -38,11 +38,16 @@ export function buildBasicAuthHeader(username: string, password: string): string
   return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 }
 
+function shouldUseSecureCookies(): boolean {
+  const publicBaseUrl = process.env.ADMIN_PUBLIC_URL || process.env.NEXT_PUBLIC_ADMIN_URL || "";
+  return publicBaseUrl.startsWith("https://");
+}
+
 export function sessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     path: "/",
     maxAge: ADMIN_SESSION_MAX_AGE_SECONDS,
   };

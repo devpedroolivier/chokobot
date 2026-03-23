@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin-session-constants";
+import { resolveAdminPublicUrl } from "@/lib/public-url";
 
 function isPublicPath(pathname: string): boolean {
   return (
@@ -26,7 +27,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ detail: "admin_session_required" }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = resolveAdminPublicUrl("/login", request.url);
   loginUrl.searchParams.set("error", "session_required");
   loginUrl.searchParams.set("next", `${pathname}${search}`);
   return NextResponse.redirect(loginUrl);

@@ -6,14 +6,15 @@ import {
   verifyPanelCredentials,
 } from "@/lib/admin-session";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin-session-constants";
+import { resolveAdminPublicUrl } from "@/lib/public-url";
 
 function resolveRedirectTarget(request: NextRequest, rawPath: string | null): URL {
   const safePath = rawPath && rawPath.startsWith("/") && !rawPath.startsWith("//") ? rawPath : "/";
-  return new URL(safePath, request.url);
+  return resolveAdminPublicUrl(safePath, request.url);
 }
 
 function resolveLoginRedirect(request: NextRequest, error: string, nextPath: string | null): NextResponse {
-  const target = new URL("/login", request.url);
+  const target = resolveAdminPublicUrl("/login", request.url);
   target.searchParams.set("error", error);
   if (nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")) {
     target.searchParams.set("next", nextPath);
