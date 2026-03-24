@@ -19,6 +19,16 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("ULTIMA mensagem do cliente", SWEET_ORDER_PROMPT)
         self.assertIn('"confirmo"', SWEET_ORDER_PROMPT)
 
+    def test_cake_order_prompt_lists_valid_fillings_and_separates_categories(self):
+        self.assertIn("Recheios validos: Beijinho, Brigadeiro, Brigadeiro de Nutella", CAKE_ORDER_PROMPT)
+        self.assertIn("Adicionais validos: Morango, Ameixa, Nozes, Cereja, Abacaxi.", CAKE_ORDER_PROMPT)
+        self.assertIn("NUNCA liste mousse como se fosse recheio.", CAKE_ORDER_PROMPT)
+        self.assertIn('Se o cliente perguntar "quais recheios temos?", responda listando apenas recheios.', CAKE_ORDER_PROMPT)
+        self.assertIn("Temos estes recheios:", CAKE_ORDER_PROMPT)
+        self.assertIn("chame `get_cake_options`", CAKE_ORDER_PROMPT)
+        self.assertIn("sem resumir, sem omitir itens e sem misturar categorias", CAKE_ORDER_PROMPT)
+
+
 
 if __name__ == "__main__":
     unittest.main()

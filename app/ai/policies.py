@@ -83,19 +83,26 @@ def normalize_intent_text(text: str) -> str:
     return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
 
 
+def _mentions_non_easter_egg_context(normalized: str) -> bool:
+    patterns = (
+        r"\b(pao|lanche|misto|croissant|sanduiche|sanduíche|omelete|tapioca)\b.*\bovo\b",
+        r"\bovo\b.*\b(oregano|orégano|misto|lanche|croissant|sanduiche|sanduíche|omelete|tapioca)\b",
+        r"\bsem\b.*\bovo\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
 def requests_easter_catalog(text: str) -> bool:
     normalized = normalize_intent_text(text)
+    if re.search(r"\bovos?\b", normalized):
+        return not _mentions_non_easter_egg_context(normalized)
+
     patterns = (
         r"\bpascoa\b",
-        r"\bovo(s)?\s+de\s+pascoa\b",
         r"\bcardapio\s+de\s+pascoa\b",
-        r"\bovo(s)?\s+de\s+chocolate\b",
-        r"\bovo(s)?\s+rechead[oa]s?\b",
-        r"\bovo(s)?\s+de\s+colher\b",
         r"\bcasca\s+recheada\b",
         r"\bcoelho\s+de\s+pascoa\b",
-        r"\bovo(s)?\b.*\b(prestigio|prestigio|brigadeiro|ninho|pistache|oreo|rechead[oa])\b",
-        r"\b(prestigio|prestigio|brigadeiro|ninho|pistache|oreo)\b.*\bovo(s)?\b",
+        r"\bpre[\s-]?pascoa\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 

@@ -27,6 +27,7 @@ from app.ai.tools import (
     create_cake_order,
     create_sweet_order,
     escalate_to_human,
+    get_cake_options,
     get_learnings,
     get_menu,
     save_learning,
@@ -43,6 +44,7 @@ CONVERSATIONS = ai_sessions
 @dataclass(frozen=True)
 class AIRuntime:
     get_menu: Any
+    get_cake_options: Any
     get_learnings: Any
     save_learning: Any
     escalate_to_human: Any
@@ -53,6 +55,7 @@ class AIRuntime:
 def get_default_ai_runtime() -> AIRuntime:
     return AIRuntime(
         get_menu=get_menu,
+        get_cake_options=get_cake_options,
         get_learnings=get_learnings,
         save_learning=save_learning,
         escalate_to_human=escalate_to_human,
@@ -107,6 +110,52 @@ def _assistant_message_to_dict(message) -> dict:
     return payload
 
 
+def _sanitize_session_messages(messages: list[dict]) -> tuple[list[dict], int]:
+    cleaned: list[dict] = []
+    pending_assistant: dict | None = None
+    pending_tools: list[dict] = []
+    expected_tool_ids: set[str] = set()
+    dropped_messages = 0
+
+    for message in messages:
+        role = message.get("role")
+
+        if pending_assistant is not None:
+            if role == "tool" and message.get("tool_call_id") in expected_tool_ids:
+                pending_tools.append(message)
+                expected_tool_ids.discard(message["tool_call_id"])
+                if not expected_tool_ids:
+                    cleaned.append(pending_assistant)
+                    cleaned.extend(pending_tools)
+                    pending_assistant = None
+                    pending_tools = []
+                continue
+
+            dropped_messages += 1 + len(pending_tools)
+            pending_assistant = None
+            pending_tools = []
+            expected_tool_ids = set()
+
+        if role == "assistant" and message.get("tool_calls"):
+            tool_ids = {tool_call.get("id") for tool_call in message.get("tool_calls", []) if tool_call.get("id")}
+            if tool_ids:
+                pending_assistant = message
+                expected_tool_ids = tool_ids
+                pending_tools = []
+                continue
+
+        if role == "tool":
+            dropped_messages += 1
+            continue
+
+        cleaned.append(message)
+
+    if pending_assistant is not None:
+        dropped_messages += 1 + len(pending_tools)
+
+    return cleaned, dropped_messages
+
+
 def save_session(telefone: str, session: dict) -> None:
     CONVERSATIONS[telefone] = session
 
@@ -118,6 +167,11 @@ def get_or_create_session(telefone: str) -> Dict[str, Any]:
             "current_agent": "TriageAgent",
         }
         save_session(telefone, session)
+    else:
+        sanitized_messages, dropped_messages = _sanitize_session_messages(list(session.get("messages", [])))
+        if dropped_messages:
+            session["messages"] = sanitized_messages
+            save_session(telefone, session)
     return session
 
 
@@ -208,6 +262,17 @@ async def process_message_with_ai(
     session = get_or_create_session(telefone)
     runtime = runtime or get_default_ai_runtime()
     active_client = ai_client or get_ai_client()
+
+    sanitized_messages, dropped_messages = _sanitize_session_messages(list(session.get("messages", [])))
+    if dropped_messages:
+        session["messages"] = sanitized_messages
+        save_session(telefone, session)
+        log_event(
+            "ai_session_history_repaired",
+            phone_hash=telefone[-4:] if telefone else "anon",
+            agent=session.get("current_agent", "unknown"),
+            dropped_messages=dropped_messages,
+        )
     
     if not session["messages"]:
         bootstrap_session(session, now, runtime)

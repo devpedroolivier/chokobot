@@ -64,6 +64,7 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         )
         runtime = runner.AIRuntime(
             get_menu=lambda category="todas": f"menu:{category}",
+            get_cake_options=lambda category="tradicional", option_type="recheio": f"cake-options:{category}:{option_type}",
             get_learnings=lambda: "regra de teste",
             save_learning=lambda aprendizado: f"saved:{aprendizado}",
             escalate_to_human=lambda telefone, motivo: "ok",
@@ -88,6 +89,57 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         tool_messages = [message for message in second_messages if message["role"] == "tool"]
         self.assertTrue(tool_messages)
         self.assertEqual(tool_messages[-1]["content"], "menu:pronta_entrega")
+
+    async def test_process_message_with_ai_repairs_dangling_tool_call_history(self):
+        create_mock = AsyncMock(
+            return_value=SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="Olá! Como posso te ajudar?", tool_calls=[]))],
+                usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+            )
+        )
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        runner.CONVERSATIONS["5511999999999"] = {
+            "current_agent": "CafeteriaAgent",
+            "messages": [
+                {"role": "system", "content": "prompt antigo"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "tool-1",
+                            "type": "function",
+                            "function": {"name": "transfer_to_agent", "arguments": '{"agent_name":"CafeteriaAgent"}'},
+                        }
+                    ],
+                },
+            ],
+        }
+
+        reply = await runner.process_message_with_ai(
+            "5511999999999",
+            "oi",
+            "Teste",
+            1,
+            ai_client=fake_client,
+            runtime=runner.AIRuntime(
+                get_menu=lambda category="todas": "menu",
+                get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+                get_learnings=lambda: "",
+                save_learning=lambda aprendizado: aprendizado,
+                escalate_to_human=lambda telefone, motivo: "ok",
+                create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+                create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+            ),
+        )
+
+        self.assertEqual(reply, "Olá! Como posso te ajudar?")
+        messages = create_mock.await_args.kwargs["messages"]
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        self.assertEqual(messages[1]["content"], "oi")
 
 
 if __name__ == "__main__":

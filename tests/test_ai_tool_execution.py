@@ -15,6 +15,7 @@ class AIToolExecutionTests(unittest.TestCase):
         saved = []
         runtime = runner.AIRuntime(
             get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
             get_learnings=lambda: "",
             save_learning=lambda aprendizado: aprendizado,
             escalate_to_human=lambda telefone, motivo: "ok",
@@ -43,6 +44,7 @@ class AIToolExecutionTests(unittest.TestCase):
         calls = []
         runtime = runner.AIRuntime(
             get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
             get_learnings=lambda: "",
             save_learning=lambda aprendizado: aprendizado,
             escalate_to_human=lambda telefone, motivo: calls.append((telefone, motivo)),
@@ -74,6 +76,7 @@ class AIToolExecutionTests(unittest.TestCase):
         persisted_calls = []
         runtime = runner.AIRuntime(
             get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
             get_learnings=lambda: "",
             save_learning=lambda aprendizado: aprendizado,
             escalate_to_human=lambda telefone, motivo: "ok",
@@ -126,6 +129,7 @@ class AIToolExecutionTests(unittest.TestCase):
         persisted_calls = []
         runtime = runner.AIRuntime(
             get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
             get_learnings=lambda: "",
             save_learning=lambda aprendizado: aprendizado,
             escalate_to_human=lambda telefone, motivo: "ok",
@@ -155,6 +159,32 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertEqual(session["messages"], [])
         self.assertEqual(saved[0][0], "5511999999999")
         self.assertIn("pedido foi finalizado", tool_result)
+
+    def test_get_cake_options_uses_runtime_and_keeps_run_active(self):
+        session = {"messages": [], "current_agent": "CakeOrderAgent"}
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": f"{category}:{option_type}",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+        )
+
+        should_return, tool_result = handle_tool_call(
+            runtime=runtime,
+            function_name="get_cake_options",
+            arguments={"category": "tradicional", "option_type": "recheio"},
+            telefone="5511999999999",
+            nome_cliente="Cliente",
+            cliente_id=1,
+            session=session,
+            save_session_fn=lambda telefone, state: None,
+        )
+
+        self.assertFalse(should_return)
+        self.assertEqual(tool_result, "tradicional:recheio")
 
 
 if __name__ == "__main__":

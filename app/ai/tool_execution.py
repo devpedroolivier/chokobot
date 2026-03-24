@@ -108,6 +108,11 @@ def handle_tool_call(
             tool_result = f"Erro: Agente {new_agent} não existe."
     elif function_name == "get_menu":
         tool_result = runtime.get_menu(arguments.get("category", "todas"))
+    elif function_name == "get_cake_options":
+        tool_result = runtime.get_cake_options(
+            arguments.get("category", "tradicional"),
+            arguments.get("option_type", "recheio"),
+        )
     elif function_name == "get_learnings":
         tool_result = runtime.get_learnings()
     elif function_name == "save_learning":

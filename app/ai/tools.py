@@ -32,15 +32,59 @@ from app.services.precos import (
 #  Constantes de validação
 # ============================================================
 
-MASSAS_VALIDAS = {"Branca", "Chocolate", "Mesclada"}
+MASSAS_TRADICIONAIS = ("Branca", "Chocolate", "Mesclada")
+MASSAS_VALIDAS = set(MASSAS_TRADICIONAIS)
 
-RECHEIOS_VALIDOS = {
-    "Beijinho", "Brigadeiro", "Brigadeiro de Nutella",
-    "Brigadeiro Branco Gourmet", "Brigadeiro Branco de Ninho",
-    "Casadinho", "Doce de Leite",
+RECHEIOS_TRADICIONAIS = (
+    "Beijinho",
+    "Brigadeiro",
+    "Brigadeiro de Nutella",
+    "Brigadeiro Branco Gourmet",
+    "Brigadeiro Branco de Ninho",
+    "Casadinho",
+    "Doce de Leite",
+)
+RECHEIOS_VALIDOS = set(RECHEIOS_TRADICIONAIS)
+
+MOUSSES_TRADICIONAIS = ("Ninho", "Trufa Branca", "Chocolate", "Trufa Preta")
+MOUSSES_VALIDOS = set(MOUSSES_TRADICIONAIS)
+
+ADICIONAIS_TRADICIONAIS = ("Morango", "Ameixa", "Nozes", "Cereja", "Abacaxi")
+TAMANHOS_TRADICIONAIS = ("B3", "B4", "B6", "B7")
+
+MASSAS_MESVERSARIO = ("Branca", "Chocolate")
+RECHEIOS_MESVERSARIO = (
+    "Brigadeiro com Ninho",
+    "Brigadeiro de Nutella com Ninho",
+    "Brigadeiro e Beijinho",
+    "Casadinho",
+    "Brigadeiro Branco Gourmet com Ninho",
+    "Brigadeiro Branco de Ninho com Ninho",
+    "Beijinho com Ninho",
+    "Doce de Leite e Brigadeiro",
+    "Doce de Leite com Ninho",
+)
+TAMANHOS_MESVERSARIO = ("P4", "P6")
+
+CAKE_OPTION_LABELS = {
+    "massa": "massas",
+    "tamanho": "tamanhos",
+    "recheio": "recheios",
+    "mousse": "mousses",
+    "adicional": "adicionais",
 }
 
-MOUSSES_VALIDOS = {"Ninho", "Trufa Branca", "Chocolate", "Trufa Preta"}
+CAKE_OPTION_VALUES = {
+    ("tradicional", "massa"): MASSAS_TRADICIONAIS,
+    ("tradicional", "tamanho"): TAMANHOS_TRADICIONAIS,
+    ("tradicional", "recheio"): RECHEIOS_TRADICIONAIS,
+    ("tradicional", "mousse"): MOUSSES_TRADICIONAIS,
+    ("tradicional", "adicional"): ADICIONAIS_TRADICIONAIS,
+    ("mesversario", "massa"): MASSAS_MESVERSARIO,
+    ("mesversario", "tamanho"): TAMANHOS_MESVERSARIO,
+    ("mesversario", "recheio"): RECHEIOS_MESVERSARIO,
+    ("mesversario", "mousse"): ("Chocolate",),
+}
 
 TAMANHOS_BOLO = {"B3", "B4", "B6", "B7", "P4", "P6"}
 
@@ -73,6 +117,44 @@ def _match_closest(valor: str, validos: set[str]) -> str | None:
         if v.lower() == valid.lower():
             return valid
     return None
+
+
+def _join_option_values(values: tuple[str, ...]) -> str:
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    return ", ".join(values[:-1]) + f" e {values[-1]}"
+
+
+def _normalize_cake_option_category(category: str) -> str:
+    normalized = (category or "tradicional").strip().lower()
+    aliases = {
+        "tradicional": "tradicional",
+        "bolo tradicional": "tradicional",
+        "mesversario": "mesversario",
+        "mesversário": "mesversario",
+        "revelacao": "mesversario",
+        "revelação": "mesversario",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _normalize_cake_option_type(option_type: str) -> str:
+    normalized = (option_type or "recheio").strip().lower()
+    aliases = {
+        "massa": "massa",
+        "massas": "massa",
+        "tamanho": "tamanho",
+        "tamanhos": "tamanho",
+        "recheio": "recheio",
+        "recheios": "recheio",
+        "mousse": "mousse",
+        "mousses": "mousse",
+        "adicional": "adicional",
+        "adicionais": "adicional",
+    }
+    return aliases.get(normalized, normalized)
 
 
 def _validar_campos_bolo(dados: dict) -> list[str]:
@@ -380,6 +462,46 @@ class SweetOrderSchema(BaseModel):
 def get_menu(category: str = "todas") -> str:
     """Retorna o cardapio completo ou filtrado entre pronta entrega e encomendas."""
     return get_catalog_gateway().get_menu(category)
+
+
+def get_cake_options(category: str = "tradicional", option_type: str = "recheio") -> str:
+    """Retorna a lista canonica de opcoes de bolo em formato pronto para resposta ao cliente."""
+    normalized_category = _normalize_cake_option_category(category)
+    normalized_option_type = _normalize_cake_option_type(option_type)
+    values = CAKE_OPTION_VALUES.get((normalized_category, normalized_option_type))
+
+    if not values:
+        return (
+            "Nao encontrei opcoes cadastradas para "
+            f"{normalized_option_type} na categoria {normalized_category}."
+        )
+
+    label = CAKE_OPTION_LABELS.get(normalized_option_type, normalized_option_type)
+    joined_values = _join_option_values(values)
+
+    if normalized_category == "tradicional":
+        if normalized_option_type == "recheio":
+            return f"Temos estes recheios: {joined_values}. Se escolher Casadinho, nao precisa de mousse."
+        if normalized_option_type == "mousse":
+            return f"Temos estes mousses: {joined_values}."
+        if normalized_option_type == "adicional":
+            return f"Temos estes adicionais: {joined_values}."
+        if normalized_option_type == "massa":
+            return f"Temos estas massas: {joined_values}."
+        if normalized_option_type == "tamanho":
+            return f"Os tamanhos disponiveis para bolo tradicional sao: {joined_values}."
+
+    if normalized_category == "mesversario":
+        if normalized_option_type == "recheio":
+            return f"Temos estes recheios para mesversario: {joined_values}."
+        if normalized_option_type == "mousse":
+            return "No mesversario, a troca opcional de mousse disponivel e Chocolate."
+        if normalized_option_type == "massa":
+            return f"As massas disponiveis para mesversario sao: {joined_values}."
+        if normalized_option_type == "tamanho":
+            return f"Os tamanhos disponiveis para mesversario sao: {joined_values}."
+
+    return f"Temos estes {label}: {joined_values}."
 
 
 def get_learnings() -> str:

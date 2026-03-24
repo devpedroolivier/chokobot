@@ -72,6 +72,54 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
 
+    async def test_process_message_handles_generic_ovo_request_as_easter(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "Eu gostaria de encomendar um ovo",
+                "Teste",
+                99,
+            )
+
+        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_handles_ovo_pronta_entrega_as_easter(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "Oi tem ovo pronta entrega?",
+                "Teste",
+                99,
+            )
+
+        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_handles_ovo_pacoca_as_easter(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "Tem ovo de pacoca?",
+                "Teste",
+                99,
+            )
+
+        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
+        fake_client.chat.completions.create.assert_not_awaited()
+
     async def test_process_message_keeps_easter_context_for_follow_up(self):
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))

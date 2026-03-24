@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Callable
 from app.ai.tools import (
     get_menu,
+    get_cake_options,
     escalate_to_human,
     create_cake_order,
     create_sweet_order,
@@ -72,9 +73,26 @@ FLUXO POR LINHA (siga o fluxo correto de acordo com a linha):
 
 ═══ LINHA TRADICIONAL (categoria: "tradicional") ═══
 Campos a coletar: linha, categoria, tamanho (B3/B4/B6/B7), massa (Branca/Chocolate/Mesclada), recheio, mousse, adicional (opcional), descricao.
+- Recheios validos: Beijinho, Brigadeiro, Brigadeiro de Nutella, Brigadeiro Branco Gourmet, Brigadeiro Branco de Ninho, Casadinho, Doce de Leite.
 - Mousses: Ninho, Trufa Branca, Chocolate, Trufa Preta.
+- Adicionais validos: Morango, Ameixa, Nozes, Cereja, Abacaxi.
 - EXCEÇÃO: recheio 'Casadinho' NÃO precisa de mousse.
 - Se o cliente pediu "Bolo mesclado", a linha é "tradicional" e a categoria é "tradicional".
+- REGRA DE SEPARAÇÃO OBRIGATÓRIA:
+  - Recheio é uma coisa.
+  - Mousse é outra.
+  - Adicional é outra.
+  - NUNCA liste mousse como se fosse recheio.
+  - NUNCA liste adicional como se fosse recheio.
+  - Exemplos: "Ninho" é mousse, não recheio. "Morango" é adicional, não recheio.
+- Quando o cliente pedir apenas os recheios, responda SOMENTE com os recheios validos.
+- Quando o cliente pedir apenas os mousses, responda SOMENTE com os mousses validos.
+- Quando o cliente pedir adicionais, responda SOMENTE com os adicionais validos.
+- Sempre que o cliente pedir lista de recheios, mousses, adicionais, massas ou tamanhos, chame `get_cake_options`.
+- Reproduza a lista retornada por `get_cake_options` completa, na mesma ordem, sem resumir, sem omitir itens e sem misturar categorias.
+- Formato correto de resposta:
+  - "Temos estes recheios: Beijinho, Brigadeiro, Brigadeiro de Nutella, Brigadeiro Branco Gourmet, Brigadeiro Branco de Ninho, Casadinho e Doce de Leite."
+  - Se quiser seguir no pedido depois, pergunte em seguida qual recheio ele escolhe.
 Exemplo de coleta: "Qual o tamanho? (B3 até 15 pessoas, B4 até 30, B6 até 50, B7 até 80)" → cliente responde → "E a massa? Branca, Chocolate ou Mesclada?" → etc.
 
 ═══ LINHA GOURMET INGLÊS (categoria: "ingles") ═══
@@ -117,6 +135,13 @@ CAMPOS COMUNS (coletar para TODAS as linhas):
 - horario_retirada: Converta ("três da tarde", "15h") para HH:MM. Se entrega, máximo 17:30.
 - modo_recebimento: "retirada" ou "entrega". Se entrega, colete o endereço completo.
 - pagamento: PIX, Cartão ou Dinheiro.
+
+REGRA DE LINGUAGEM PARA RESPOSTAS:
+- Se o cliente perguntar "quais recheios temos?", responda listando apenas recheios.
+- Se o cliente perguntar "quais mousses temos?", responda listando apenas mousses.
+- Se o cliente perguntar "quais adicionais temos?", responda listando apenas adicionais.
+- Antes de listar qualquer uma dessas opcoes, use `get_cake_options` para buscar a lista canonica.
+- Nao misture categorias na mesma lista, a menos que o cliente peça explicitamente por recheio, mousse e adicional juntos.
 
 NUNCA chame 'create_cake_order' sem: linha, categoria, descricao, data_entrega, modo_recebimento, pagamento.
 Use 'get_menu' com `category="encomendas"` se precisar consultar o cardápio.
@@ -213,7 +238,7 @@ TriageAgent = Agent(
 CakeOrderAgent = Agent(
     name="CakeOrderAgent",
     instructions=CAKE_ORDER_PROMPT,
-    tools=[get_menu, create_cake_order, escalate_to_human, save_learning, get_learnings]
+    tools=[get_menu, get_cake_options, create_cake_order, escalate_to_human, save_learning, get_learnings]
 )
 
 SweetOrderAgent = Agent(

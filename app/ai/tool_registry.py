@@ -31,6 +31,37 @@ def build_openai_tools(agent, runtime) -> list[dict]:
             }
         )
 
+    if runtime.get_cake_options in agent.tools:
+        openai_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_cake_options",
+                    "description": (
+                        "Retorna as opcoes canonicas de bolo para uma categoria especifica. "
+                        "Use para listar recheios, mousses, adicionais, massas ou tamanhos "
+                        "sem omitir itens e sem misturar categorias."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "category": {
+                                "type": "string",
+                                "enum": ["tradicional", "mesversario"],
+                                "description": "Categoria do bolo: tradicional ou mesversario",
+                            },
+                            "option_type": {
+                                "type": "string",
+                                "enum": ["massa", "tamanho", "recheio", "mousse", "adicional"],
+                                "description": "Tipo de opcao que deve ser listada",
+                            },
+                        },
+                        "required": ["category", "option_type"],
+                    },
+                },
+            }
+        )
+
     if runtime.get_learnings in agent.tools:
         openai_tools.append(
             {
