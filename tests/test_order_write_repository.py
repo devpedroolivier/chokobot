@@ -11,6 +11,7 @@ from app.models import criar_tabelas
 from app.db.init_db import ensure_views
 from app.db.database import get_connection
 from app.infrastructure.gateways.local_order_gateway import LocalOrderGateway
+from app.infrastructure.repositories.sqlite_order_repository import SQLiteOrderRepository
 from app.infrastructure.repositories.sqlite_order_write_repository import SQLiteOrderWriteRepository
 from app.infrastructure.repositories.sqlite_delivery_write_repository import SQLiteDeliveryWriteRepository
 
@@ -161,6 +162,76 @@ class OrderWriteRepositoryTests(unittest.TestCase):
                     data_agendada="2026-03-20",
                     status="pendente",
                 )
+
+    def test_delete_order_removes_related_rows_and_clears_process_link(self):
+        repository = SQLiteOrderRepository()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "chokobot.db")
+            with patch.dict(os.environ, {"DB_PATH": db_path}, clear=False):
+                criar_tabelas()
+                ensure_views()
+
+                order_id = repository.create_order(
+                    nome="Ana",
+                    telefone="5511999999999",
+                    categoria="tradicional",
+                    produto="Bolo de chocolate",
+                    tamanho="B3",
+                    valor_total="120,00",
+                    data_entrega="2026-03-25",
+                )
+
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        INSERT INTO entregas (encomenda_id, tipo, endereco, data_agendada, status)
+                        VALUES (?, 'entrega', 'Rua Teste, 123', '2026-03-25', 'pendente')
+                        """,
+                        (order_id,),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO encomenda_doces (encomenda_id, nome, qtd, preco, unit)
+                        VALUES (?, 'Brigadeiro Escama', 10, 15.0, 1.5)
+                        """,
+                        (order_id,),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO customer_processes (
+                            phone, customer_id, process_type, stage, status, source, draft_payload, order_id
+                        ) VALUES (?, 1, 'delivery_order', 'pedido_confirmado', 'converted', 'teste', '{}', ?)
+                        """,
+                        ("5511999999999", order_id),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+
+                repository.delete_order(order_id)
+
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    cur.execute("SELECT 1 FROM encomendas WHERE id = ?", (order_id,))
+                    order_row = cur.fetchone()
+                    cur.execute("SELECT 1 FROM entregas WHERE encomenda_id = ?", (order_id,))
+                    delivery_row = cur.fetchone()
+                    cur.execute("SELECT 1 FROM encomenda_doces WHERE encomenda_id = ?", (order_id,))
+                    sweets_row = cur.fetchone()
+                    cur.execute("SELECT order_id FROM customer_processes WHERE phone = ?", ("5511999999999",))
+                    process_row = cur.fetchone()
+                finally:
+                    conn.close()
+
+        self.assertIsNone(order_row)
+        self.assertIsNone(delivery_row)
+        self.assertIsNone(sweets_row)
+        self.assertIsNotNone(process_row)
+        self.assertIsNone(process_row["order_id"])
 
 
 if __name__ == "__main__":

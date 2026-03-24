@@ -82,6 +82,18 @@ class DashboardContextTests(unittest.TestCase):
                 tipo="entrega",
                 criado_em="2025-11-30 09:00:00",
             ),
+            OrderPanelItem(
+                id=6,
+                cliente_nome="Eva",
+                produto="Bolo branco",
+                categoria="tradicional",
+                data_entrega="2026-03-20",
+                horario="09:30",
+                valor_total=0.0,
+                status="pendente",
+                tipo="entrega",
+                criado_em="2026-03-18 10:00:00",
+            ),
         ]
 
         dashboard = build_dashboard_context(items, today=date(2026, 3, 19))
@@ -95,6 +107,7 @@ class DashboardContextTests(unittest.TestCase):
         self.assertEqual(metrics["Hoje"], "1")
         self.assertEqual(metrics["Atrasados"], "1")
         self.assertIn("Receita em operação", metrics)
+        self.assertEqual(quality["Ocultos"], "2")
         self.assertEqual(quality["Sem data"], "0")
         self.assertEqual(len(priorities["Atrasados"]), 1)
         self.assertEqual(len(priorities["Hoje"]), 1)
@@ -105,6 +118,8 @@ class DashboardContextTests(unittest.TestCase):
         self.assertEqual(len(kanban["Concluídos"]), 1)
         self.assertEqual(dashboard["orders"][0]["id"], 1)
         self.assertFalse(any(item["id"] == 5 for item in dashboard["orders"]))
+        self.assertFalse(any(item["id"] == 6 for item in dashboard["orders"]))
+        self.assertEqual({item["id"] for item in dashboard["hidden_orders"]}, {5, 6})
 
 
 if __name__ == "__main__":

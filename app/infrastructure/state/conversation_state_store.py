@@ -58,6 +58,7 @@ class RedisStateBackend(StateBackend):
         import redis
 
         self.client = redis.Redis.from_url(redis_url, decode_responses=True)
+        self.client.ping()
 
     @staticmethod
     def _key(namespace: str, key: str) -> str:

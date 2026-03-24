@@ -45,6 +45,12 @@ _TYPE_META = {
 }
 
 _TEST_NAME_TOKENS = ("teste", "suporte", "pessoal")
+_HIDDEN_REASON_LABELS = {
+    "test_customer": "Cliente de teste",
+    "missing_customer": "Cliente ausente",
+    "missing_value": "Valor zerado",
+    "implausible_date": "Data improvavel",
+}
 _WHATSAPP_STAGE_META = {
     "CakeOrderAgent": ("Pedido de bolo", "stage-cake"),
     "SweetOrderAgent": ("Pedido de doces", "stage-sweet"),
@@ -212,9 +218,51 @@ def _format_category(category: str | None) -> str:
     return _CATEGORY_LABELS.get(slug, (category or "Sem categoria").replace("_", " ").title())
 
 
-def _looks_like_test_customer(name: str | None) -> bool:
+def looks_like_test_customer(name: str | None) -> bool:
     normalized = (name or "").casefold()
     return any(token in normalized for token in _TEST_NAME_TOKENS)
+
+
+def classify_order_visibility(
+    *,
+    customer_name: str | None,
+    delivery_date_raw: str | None,
+    created_at_raw: str | None,
+    value,
+    today: date | None = None,
+) -> dict:
+    reference_date = today or current_business_date()
+    delivery_date = parse_order_date(delivery_date_raw)
+    created_date = parse_created_date(created_at_raw)
+    numeric_value = _safe_float(value)
+    reasons: list[str] = []
+
+    normalized_name = (customer_name or "").strip()
+    if looks_like_test_customer(customer_name):
+        reasons.append("test_customer")
+    if not normalized_name or normalized_name == "~":
+        reasons.append("missing_customer")
+    if numeric_value <= 0:
+        reasons.append("missing_value")
+
+    lower_bound = reference_date - timedelta(days=365)
+    upper_bound = reference_date + timedelta(days=365)
+    if delivery_date is not None:
+        if delivery_date < lower_bound or delivery_date > upper_bound:
+            reasons.append("implausible_date")
+    elif created_date is not None and created_date < lower_bound:
+        reasons.append("implausible_date")
+
+    return {
+        "delivery_date": delivery_date,
+        "created_date": created_date,
+        "value": numeric_value,
+        "reasons": reasons,
+        "reason_labels": [_HIDDEN_REASON_LABELS[reason] for reason in reasons],
+        "is_test_like": "test_customer" in reasons,
+        "is_suspect": any(reason != "test_customer" for reason in reasons),
+        "hide_from_views": bool(reasons),
+    }
 
 
 def _parse_runtime_timestamp(raw_value: str | None) -> datetime | None:
@@ -449,7 +497,7 @@ def build_process_cards(
     for process in processes:
         customer = loaded_customers.get(process.phone)
         customer_name = customer.nome if customer else process.phone
-        if _looks_like_test_customer(customer_name):
+        if looks_like_test_customer(customer_name):
             continue
 
         updated_at = _parse_process_timestamp(process.updated_at)
@@ -606,7 +654,7 @@ def build_whatsapp_cards(
 
         customer = loaded_customers.get(phone)
         customer_name = customer.nome if customer else phone
-        if _looks_like_test_customer(customer_name):
+        if looks_like_test_customer(customer_name):
             continue
 
         stage_label, stage_class = _WHATSAPP_STAGE_META[source_key]
@@ -680,11 +728,18 @@ def build_whatsapp_cards(
 
 
 def _normalize_order(item: OrderPanelItem, *, today: date) -> dict:
-    delivery_date = parse_order_date(item.data_entrega)
-    created_date = parse_created_date(item.criado_em)
+    visibility = classify_order_visibility(
+        customer_name=item.cliente_nome,
+        delivery_date_raw=item.data_entrega,
+        created_at_raw=item.criado_em,
+        value=item.valor_total,
+        today=today,
+    )
+    delivery_date = visibility["delivery_date"]
+    created_date = visibility["created_date"]
     status_slug = normalize_status(item.status, item.tipo)
     type_slug = _normalize_type(item.tipo, status_slug)
-    value = _safe_float(item.valor_total)
+    value = visibility["value"]
     category_slug = (item.categoria or "sem_categoria").strip().lower() or "sem_categoria"
     days_until = (delivery_date - today).days if delivery_date else None
     recent_delivery_cutoff = today - timedelta(days=7)
@@ -766,7 +821,10 @@ def _normalize_order(item: OrderPanelItem, *, today: date) -> dict:
         "urgency_rank": urgency_rank,
         "is_active": status_slug != "entregue",
         "is_operational": is_operational,
-        "is_test_like": _looks_like_test_customer(item.cliente_nome),
+        "is_test_like": visibility["is_test_like"],
+        "is_suspect": visibility["is_suspect"],
+        "hidden_reason_labels": visibility["reason_labels"],
+        "hide_from_views": visibility["hide_from_views"],
         "missing_value": value <= 0,
         "missing_date": delivery_date is None,
         "missing_time": not horario,
@@ -806,9 +864,8 @@ def _build_distribution(counter: Counter, labels: dict[str, str]) -> list[dict]:
 def build_dashboard_context(items: list[OrderPanelItem], *, today: date | None = None) -> dict:
     reference_date = today or current_business_date()
     normalized_orders = [_normalize_order(item, today=reference_date) for item in items]
-    orders = _sort_orders(
-        [item for item in normalized_orders if not (item["is_test_like"] and not item["is_operational"])]
-    )
+    hidden_orders = [item for item in normalized_orders if item["hide_from_views"]]
+    orders = _sort_orders([item for item in normalized_orders if not item["hide_from_views"]])
 
     active_orders = [item for item in orders if item["is_active"]]
     operational_orders = [item for item in active_orders if item["is_operational"]]
@@ -938,6 +995,7 @@ def build_dashboard_context(items: list[OrderPanelItem], *, today: date | None =
             },
         ],
         "quality_metrics": [
+            {"label": "Ocultos", "value": str(len(hidden_orders))},
             {"label": "Sem valor", "value": str(sum(1 for item in orders if item["missing_value"]))},
             {"label": "Sem data", "value": str(sum(1 for item in orders if item["missing_date"]))},
             {"label": "Sem horário", "value": str(sum(1 for item in orders if item["missing_time"]))},
@@ -956,6 +1014,7 @@ def build_dashboard_context(items: list[OrderPanelItem], *, today: date | None =
         "type_distribution": _build_distribution(type_counter, _TYPE_META),
         "top_customers": top_customers,
         "orders": orders,
+        "hidden_orders": hidden_orders,
         "operational_orders": operational_orders,
         "historical_open_orders": historical_open_orders,
         "kanban_columns": kanban_columns,

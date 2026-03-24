@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from pydantic import BaseModel
 
 from app.api.dependencies import get_order_repository
+from app.application.use_cases.panel_dashboard import classify_order_visibility
 from app.application.use_cases.panel_orders import build_create_order_payload, export_orders_txt
 from app.domain.repositories.order_repository import OrderRepository
 from app.infrastructure.web.admin_frontend import resolve_admin_frontend_url
@@ -38,6 +39,14 @@ def build_orders_snapshot_payload(
     items = []
     for row in rows:
         order_id = int(row[0])
+        visibility = classify_order_visibility(
+            customer_name=row[1],
+            delivery_date_raw=row[14] if len(row) > 14 else None,
+            created_at_raw=row[11],
+            value=row[15] if len(row) > 15 else None,
+        )
+        if visibility["hide_from_views"]:
+            continue
         items.append(
             {
                 "id": order_id,

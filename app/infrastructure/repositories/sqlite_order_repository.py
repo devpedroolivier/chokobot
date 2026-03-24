@@ -66,7 +66,10 @@ class SQLiteOrderRepository(OrderRepository):
                     CASE WHEN e.categoria = 'gourmet' THEN 'sim' ELSE 'nao' END AS gourmet,
                     COALESCE(d.tipo, CASE WHEN e.categoria = 'pronta_entrega' THEN 'pronta entrega' END) AS entrega,
                     e.criado_em,
-                    COALESCE(d.status, 'pendente') AS status
+                    COALESCE(d.status, 'pendente') AS status,
+                    e.produto,
+                    e.data_entrega,
+                    e.valor_total
                 FROM encomendas e
                 JOIN clientes c ON e.cliente_id = c.id
                 LEFT JOIN entregas d ON d.encomenda_id = e.id
@@ -167,6 +170,12 @@ class SQLiteOrderRepository(OrderRepository):
         conn = get_connection()
         try:
             cursor = conn.cursor()
+            cursor.execute("DELETE FROM encomenda_doces WHERE encomenda_id = ?", (order_id,))
+            cursor.execute("DELETE FROM entregas WHERE encomenda_id = ?", (order_id,))
+            cursor.execute(
+                "UPDATE customer_processes SET order_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE order_id = ?",
+                (order_id,),
+            )
             cursor.execute("DELETE FROM encomendas WHERE id = ?", (order_id,))
             conn.commit()
         finally:
