@@ -1,0 +1,7 @@
+interface:
+  display_name: "WPP Conversation Audit"
+  short_description: "Audit WhatsApp flow, state, and panel sync."
+  default_prompt: "Use $whatsapp-conversation-ops-audit to deeply analyze a WhatsApp-to-panel flow in Chokobot."
+
+policy:
+  allow_implicit_invocation: true

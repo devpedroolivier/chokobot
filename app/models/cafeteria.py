@@ -12,6 +12,12 @@ def criar_tabela_pedidos_cafeteria(conn):
             FOREIGN KEY (cliente_id) REFERENCES clientes(id)
         );
     """)
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_pedidos_cafeteria_cliente_id
+        ON pedidos_cafeteria(cliente_id)
+        """
+    )
     conn.commit()
 
 def salvar_pedido_cafeteria(cliente_id: int, pedido: str):
@@ -26,4 +32,3 @@ def salvar_pedido_cafeteria(cliente_id: int, pedido: str):
     conn.commit()
     conn.close()
     print("☕ Pedido da cafeteria salvo com sucesso.")
-

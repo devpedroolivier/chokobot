@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Iterable
 
 from app.db.database import get_connection
 from app.domain.repositories.customer_repository import CustomerRecord, CustomerRepository
@@ -42,6 +43,27 @@ class SQLiteCustomerRepository(CustomerRepository):
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM clientes WHERE telefone = ?", (telefone,))
             return _map_customer(cursor.fetchone())
+        finally:
+            conn.close()
+
+    def get_customers_by_phones(self, phones: Iterable[str]) -> dict[str, CustomerRecord]:
+        unique_phones = tuple(dict.fromkeys(phone for phone in phones if phone))
+        if not unique_phones:
+            return {}
+
+        placeholders = ",".join("?" for _ in unique_phones)
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT * FROM clientes WHERE telefone IN ({placeholders})",
+                unique_phones,
+            )
+            return {
+                customer.telefone: customer
+                for customer in (_map_customer(row) for row in cursor.fetchall())
+                if customer is not None
+            }
         finally:
             conn.close()
 

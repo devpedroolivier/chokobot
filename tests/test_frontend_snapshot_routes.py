@@ -53,6 +53,29 @@ class FrontendSnapshotRoutesTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["categoria"], "tradicional")
         self.assertEqual(payload["items"][0]["status"], "em_preparo")
 
+    def test_build_orders_snapshot_payload_uses_embedded_status_when_present(self):
+        payload = build_orders_snapshot_payload(
+            [
+                (
+                    10,
+                    "Bia",
+                    "5511888888888",
+                    "tradicional",
+                    "Chocolate",
+                    "Brigadeiro",
+                    "Ninho",
+                    "Morango",
+                    "B3",
+                    "nao",
+                    "entrega",
+                    "2026-03-23 18:10:00",
+                    "agendada",
+                )
+            ]
+        )
+
+        self.assertEqual(payload["items"][0]["status"], "agendada")
+
     def test_build_customer_details_snapshot_payload_serializes_record(self):
         payload = build_customer_details_snapshot_payload(
             CustomerRecord(

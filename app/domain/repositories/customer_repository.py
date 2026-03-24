@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Iterable, Protocol
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,8 @@ class CustomerRepository(Protocol):
     def get_customer(self, customer_id: int) -> CustomerRecord | None: ...
 
     def get_customer_by_phone(self, telefone: str) -> CustomerRecord | None: ...
+
+    def get_customers_by_phones(self, phones: Iterable[str]) -> dict[str, CustomerRecord]: ...
 
     def create_customer(self, nome: str, telefone: str) -> None: ...
 

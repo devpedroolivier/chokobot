@@ -10,6 +10,7 @@
 - autenticacao e sessao HTTP-only no admin moderno
 - migracao das telas modernas de:
   - dashboard
+  - operacoes
   - clientes
   - detalhe de cliente
   - novo cliente
@@ -27,6 +28,7 @@
 ## Rotas modernas disponiveis
 
 - `/`
+- `/operacoes`
 - `/login`
 - `/clientes`
 - `/clientes/novo`
@@ -60,7 +62,7 @@ Rotas legadas ja preparadas para redirect:
 
 ## Pendencias remanescentes
 
-- decidir o destino das telas legadas ainda fora do admin moderno:
+- remover ou arquivar templates legados residuais agora absorvidos pela visao moderna de operacoes:
   - `atendimentos`
   - `cafeteria`
   - `entregas`

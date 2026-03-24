@@ -11,6 +11,18 @@ def criar_tabela_clientes(conn: Connection):
             criado_em TEXT DEFAULT CURRENT_TIMESTAMP
         );
     """)
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_clientes_telefone
+        ON clientes(telefone)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_clientes_criado_em
+        ON clientes(criado_em)
+        """
+    )
     conn.commit()
 
 def salvar_cliente(telefone: str, nome: str):
@@ -32,4 +44,3 @@ def salvar_cliente(telefone: str, nome: str):
     conn.commit()
     conn.close()
     return cliente_id
-

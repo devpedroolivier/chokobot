@@ -1,0 +1,7 @@
+interface:
+  display_name: "Frontend Design System"
+  short_description: "Refine the Chokobot admin UI system."
+  default_prompt: "Use $frontend-design-system to improve consistency and UX in the Chokobot admin frontend."
+
+policy:
+  allow_implicit_invocation: true

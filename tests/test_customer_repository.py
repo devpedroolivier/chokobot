@@ -25,6 +25,9 @@ class CustomerRepositoryTests(unittest.TestCase):
 
                 customers = repository.list_customers()
                 customer = repository.get_customer_by_phone("5511999999999")
+                customers_by_phone = repository.get_customers_by_phones(
+                    ["5511999999999", "5511888888888", "5511777777777"]
+                )
             finally:
                 if previous_db_path is None:
                     os.environ.pop("DB_PATH", None)
@@ -37,6 +40,8 @@ class CustomerRepositoryTests(unittest.TestCase):
         self.assertIsInstance(customer, CustomerRecord)
         self.assertEqual(customer.nome, "Ana")
         self.assertEqual(customer.telefone, "5511999999999")
+        self.assertEqual(set(customers_by_phone), {"5511999999999", "5511888888888"})
+        self.assertEqual(customers_by_phone["5511888888888"].nome, "Bia")
 
 
 if __name__ == "__main__":

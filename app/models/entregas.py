@@ -17,6 +17,12 @@ def criar_tabela_entregas(conn: Connection):
             FOREIGN KEY (encomenda_id) REFERENCES encomendas(id)
         );
     """)
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_entregas_encomenda_id
+        ON entregas(encomenda_id)
+        """
+    )
     conn.commit()
 
 # 💾 Salvar entrega no banco SQLite

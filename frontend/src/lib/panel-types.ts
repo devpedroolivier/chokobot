@@ -11,6 +11,13 @@ export type Alert = {
   description: string;
 };
 
+export type ConversationMessage = {
+  role: "cliente" | "ia" | "contexto" | string;
+  actor_label: string;
+  content: string;
+  timestamp_label: string;
+};
+
 export type ProcessCard = {
   process_id?: number;
   order_id?: number | null;
@@ -28,6 +35,7 @@ export type ProcessCard = {
   owner_class: string;
   owner_hint: string;
   updated_label: string;
+  stage_slug?: string;
 };
 
 export type ProcessSection = {
@@ -39,6 +47,7 @@ export type ProcessSection = {
 
 export type WhatsAppCard = {
   phone: string;
+  order_id?: number | null;
   cliente_nome: string;
   stage_label: string;
   stage_class: string;
@@ -46,8 +55,10 @@ export type WhatsAppCard = {
   last_seen_label: string;
   agent: string;
   is_human_handoff: boolean;
+  owner_slug?: string;
   owner_label: string;
   owner_class: string;
+  messages: ConversationMessage[];
 };
 
 export type KanbanItem = {
@@ -59,9 +70,14 @@ export type KanbanItem = {
   status_badge_class: string;
   tipo_label: string;
   data_label: string;
+  data_iso?: string;
   horario: string;
   valor_label: string;
   schedule_bucket: string;
+  status_slug?: string;
+  tipo_slug?: string;
+  ready_status?: string;
+  search_blob?: string;
 };
 
 export type KanbanColumn = {
@@ -76,6 +92,12 @@ export type DashboardSnapshot = {
   reference_date: string;
   metrics: Metric[];
   kanban_columns: KanbanColumn[];
+  filters?: {
+    statuses: Array<{ value: string; label: string }>;
+    types: Array<{ value: string; label: string }>;
+    categories: Array<{ value: string; label: string }>;
+    schedule_buckets: Array<{ value: string; label: string }>;
+  };
 };
 
 export type PanelSnapshot = {

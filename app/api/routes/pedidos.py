@@ -52,7 +52,7 @@ def build_orders_snapshot_payload(
                 "gourmet": row[9],
                 "entrega": row[10],
                 "criado_em": row[11],
-                "status": (statuses_by_id or {}).get(order_id, "pendente"),
+                "status": (statuses_by_id or {}).get(order_id, row[12] if len(row) > 12 and row[12] else "pendente"),
             }
         )
     return {"items": items, "count": len(items)}
@@ -108,14 +108,7 @@ async def listar_encomendas(
 async def listar_encomendas_snapshot(
     repository: OrderRepository = Depends(get_order_repository),
 ):
-    statuses_by_id = {
-        item.id: item.status
-        for item in repository.list_for_main_panel()
-    }
-    payload = build_orders_snapshot_payload(
-        repository.list_for_orders_page(),
-        statuses_by_id=statuses_by_id,
-    )
+    payload = build_orders_snapshot_payload(repository.list_for_orders_page())
     return JSONResponse(payload)
 
 

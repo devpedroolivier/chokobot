@@ -1,0 +1,7 @@
+interface:
+  display_name: "FastAPI Panel Perf"
+  short_description: "Optimize FastAPI panel reads and snapshots."
+  default_prompt: "Use $fastapi-panel-performance to optimize a slow Chokobot panel or snapshot path."
+
+policy:
+  allow_implicit_invocation: true

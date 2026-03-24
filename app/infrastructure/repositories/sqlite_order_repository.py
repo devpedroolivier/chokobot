@@ -65,7 +65,8 @@ class SQLiteOrderRepository(OrderRepository):
                     e.tamanho,
                     CASE WHEN e.categoria = 'gourmet' THEN 'sim' ELSE 'nao' END AS gourmet,
                     COALESCE(d.tipo, CASE WHEN e.categoria = 'pronta_entrega' THEN 'pronta entrega' END) AS entrega,
-                    e.criado_em
+                    e.criado_em,
+                    COALESCE(d.status, 'pendente') AS status
                 FROM encomendas e
                 JOIN clientes c ON e.cliente_id = c.id
                 LEFT JOIN entregas d ON d.encomenda_id = e.id

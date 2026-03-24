@@ -1,0 +1,7 @@
+interface:
+  display_name: "Admin UX Modernization"
+  short_description: "Improve operational flow in the admin."
+  default_prompt: "Use $admin-ux-modernization to improve the operator workflow in the Chokobot admin."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from app.application.service_registry import get_customer_process_repository
 from app.observability import log_event
 from app.services.estados import (
     estados_atendimento,
@@ -12,6 +13,8 @@ from app.services.estados import (
     estados_entrega,
 )
 from app.welcome_message import BOT_REACTIVATED_MESSAGE, HUMAN_HANDOFF_MESSAGE
+
+_DUPLICATE_HANDOFF_AUDIT_WINDOW = timedelta(minutes=10)
 
 
 def _handoff_audit_path() -> Path:
@@ -42,30 +45,93 @@ def clear_customer_active_flows(telefone: str) -> None:
         state_map.pop(telefone, None)
 
 
+def _parse_state_timestamp(raw_value: str | None) -> datetime | None:
+    if not raw_value:
+        return None
+    try:
+        return datetime.fromisoformat(raw_value)
+    except ValueError:
+        return None
+
+
+def _is_duplicate_handoff_request(telefone: str, motivo: str, *, now: datetime) -> bool:
+    current_state = estados_atendimento.get(telefone)
+    if not current_state:
+        return False
+    if (current_state.get("motivo") or "").strip() != (motivo or "").strip():
+        return False
+
+    last_audit_at = _parse_state_timestamp(current_state.get("audit_at") or current_state.get("inicio"))
+    if last_audit_at is None:
+        return False
+    return (now - last_audit_at) <= _DUPLICATE_HANDOFF_AUDIT_WINDOW
+
+
 def activate_human_handoff(
     telefone: str,
     *,
     nome: str = "Cliente",
     motivo: str = "solicitado_pelo_cliente",
     audit_writer=register_handoff_audit,
+    process_repository=None,
+    now: datetime | None = None,
 ) -> str:
-    if audit_writer is not None:
+    handoff_started_at = now or datetime.now()
+    is_duplicate_request = _is_duplicate_handoff_request(telefone, motivo, now=handoff_started_at)
+
+    if audit_writer is not None and not is_duplicate_request:
         audit_writer(telefone, nome, motivo)
 
     clear_customer_active_flows(telefone)
+    process_repository = process_repository or get_customer_process_repository()
+    process_repository.upsert_process(
+        phone=telefone,
+        process_type="human_handoff",
+        stage="handoff_humano",
+        status="active",
+        source="human_handoff",
+        draft_payload={
+            "nome": nome,
+            "motivo": motivo,
+            "duplicated_request": is_duplicate_request,
+        },
+    )
     estados_atendimento[telefone] = {
         "humano": True,
-        "inicio": datetime.now().isoformat(),
+        "inicio": handoff_started_at.isoformat(),
+        "audit_at": handoff_started_at.isoformat(),
         "nome": nome,
         "motivo": motivo,
     }
-    log_event("human_handoff_activated", telefone=telefone, nome=nome, motivo=motivo)
+    log_event(
+        "human_handoff_activated",
+        telefone=telefone,
+        nome=nome,
+        motivo=motivo,
+        duplicate=is_duplicate_request,
+    )
     return HUMAN_HANDOFF_MESSAGE
 
 
-def deactivate_human_handoff(telefone: str) -> bool:
+def deactivate_human_handoff(telefone: str, *, process_repository=None) -> bool:
     existed = telefone in estados_atendimento
     estados_atendimento.pop(telefone, None)
+    process_repository = process_repository or get_customer_process_repository()
+    existing_process = process_repository.get_process(telefone, "human_handoff")
+    if existing_process is not None:
+        process_repository.upsert_process(
+            phone=telefone,
+            customer_id=existing_process.customer_id,
+            process_type="human_handoff",
+            stage="bot_reativado",
+            status="resolved",
+            source=existing_process.source or "human_handoff",
+            draft_payload={
+                **existing_process.draft_payload,
+                "encerrado_em": datetime.now().isoformat(),
+            },
+            order_id=existing_process.order_id,
+        )
     log_event("human_handoff_deactivated", telefone=telefone, existed=existed)
     return existed
 

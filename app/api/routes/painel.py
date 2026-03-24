@@ -38,8 +38,13 @@ def _normalize_status(raw_status: str | None, raw_type: str | None) -> str:
     return _normalize_status_impl(raw_status, raw_type)
 
 
-def build_whatsapp_cards(customer_repository: CustomerRepository, *, now: datetime | None = None) -> list[dict]:
-    return _build_whatsapp_cards_impl(customer_repository, now=now)
+def build_whatsapp_cards(
+    process_repository: CustomerProcessRepository,
+    customer_repository: CustomerRepository,
+    *,
+    now: datetime | None = None,
+) -> list[dict]:
+    return _build_whatsapp_cards_impl(process_repository, customer_repository, now=now)
 
 
 def build_process_cards(
@@ -117,7 +122,7 @@ def painel_principal(
     dashboard = build_dashboard_context(repository.list_for_main_panel())
     process_cards = build_process_cards(process_repository, customer_repository)
     process_sections = build_process_sections(process_cards)
-    whatsapp_cards = build_whatsapp_cards(customer_repository)
+    whatsapp_cards = build_whatsapp_cards(process_repository, customer_repository)
     sync_overview = build_sync_overview(
         process_cards,
         whatsapp_cards,
@@ -145,7 +150,7 @@ def painel_snapshot(
     dashboard = build_dashboard_context(repository.list_for_main_panel())
     process_cards = build_process_cards(process_repository, customer_repository)
     process_sections = build_process_sections(process_cards)
-    whatsapp_cards = build_whatsapp_cards(customer_repository)
+    whatsapp_cards = build_whatsapp_cards(process_repository, customer_repository)
     sync_overview = build_sync_overview(
         process_cards,
         whatsapp_cards,

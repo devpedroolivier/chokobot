@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
+from typing import Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.domain.repositories.customer_process_repository import CustomerProcessRepository
-from app.domain.repositories.customer_repository import CustomerRepository
+from app.domain.repositories.customer_repository import CustomerRecord, CustomerRepository
 from app.domain.repositories.order_repository import OrderPanelItem
 from app.observability import snapshot_metrics
 from app.services.estados import (
@@ -54,6 +55,12 @@ _WHATSAPP_STAGE_META = {
     "estados_atendimento": ("Aguardando humano", "stage-human"),
 }
 _PROCESS_STAGE_META = {
+    "handoff_humano": {
+        "label": "Handoff humano",
+        "class": "stage-human",
+        "priority": 0,
+        "action_label": "Assumir atendimento",
+    },
     "montando_pedido": {
         "label": "Montando pedido",
         "class": "stage-cafe",
@@ -92,6 +99,7 @@ _PROCESS_STAGE_META = {
     },
 }
 _PROCESS_TYPE_META = {
+    "human_handoff": "Handoff humano",
     "delivery_order": "Entrega em montagem",
     "cafeteria_order": "Pedido cafeteria",
     "cesta_box_order": "Cesta box",
@@ -225,6 +233,66 @@ def _latest_user_message(session: dict | None) -> str:
     return ""
 
 
+def _conversation_messages(
+    session: dict | None,
+    recent: dict | None,
+    process,
+    *,
+    last_seen: datetime | None,
+    now: datetime,
+) -> list[dict]:
+    items: list[dict] = []
+
+    for message in (session or {}).get("messages", []):
+        role = str(message.get("role") or "").strip()
+        content = str(message.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        items.append(
+            {
+                "role": "cliente" if role == "user" else "ia",
+                "actor_label": "Cliente" if role == "user" else "IA",
+                "content": content,
+                "timestamp_label": "",
+            }
+        )
+
+    if items:
+        trimmed = items[-6:]
+        if last_seen is not None:
+            trimmed[-1]["timestamp_label"] = _format_last_seen(last_seen, now=now)
+        return trimmed
+
+    recent_text = str((recent or {}).get("texto") or "").strip()
+    if recent_text:
+        return [
+            {
+                "role": "cliente",
+                "actor_label": "Cliente",
+                "content": recent_text,
+                "timestamp_label": _format_last_seen(last_seen, now=now),
+            }
+        ]
+
+    if process is not None:
+        fallback_content = (
+            str(process.draft_payload.get("motivo") or "").strip()
+            if process.process_type == "human_handoff"
+            else _build_process_summary(process.draft_payload)
+        )
+        if fallback_content:
+            return [
+                {
+                    "role": "contexto",
+                    "actor_label": "Contexto",
+                    "content": fallback_content,
+                    "timestamp_label": _format_last_seen(last_seen, now=now),
+                }
+            ]
+
+    return []
+
+
 def _format_last_seen(value: datetime | None, *, now: datetime) -> str:
     if value is None:
         return "Sem horário"
@@ -242,6 +310,30 @@ def _parse_process_timestamp(raw_value: str | None) -> datetime | None:
         except ValueError:
             continue
     return _parse_runtime_timestamp(value)
+
+
+def _preload_customers_by_phone(
+    customer_repository: CustomerRepository,
+    phones: set[str],
+    *,
+    customers_by_phone: Mapping[str, CustomerRecord] | None = None,
+) -> dict[str, CustomerRecord]:
+    if customers_by_phone is not None:
+        return {phone: customer for phone, customer in customers_by_phone.items() if phone in phones}
+
+    if not phones:
+        return {}
+
+    bulk_loader = getattr(customer_repository, "get_customers_by_phones", None)
+    if callable(bulk_loader):
+        return dict(bulk_loader(phones))
+
+    loaded: dict[str, CustomerRecord] = {}
+    for phone in phones:
+        customer = customer_repository.get_customer_by_phone(phone)
+        if customer is not None:
+            loaded[phone] = customer
+    return loaded
 
 
 def _build_process_summary(payload: dict) -> str:
@@ -297,6 +389,8 @@ def _process_missing_items(process_type: str, stage: str, payload: dict) -> list
 
 
 def _resolve_process_owner(process_type: str, stage: str, missing_items: list[str]) -> tuple[str, str]:
+    if process_type == "human_handoff" or stage == "handoff_humano":
+        return "humano", "Atendimento manual em andamento"
     if stage in {"aguardando_confirmacao", "pagamento_pendente"}:
         if stage == "pagamento_pendente":
             return "cliente", "Cobrar pagamento e comprovante"
@@ -318,12 +412,19 @@ def build_process_cards(
     customer_repository: CustomerRepository,
     *,
     now: datetime | None = None,
+    customers_by_phone: Mapping[str, CustomerRecord] | None = None,
 ) -> list[dict]:
     reference = now or current_business_datetime()
+    processes = process_repository.list_active_processes()
+    loaded_customers = _preload_customers_by_phone(
+        customer_repository,
+        {process.phone for process in processes},
+        customers_by_phone=customers_by_phone,
+    )
     cards: list[dict] = []
 
-    for process in process_repository.list_active_processes():
-        customer = customer_repository.get_customer_by_phone(process.phone)
+    for process in processes:
+        customer = loaded_customers.get(process.phone)
         customer_name = customer.nome if customer else process.phone
         if _looks_like_test_customer(customer_name):
             continue
@@ -380,29 +481,91 @@ def build_process_cards(
     return cards
 
 
-def build_whatsapp_cards(customer_repository: CustomerRepository, *, now: datetime | None = None) -> list[dict]:
+def _stage_meta_for_process(process) -> dict:
+    return _PROCESS_STAGE_META.get(
+        process.stage,
+        {
+            "label": process.stage.replace("_", " ").title(),
+            "class": "stage-human",
+            "priority": 9,
+            "action_label": "Revisar processo",
+        },
+    )
+
+
+def _process_source_key(process) -> str | None:
+    if process.process_type == "human_handoff" or process.stage == "handoff_humano":
+        return "estados_atendimento"
+    if process.process_type == "delivery_order":
+        return "estados_entrega"
+    if process.process_type == "cafeteria_order":
+        return "estados_cafeteria"
+    if process.process_type == "cesta_box_order":
+        return "estados_cestas_box"
+    if process.process_type == "ai_cake_order":
+        return "CakeOrderAgent"
+    if process.process_type == "ai_sweet_order":
+        return "SweetOrderAgent"
+    return "estados_encomenda"
+
+
+def _active_processes_by_phone(
+    process_repository: CustomerProcessRepository,
+) -> dict[str, CustomerProcessRecord]:
+    selected: dict[str, tuple[tuple[int, datetime], CustomerProcessRecord]] = {}
+
+    for process in process_repository.list_active_processes():
+        stage_meta = _stage_meta_for_process(process)
+        updated_at = _parse_process_timestamp(process.updated_at) or datetime.min
+        sort_key = (stage_meta["priority"], updated_at)
+        current = selected.get(process.phone)
+        if current is None or sort_key < current[0]:
+            selected[process.phone] = (sort_key, process)
+
+    return {phone: process for phone, (_sort_key, process) in selected.items()}
+
+
+def build_whatsapp_cards(
+    process_repository: CustomerProcessRepository,
+    customer_repository: CustomerRepository,
+    *,
+    now: datetime | None = None,
+    customers_by_phone: Mapping[str, CustomerRecord] | None = None,
+) -> list[dict]:
     reference = now or current_business_datetime()
+    active_processes = _active_processes_by_phone(process_repository)
     phones = (
-        set(ai_sessions)
+        set(active_processes)
+        | set(ai_sessions)
         | set(estados_encomenda)
         | set(estados_cafeteria)
         | set(estados_cestas_box)
         | set(estados_entrega)
         | set(estados_atendimento)
     )
+    loaded_customers = _preload_customers_by_phone(
+        customer_repository,
+        phones,
+        customers_by_phone=customers_by_phone,
+    )
     cards: list[dict] = []
 
     for phone in phones:
+        process = active_processes.get(phone)
         session = ai_sessions.get(phone)
         recent = recent_messages.get(phone) if phone in recent_messages else None
         last_seen = _parse_runtime_timestamp((recent or {}).get("hora"))
+        if last_seen is None and process is not None:
+            last_seen = _parse_process_timestamp(process.updated_at)
         if last_seen is not None and last_seen.tzinfo is None:
             last_seen = last_seen.replace(tzinfo=reference.tzinfo)
-        if last_seen and (reference - last_seen) > timedelta(hours=24):
+        if process is None and last_seen and (reference - last_seen) > timedelta(hours=24):
             continue
 
         source_key = None
-        if phone in estados_atendimento:
+        if process is not None:
+            source_key = _process_source_key(process)
+        elif phone in estados_atendimento:
             source_key = "estados_atendimento"
         elif phone in estados_entrega:
             source_key = "estados_entrega"
@@ -418,35 +581,65 @@ def build_whatsapp_cards(customer_repository: CustomerRepository, *, now: dateti
         if source_key is None:
             continue
 
-        customer = customer_repository.get_customer_by_phone(phone)
+        customer = loaded_customers.get(phone)
         customer_name = customer.nome if customer else phone
         if _looks_like_test_customer(customer_name):
             continue
 
         stage_label, stage_class = _WHATSAPP_STAGE_META[source_key]
-        last_message = (recent or {}).get("texto") or _latest_user_message(session) or "Sem mensagem recente"
+        if process is not None:
+            missing_items = _process_missing_items(process.process_type, process.stage, process.draft_payload)
+            owner_slug, _owner_hint = _resolve_process_owner(process.process_type, process.stage, missing_items)
+            owner_meta = _PROCESS_OWNER_META[owner_slug]
+            owner_label = owner_meta["label"]
+            owner_class = owner_meta["class"]
+            process_message = (
+                (process.draft_payload.get("motivo") or "").strip()
+                if process.process_type == "human_handoff"
+                else _build_process_summary(process.draft_payload)
+            )
+            last_message = (
+                (recent or {}).get("texto")
+                or _latest_user_message(session)
+                or process_message
+                or "Sem mensagem recente"
+            )
+            is_human_handoff = process.process_type == "human_handoff" or process.stage == "handoff_humano"
+        else:
+            owner_label = (
+                _PROCESS_OWNER_META["humano"]["label"]
+                if source_key == "estados_atendimento"
+                else _PROCESS_OWNER_META["bot"]["label"]
+            )
+            owner_class = (
+                _PROCESS_OWNER_META["humano"]["class"]
+                if source_key == "estados_atendimento"
+                else _PROCESS_OWNER_META["bot"]["class"]
+            )
+            last_message = (recent or {}).get("texto") or _latest_user_message(session) or "Sem mensagem recente"
+            is_human_handoff = source_key == "estados_atendimento"
 
         cards.append(
             {
                 "phone": phone,
+                "order_id": process.order_id if process is not None else None,
                 "cliente_nome": customer_name,
                 "stage_label": stage_label,
                 "stage_class": stage_class,
                 "last_message": str(last_message),
                 "last_seen_label": _format_last_seen(last_seen, now=reference),
                 "last_seen_sort": last_seen or datetime.min.replace(tzinfo=reference.tzinfo),
-                "agent": (session or {}).get("current_agent") or source_key,
-                "is_human_handoff": source_key == "estados_atendimento",
-                "owner_slug": "humano" if source_key == "estados_atendimento" else "bot",
-                "owner_label": (
-                    _PROCESS_OWNER_META["humano"]["label"]
-                    if source_key == "estados_atendimento"
-                    else _PROCESS_OWNER_META["bot"]["label"]
-                ),
-                "owner_class": (
-                    _PROCESS_OWNER_META["humano"]["class"]
-                    if source_key == "estados_atendimento"
-                    else _PROCESS_OWNER_META["bot"]["class"]
+                "agent": (session or {}).get("current_agent") or (process.process_type if process is not None else source_key),
+                "is_human_handoff": is_human_handoff,
+                "owner_slug": "humano" if owner_class == _PROCESS_OWNER_META["humano"]["class"] else "bot",
+                "owner_label": owner_label,
+                "owner_class": owner_class,
+                "messages": _conversation_messages(
+                    session,
+                    recent,
+                    process,
+                    last_seen=last_seen,
+                    now=reference,
                 ),
             }
         )

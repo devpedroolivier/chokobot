@@ -1,0 +1,7 @@
+interface:
+  display_name: "SQLite Query Tuning"
+  short_description: "Tune SQLite reads, joins, and indexes."
+  default_prompt: "Use $sqlite-query-tuning to optimize a Chokobot SQLite repository or panel query path."
+
+policy:
+  allow_implicit_invocation: true

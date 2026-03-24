@@ -1,0 +1,7 @@
+interface:
+  display_name: "WhatsApp Complete E2E"
+  short_description: "Test the full WhatsApp-to-panel business flow."
+  default_prompt: "Use $whatsapp-e2e-panel-flow to validate complete end-to-end scenarios from WhatsApp contact through confirmation and final panel visibility."
+
+policy:
+  allow_implicit_invocation: true

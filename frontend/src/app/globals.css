@@ -4,6 +4,10 @@
 
 :root {
   color-scheme: light;
+  --paper: #fff9f2;
+  --ink: #251814;
+  --line: #e4d4c5;
+  --focus: rgba(216, 141, 111, 0.38);
 }
 
 body {
@@ -12,9 +16,29 @@ body {
     radial-gradient(circle at top left, rgba(188, 108, 78, 0.16), transparent 24%),
     radial-gradient(circle at top right, rgba(207, 225, 247, 0.32), transparent 22%),
     linear-gradient(180deg, #f6efe6 0%, #fffdf9 100%);
-  color: #251814;
+  color: var(--ink);
 }
 
 * {
-  border-color: #e4d4c5;
+  border-color: var(--line);
+}
+
+::selection {
+  background: rgba(216, 141, 111, 0.22);
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  outline: none;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus);
 }

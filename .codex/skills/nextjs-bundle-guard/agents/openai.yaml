@@ -1,0 +1,7 @@
+interface:
+  display_name: "Next.js Bundle Guard"
+  short_description: "Trim bundle and hydration in Next.js."
+  default_prompt: "Use $nextjs-bundle-guard to optimize a slow or over-hydrated Chokobot admin route."
+
+policy:
+  allow_implicit_invocation: true

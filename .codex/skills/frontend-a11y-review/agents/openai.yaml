@@ -1,0 +1,7 @@
+interface:
+  display_name: "Frontend A11y Review"
+  short_description: "Improve accessibility in the admin UI."
+  default_prompt: "Use $frontend-a11y-review to review and improve accessibility in the Chokobot admin frontend."
+
+policy:
+  allow_implicit_invocation: true

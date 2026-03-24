@@ -126,3 +126,54 @@ class PanelProcessCardsTests(unittest.TestCase):
         self.assertEqual(cards[2]["owner_label"], "Ação humana")
         self.assertIn("Pagamento", cards[2]["missing_items"])
         self.assertIn("Endereco", cards[2]["missing_items"])
+
+    def test_build_process_cards_prefers_bulk_customer_lookup_when_repository_supports_it(self):
+        class _ProcessRepository:
+            def list_active_processes(self):
+                return [
+                    CustomerProcessRecord(
+                        id=1,
+                        phone="5511999999999",
+                        customer_id=7,
+                        process_type="delivery_order",
+                        stage="aguardando_confirmacao",
+                        status="active",
+                        source="legacy_delivery",
+                        draft_payload={"descricao": "Bolo", "data_entrega": "2026-03-25", "horario": "14:00"},
+                        order_id=321,
+                        created_at="2026-03-23 16:00:00",
+                        updated_at="2026-03-23 16:30:00",
+                    )
+                ]
+
+        class _CustomerRepository:
+            def __init__(self):
+                self.bulk_calls = 0
+                self.single_calls = 0
+
+            def get_customers_by_phones(self, phones):
+                self.bulk_calls += 1
+                return {
+                    "5511999999999": CustomerRecord(
+                        id=7,
+                        nome="Ana",
+                        telefone="5511999999999",
+                        criado_em="2026-03-20 10:00:00",
+                    )
+                }
+
+            def get_customer_by_phone(self, phone: str):
+                self.single_calls += 1
+                return None
+
+        customer_repository = _CustomerRepository()
+        cards = build_process_cards(
+            _ProcessRepository(),
+            customer_repository,
+            now=datetime(2026, 3, 23, 17, 0, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["cliente_nome"], "Ana")
+        self.assertEqual(customer_repository.bulk_calls, 1)
+        self.assertEqual(customer_repository.single_calls, 0)
