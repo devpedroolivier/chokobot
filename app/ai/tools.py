@@ -19,6 +19,7 @@ from app.services.encomendas_utils import (
     _normaliza_tamanho,
     _normaliza_produto,
 )
+from app.services.store_schedule import validate_service_schedule
 from app.services.precos import (
     DOCES_UNITARIOS,
     DOCES_ALIASES,
@@ -295,6 +296,10 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
     categoria = (dados.get("categoria") or "").lower()
     dados["categoria"] = categoria
 
+    schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
+    if schedule_error:
+        return None, schedule_error
+
     if dados.get("tamanho"):
         dados["tamanho"] = _normaliza_tamanho(dados["tamanho"])
 
@@ -343,6 +348,10 @@ def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict |
     itens_validados: List[Dict] = []
     total_doces = 0.0
     erros: list[str] = []
+
+    schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
+    if schedule_error:
+        return None, schedule_error
 
     for item in dados.get("itens", []):
         nome_raw = item.get("nome", "")

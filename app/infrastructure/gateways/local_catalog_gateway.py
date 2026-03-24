@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.security import ai_learning_enabled, security_audit
 from app.services.precos import KIT_FESTOU_PRECO, TRADICIONAL_BASE
+from app.services.store_schedule import GIFT_CATALOG_SUMMARY, READY_DELIVERY_SUMMARY, STORE_HOURS_SUMMARY
 from app.settings import get_settings
 
 
@@ -36,6 +37,8 @@ class LocalCatalogGateway:
             "bolos": "encomendas",
             "tortas": "encomendas",
             "cestas": "encomendas",
+            "presentes": "encomendas",
+            "flores": "encomendas",
         }
         return aliases.get(raw, "todas")
 
@@ -45,17 +48,28 @@ class LocalCatalogGateway:
         cafeteria_url = get_settings().cafeteria_url
         return (
             "🛍️ Pronta Entrega\n"
-            "- Mostrar apenas itens prontos do dia, cafeteria e bolos de pronta entrega.\n"
-            "- Nao misturar com encomendas personalizadas.\n\n"
+            f"- Antes de seguir, identifique qual pronta entrega o cliente quer: {READY_DELIVERY_SUMMARY}.\n"
+            "- Mostrar apenas itens prontos do dia.\n"
+            "- Nao misturar com encomendas personalizadas.\n"
+            "- Se o detalhe nao estiver cadastrado aqui, nao inventar: informar que a disponibilidade varia no dia.\n\n"
             "🎂 Bolos Pronta Entrega\n"
             f"- B3 (ate {b3['serve']} pessoas): R${b3['preco']:.2f} | sabor padrao: Mesclado com Brigadeiro + Ninho\n"
             f"- B4 (ate {b4['serve']} pessoas): R${b4['preco']:.2f} | sabor padrao: Mesclado com Brigadeiro + Ninho\n"
-            f"🎉 Kit Festou opcional: +R${KIT_FESTOU_PRECO:.2f}\n"
             "- Regra atual: pronta entrega segue como retirada na loja no fluxo interno.\n\n"
+            "🎉 Kit Festou\n"
+            f"- 25 brigadeiros + 1 balao personalizado: +R${KIT_FESTOU_PRECO:.2f}\n"
+            "- Confirme se o cliente quer somente o Kit Festou ou bolo com Kit Festou.\n\n"
+            "🥚 Ovos Pronta Entrega\n"
+            "- Identifique primeiro se o cliente quer ovos pronta entrega.\n"
+            "- Sabores e disponibilidade variam no dia.\n"
+            "- Catalogo oficial de Pascoa: https://pascoachoko.goomer.app\n\n"
             "☕ Cafeteria e Vitrine\n"
             f"- Cardapio Cafeteria: {cafeteria_url}\n"
             "- A vitrine pode variar no dia.\n"
+            f"- Horario de funcionamento: {STORE_HOURS_SUMMARY}\n"
+            "- Nao fazemos pedidos, retiradas ou encomendas para domingo.\n"
             "- Entregas sao realizadas ate 17:30.\n"
+            f"\n🎁 Presentes\n- Oferecemos {GIFT_CATALOG_SUMMARY}.\n"
         )
 
     def _slice_section(self, text: str, start: str, end: str | None = None) -> str:

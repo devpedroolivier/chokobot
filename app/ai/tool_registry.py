@@ -14,8 +14,8 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                     "name": "get_menu",
                     "description": (
                         "Busca os cardapios, produtos e precos da Chokodelicia. "
-                        'Use `category="pronta_entrega"` para vitrine/cafeteria/doces e '
-                        '`category="encomendas"` para bolos personalizados, tortas e cestas.'
+                        'Use `category="pronta_entrega"` para vitrine/cafeteria/bolo pronta entrega/Kit Festou/ovos e '
+                        '`category="encomendas"` para bolos personalizados, tortas e presentes.'
                     ),
                     "parameters": {
                         "type": "object",

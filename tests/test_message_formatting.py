@@ -38,7 +38,8 @@ class MessageFormattingTests(unittest.TestCase):
         menu = ai_tools.get_menu("pronta_entrega")
 
         self.assertIn("🎂 Bolos Pronta Entrega", menu)
-        self.assertIn("🎉 Kit Festou opcional", menu)
+        self.assertIn("🎉 Kit Festou", menu)
+        self.assertIn("🥚 Ovos Pronta Entrega", menu)
         self.assertIn("☕ Cafeteria e Vitrine", menu)
         self.assertNotIn("DOCES AVULSOS", menu)
         self.assertNotIn("doceschoko", menu)
@@ -47,6 +48,8 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn(WELCOME_MESSAGE, TRIAGE_PROMPT)
         self.assertIn("Me conta o que você está procurando", WELCOME_MESSAGE)
         self.assertIn("Páscoa Inesquecível", WELCOME_MESSAGE)
+        self.assertIn("Kit Festou e ovos", WELCOME_MESSAGE)
+        self.assertIn("caixinha de chocolate e flores", WELCOME_MESSAGE)
 
     def test_mensagem_de_pascoa_expoe_link_direto(self):
         self.assertIn("pedido de Páscoa", EASTER_CATALOG_MESSAGE)

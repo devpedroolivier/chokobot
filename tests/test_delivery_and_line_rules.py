@@ -6,6 +6,7 @@ os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
 from app.ai.tools import CakeOrderSchema, create_cake_order
 from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido, _linha_canonica
+from app.services.store_schedule import validate_service_schedule
 
 
 class DeliveryAndLineRulesTests(unittest.TestCase):
@@ -30,6 +31,12 @@ class DeliveryAndLineRulesTests(unittest.TestCase):
 
         result = create_cake_order("5511999999999", "Cliente Teste", 1, order)
         self.assertIn("17:30", result)
+
+    def test_validate_service_schedule_blocks_sunday(self):
+        self.assertIn("domingo", validate_service_schedule("29/03/2026", "10:00").lower())
+
+    def test_validate_service_schedule_blocks_before_monday_opening(self):
+        self.assertIn("segunda-feira", validate_service_schedule("30/03/2026", "10:00").lower())
 
 
 if __name__ == "__main__":

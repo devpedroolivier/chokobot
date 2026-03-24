@@ -19,6 +19,17 @@ from app.observability import clear_metrics
 from app.welcome_message import EASTER_CATALOG_MESSAGE
 
 
+def _message(content: str):
+    return SimpleNamespace(content=content, tool_calls=[])
+
+
+def _response(message):
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=message)],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+    )
+
+
 class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         runner.CONVERSATIONS.clear()
@@ -88,9 +99,10 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
 
-    async def test_process_message_handles_ovo_pronta_entrega_as_easter(self):
+    async def test_process_message_handles_ovo_pronta_entrega_via_ai_flow(self):
+        ai_reply = "Posso te ajudar com pronta entrega. Voce quer bolo, Kit Festou ou ovos pronta entrega?"
         fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message(ai_reply)))))
         )
 
         with patch.object(runner, "client", fake_client):
@@ -101,8 +113,8 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
                 99,
             )
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
+        self.assertEqual(reply, ai_reply)
+        fake_client.chat.completions.create.assert_awaited_once()
 
     async def test_process_message_handles_ovo_pacoca_as_easter(self):
         fake_client = SimpleNamespace(

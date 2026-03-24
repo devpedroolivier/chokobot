@@ -2,8 +2,9 @@
 
 ## Regra Comercial Principal
 - Quando o cliente perguntar por **pronta entrega**, mostre somente itens de vitrine, cafeteria, doces avulsos e bolo pronta entrega do dia.
-- Quando o cliente perguntar por **encomenda**, mostre bolos personalizados, linhas gourmet, mesversario, baby cake, tortas, linha simples e cestas.
+- Quando o cliente perguntar por **encomenda**, mostre bolos personalizados, linhas gourmet, mesversario, baby cake, tortas, linha simples e presentes.
 - Nao misture pronta entrega com encomenda na mesma resposta, a menos que o cliente pergunte explicitamente pelos dois.
+- Regra anti-alucinacao: responda somente com categorias, regras, links e produtos cadastrados neste arquivo. Se um sabor, preco ou disponibilidade nao estiver aqui, diga que vai confirmar e nao invente.
 
 ## Pronta Entrega
 
@@ -11,14 +12,25 @@
 - Sabor padrao do fluxo interno: **Mesclado com Brigadeiro + Ninho**
 - **B3** (serve ate 15 pessoas): **R$120**
 - **B4** (serve ate 30 pessoas): **R$180**
-- **Kit Festou** opcional: **+R$35**
+- Regra de atendimento: se o cliente pedir apenas "pronta entrega", primeiro identifique se ele quer **bolo pronta entrega**, **Kit Festou** ou **ovos pronta entrega**
 - Regra operacional: pronta entrega fica como retirada na loja no fluxo atual.
 
-### 2. Cafeteria e Itens de Vitrine
+### 2. Kit Festou
+- **Kit Festou**: **25 brigadeiros + 1 balao personalizado**
+- Valor adicional cadastrado: **+R$35**
+- Se o cliente falar de pronta entrega sem detalhar, confirme se ele quer apenas o Kit Festou ou bolo com Kit Festou.
+
+### 3. Ovos Pronta Entrega
+- Existe categoria de **ovos pronta entrega**
+- **Nao inventar sabores ou disponibilidade**
+- Quando o cliente quiser ovos, primeiro identifique que e essa categoria
+- Para detalhes atualizados de sabores e disponibilidade, use o catalogo oficial: **https://pascoachoko.goomer.app**
+
+### 4. Cafeteria e Itens de Vitrine
 - **Cardapio Cafeteria:** http://bit.ly/44ZlKlZ
 - A vitrine pode variar no dia. Se o cliente pedir sabores disponiveis agora, informar somente o que estiver na pronta entrega/cafeteria.
 
-### 3. Doces Avulsos
+### 5. Doces Avulsos
 - **Cardapio de Doces:** https://bit.ly/doceschoko
 - Exemplos de valores cadastrados no sistema:
   - Brigadeiro Escama: R$1,50
@@ -87,9 +99,12 @@
 - **Coberturas:** Vulcao (R$35), Simples (R$25)
 
 ### 7. Cestas e Presentes
-- **Cestas Box/Presentes:** https://bit.ly/presenteschoko
+- Oferecemos **cestas (Box Cafe ou Chocolate), caixinha de chocolate e flores**
+- **Catalogo de presentes:** https://bit.ly/presenteschoko
 
 ## Entregas e Pagamento
+- **Horario de funcionamento:** segunda (12h-18h), terca-sabado (9h-18h), domingo (fechado)
+- **Nao fazemos pedidos, retiradas ou encomendas para domingo**
 - **Modo de recebimento:** retirada na loja ou entrega
 - **Horário limite para entregas:** até 17:30
 - **Taxa de entrega padrao:** geralmente R$10,00, salvo regra especifica

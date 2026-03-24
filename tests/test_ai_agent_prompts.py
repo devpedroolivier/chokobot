@@ -1,6 +1,6 @@
 import unittest
 
-from app.ai.agents import CAKE_ORDER_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
+from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
 
 
 class AIAgentPromptsTests(unittest.TestCase):
@@ -18,6 +18,12 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn('"pode fechar"', CAKE_ORDER_PROMPT)
         self.assertIn("ULTIMA mensagem do cliente", SWEET_ORDER_PROMPT)
         self.assertIn('"confirmo"', SWEET_ORDER_PROMPT)
+
+    def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
+        self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
+        self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
+        self.assertIn("bolo pronta entrega, Kit Festou ou ovos pronta entrega", CAFETERIA_PROMPT)
+        self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", CAFETERIA_PROMPT)
 
     def test_cake_order_prompt_lists_valid_fillings_and_separates_categories(self):
         self.assertIn("Recheios validos: Beijinho, Brigadeiro, Brigadeiro de Nutella", CAKE_ORDER_PROMPT)

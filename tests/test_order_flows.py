@@ -62,6 +62,24 @@ class OrderFlowsTests(unittest.IsolatedAsyncioTestCase):
         responder.assert_awaited_once()
         self.assertIn("entregas são realizadas até", responder.await_args.args[1].lower())
 
+    async def test_process_cesta_box_flow_blocks_sunday_date(self):
+        responder = AsyncMock(return_value=True)
+        estado = {"etapa": "data_entrega", "dados": {}}
+
+        result = await process_cesta_box_flow(
+            "5511999999999",
+            "29/03/2026",
+            estado,
+            "Cliente Box",
+            10,
+            responder_usuario_fn=responder,
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(estado["etapa"], "data_entrega")
+        responder.assert_awaited_once()
+        self.assertIn("domingo", responder.await_args.args[1].lower())
+
     async def test_salvar_pedido_cesta_dispatches_order_and_delivery(self):
         responder = AsyncMock(return_value=True)
         order_calls = []

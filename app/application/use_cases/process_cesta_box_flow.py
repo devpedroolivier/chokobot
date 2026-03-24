@@ -9,6 +9,7 @@ from app.application.service_registry import (
 )
 from app.observability import log_event
 from app.services.encomendas_utils import LIMITE_HORARIO_ENTREGA, _horario_entrega_permitido, _parse_hora, _valida_data
+from app.services.store_schedule import validate_service_date, validate_service_schedule
 from app.utils.mensagens import responder_usuario
 
 ResponderUsuarioFn = Callable[[str, str], Awaitable[bool]]
@@ -262,6 +263,11 @@ async def process_cesta_box_flow(
             await responder_usuario_fn(telefone, "⚠️ Data inválida. Digite no formato DD/MM/AAAA.")
             return None
 
+        date_error = validate_service_date(texto_limpo)
+        if date_error:
+            await responder_usuario_fn(telefone, f"⚠️ {date_error}")
+            return None
+
         dados["data_entrega"] = texto_limpo
         _sync_cesta_process(
             process_repository,
@@ -275,11 +281,17 @@ async def process_cesta_box_flow(
         return None
 
     if etapa == "hora_retirada":
-        if not _parse_hora(texto):
+        horario = _parse_hora(texto)
+        if not horario:
             await responder_usuario_fn(telefone, "⚠️ Horário inválido. Digite no formato HH:MM (ex: 14:30).")
             return None
 
-        dados["horario_retirada"] = (texto or "").strip()
+        schedule_error = validate_service_schedule(dados.get("data_entrega"), horario)
+        if schedule_error:
+            await responder_usuario_fn(telefone, f"⚠️ {schedule_error}")
+            return None
+
+        dados["horario_retirada"] = horario
         _sync_cesta_process(
             process_repository,
             phone=telefone,

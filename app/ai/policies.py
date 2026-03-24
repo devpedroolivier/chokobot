@@ -95,7 +95,11 @@ def _mentions_non_easter_egg_context(normalized: str) -> bool:
 def requests_easter_catalog(text: str) -> bool:
     normalized = normalize_intent_text(text)
     if re.search(r"\bovos?\b", normalized):
-        return not _mentions_non_easter_egg_context(normalized)
+        if _mentions_non_easter_egg_context(normalized):
+            return False
+        if re.search(r"\bpronta\s*entrega\b", normalized):
+            return False
+        return True
 
     patterns = (
         r"\bpascoa\b",
