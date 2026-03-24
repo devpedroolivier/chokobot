@@ -3,12 +3,18 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Form, Request
+from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.api.dependencies import (
     get_customer_process_repository,
     get_customer_repository,
     get_order_repository,
+)
+from app.application.use_cases.manage_human_handoff import (
+    activate_human_handoff,
+    build_reactivation_message,
+    deactivate_human_handoff,
 )
 from app.application.use_cases.panel_dashboard import (
     build_dashboard_context as _build_dashboard_context_impl,
@@ -26,8 +32,28 @@ from app.domain.repositories.order_repository import OrderPanelItem, OrderReposi
 from app.infrastructure.web.templates import templates
 from app.infrastructure.web.admin_frontend import resolve_admin_frontend_url
 from app.security import require_panel_auth
+from app.services.estados import append_conversation_message, estados_atendimento
+from app.utils.mensagens import responder_usuario_com_contexto
 
 router = APIRouter(dependencies=[Depends(require_panel_auth)])
+
+
+class ManualConversationReplyRequest(BaseModel):
+    message: str
+    disable_ai: bool = True
+    notify_handoff: bool = False
+
+
+class ConversationAutomationRequest(BaseModel):
+    enabled: bool
+    notify_customer: bool = True
+
+
+def _resolve_customer_name(customer_repository: CustomerRepository, phone: str) -> str:
+    customer = customer_repository.get_customer_by_phone(phone)
+    if customer is None:
+        return "Cliente"
+    return customer.nome or "Cliente"
 
 
 def _parse_order_date(raw_value: str | None) -> date | None:
@@ -163,6 +189,106 @@ def painel_snapshot(
         sync_overview=sync_overview,
     )
     return JSONResponse(payload)
+
+
+@router.post("/painel/api/conversas/{phone}/reply")
+async def responder_conversa_manual(
+    phone: str,
+    body: ManualConversationReplyRequest,
+    customer_repository: CustomerRepository = Depends(get_customer_repository),
+    process_repository: CustomerProcessRepository = Depends(get_customer_process_repository),
+):
+    message = body.message.strip()
+    if not message:
+        return JSONResponse({"status": "error", "detail": "message_required"}, status_code=400)
+
+    customer_name = _resolve_customer_name(customer_repository, phone)
+    handoff_active = phone in estados_atendimento
+    if body.disable_ai:
+        handoff_notice = activate_human_handoff(
+            phone,
+            nome=customer_name,
+            motivo="assumido_pelo_painel",
+            process_repository=process_repository,
+        )
+        if body.notify_handoff and not handoff_active:
+            await responder_usuario_com_contexto(phone, handoff_notice, role="bot", actor_label="Bot")
+        append_conversation_message(
+            phone,
+            role="contexto",
+            actor_label="Painel",
+            content="IA pausada no painel. Retorno automatico apos inatividade do cliente ou reativacao manual.",
+            seen_at=datetime.now(),
+        )
+
+    sent = await responder_usuario_com_contexto(phone, message, role="humano", actor_label="Atendente")
+    if not sent:
+        return JSONResponse({"status": "error", "detail": "message_send_failed"}, status_code=502)
+
+    return JSONResponse(
+        {
+            "status": "ok",
+            "phone": phone,
+            "automation_mode": "manual" if body.disable_ai or phone in estados_atendimento else "ai",
+            "auto_resume_hint": "A IA volta automaticamente apos inatividade ou quando o cliente pedir retorno ao bot.",
+        }
+    )
+
+
+@router.post("/painel/api/conversas/{phone}/automation")
+async def atualizar_automacao_conversa(
+    phone: str,
+    body: ConversationAutomationRequest,
+    customer_repository: CustomerRepository = Depends(get_customer_repository),
+    process_repository: CustomerProcessRepository = Depends(get_customer_process_repository),
+):
+    customer_name = _resolve_customer_name(customer_repository, phone)
+    now = datetime.now()
+
+    if body.enabled:
+        deactivate_human_handoff(phone, process_repository=process_repository)
+        append_conversation_message(
+            phone,
+            role="contexto",
+            actor_label="Painel",
+            content="IA reativada pelo painel.",
+            seen_at=now,
+        )
+        if body.notify_customer:
+            await responder_usuario_com_contexto(phone, build_reactivation_message(), role="bot", actor_label="Bot")
+        return JSONResponse(
+            {
+                "status": "ok",
+                "phone": phone,
+                "automation_mode": "ai",
+                "auto_resume_hint": "A IA esta ativa e responde normalmente por aqui.",
+            }
+        )
+
+    already_manual = phone in estados_atendimento
+    handoff_notice = activate_human_handoff(
+        phone,
+        nome=customer_name,
+        motivo="assumido_pelo_painel",
+        process_repository=process_repository,
+    )
+    append_conversation_message(
+        phone,
+        role="contexto",
+        actor_label="Painel",
+        content="IA pausada no painel. Retorno automatico apos inatividade do cliente ou reativacao manual.",
+        seen_at=now,
+    )
+    if body.notify_customer and not already_manual:
+        await responder_usuario_com_contexto(phone, handoff_notice, role="bot", actor_label="Bot")
+    return JSONResponse(
+        {
+            "status": "ok",
+            "phone": phone,
+            "automation_mode": "manual",
+            "auto_resume_hint": "A IA volta automaticamente apos inatividade ou quando o cliente pedir retorno ao bot.",
+        }
+    )
 
 
 @router.post("/painel/encomendas/{id}/status")

@@ -55,6 +55,9 @@ export type WhatsAppCard = {
   last_seen_label: string;
   agent: string;
   is_human_handoff: boolean;
+  automation_mode?: "manual" | "ai" | string;
+  automation_label?: string;
+  automation_hint?: string;
   owner_slug?: string;
   owner_label: string;
   owner_class: string;

@@ -58,10 +58,13 @@ class MessagingGatewayTests(unittest.IsolatedAsyncioTestCase):
         fake_gateway.send_text.return_value = True
 
         with patch("app.utils.mensagens.get_messaging_gateway", return_value=fake_gateway):
-            ok = await responder_usuario("5511999999999", "### Kit Festou")
+            with patch("app.utils.mensagens.append_conversation_message") as mocked_append:
+                ok = await responder_usuario("5511999999999", "### Kit Festou")
 
         self.assertTrue(ok)
         fake_gateway.send_text.assert_awaited_once_with("5511999999999", "🎉 Kit Festou")
+        mocked_append.assert_called_once()
+        self.assertEqual(mocked_append.call_args.kwargs["role"], "bot")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Git Push And Container Rebuild"
+  short_description: "Push Chokobot changes and rebuild the local stack."
+  default_prompt: "Use $git-push-container-rebuild to review the worktree, push the intended changes, then rebuild and verify the Chokobot containers."
+
+policy:
+  allow_implicit_invocation: true

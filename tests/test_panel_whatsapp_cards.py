@@ -10,6 +10,8 @@ from app.domain.repositories.customer_process_repository import CustomerProcessR
 from app.domain.repositories.customer_repository import CustomerRecord
 from app.services.estados import (
     ai_sessions,
+    append_conversation_message,
+    conversation_threads,
     estados_atendimento,
     estados_cafeteria,
     estados_cestas_box,
@@ -28,6 +30,7 @@ class PanelWhatsAppCardsTests(unittest.TestCase):
             estados_cafeteria,
             estados_entrega,
             estados_cestas_box,
+            conversation_threads,
             recent_messages,
         ):
             state_map.clear()
@@ -135,6 +138,50 @@ class PanelWhatsAppCardsTests(unittest.TestCase):
         self.assertEqual(cards[0]["owner_label"], "Ação do cliente")
         self.assertIn("26/03/2026", cards[0]["last_message"])
         self.assertEqual(cards[0]["messages"][0]["role"], "contexto")
+
+    def test_build_whatsapp_cards_surfaces_full_conversation_thread(self):
+        telefone = "5511777777777"
+        for index in range(8):
+            append_conversation_message(
+                telefone,
+                role="cliente" if index % 2 == 0 else "ia",
+                actor_label="Cliente" if index % 2 == 0 else "IA",
+                content=f"Mensagem {index}",
+                seen_at=datetime(2026, 3, 24, 16, index, 0),
+            )
+        ai_sessions[telefone] = {"current_agent": "CakeOrderAgent", "messages": []}
+
+        class _ProcessRepository:
+            def list_active_processes(self):
+                return []
+
+        class _CustomerRepository:
+            def get_customers_by_phones(self, phones):
+                return {
+                    telefone: CustomerRecord(
+                        id=9,
+                        nome="Carol",
+                        telefone=telefone,
+                        criado_em="2026-03-20 10:00:00",
+                    )
+                }
+
+            def get_customer_by_phone(self, phone: str):
+                return None
+
+        recent_messages[telefone] = {"texto": "Mensagem 7", "hora": "2026-03-24T16:07:00"}
+
+        cards = build_whatsapp_cards(
+            _ProcessRepository(),
+            _CustomerRepository(),
+            now=datetime(2026, 3, 24, 17, 0, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["cliente_nome"], "Carol")
+        self.assertEqual(len(cards[0]["messages"]), 8)
+        self.assertEqual(cards[0]["messages"][0]["content"], "Mensagem 0")
+        self.assertEqual(cards[0]["messages"][-1]["content"], "Mensagem 7")
 
 
 if __name__ == "__main__":

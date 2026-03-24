@@ -1,7 +1,9 @@
 import re
 import unicodedata
+from datetime import datetime
 
 from app.application.service_registry import get_messaging_gateway
+from app.services.estados import append_conversation_message
 
 SAUDACOES = ["oi", "iae", "salve", "olá", "ola", "bom dia", "boa tarde", "boa noite"]
 
@@ -65,5 +67,37 @@ async def responder_usuario(phone: str, mensagem: str) -> bool:
     Envia mensagem de forma confiável com retry controlado e lock por telefone.
     Garante que apenas uma mensagem por número é enviada por vez, evitando duplicidade.
     """
+    return await responder_usuario_com_contexto(phone, mensagem)
+
+
+async def responder_usuario_com_contexto(
+    phone: str,
+    mensagem: str,
+    *,
+    role: str = "bot",
+    actor_label: str | None = None,
+) -> bool:
     mensagem = formatar_mensagem_saida(mensagem)
-    return await get_messaging_gateway().send_text(phone, mensagem)
+    ok = await get_messaging_gateway().send_text(phone, mensagem)
+    if ok:
+        append_conversation_message(
+            phone,
+            role=role,
+            actor_label=actor_label or _actor_label_for_role(role),
+            content=mensagem,
+            seen_at=datetime.now(),
+        )
+    return ok
+
+
+def _actor_label_for_role(role: str) -> str:
+    normalized = (role or "").strip().casefold()
+    if normalized == "ia":
+        return "IA"
+    if normalized == "humano":
+        return "Atendente"
+    if normalized == "cliente":
+        return "Cliente"
+    if normalized == "contexto":
+        return "Contexto"
+    return "Bot"

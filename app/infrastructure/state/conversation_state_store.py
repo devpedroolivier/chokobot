@@ -131,6 +131,7 @@ class ConversationStateStore:
         self.estados_cestas_box = StateMap("cestas_box", backend)
         self.estados_atendimento = StateMap("atendimento", backend)
         self.ai_sessions = StateMap("ai_session", backend)
+        self.conversation_threads = StateMap("conversation_thread", backend)
         self.processed_messages = StateMap("processed_message", backend)
         self.recent_messages = StateMap("recent_message", backend)
 
@@ -162,8 +163,55 @@ class ConversationStateStore:
         self.recent_messages[phone] = {"texto": text, "hora": seen_at.isoformat()}
         self._trim_namespace(self.recent_messages, limit=5000, sort_key="hora")
 
+    def get_conversation_messages(self, phone: str) -> list[dict]:
+        if not phone:
+            return []
+        thread = self.conversation_threads.get(phone) or {}
+        return list(thread.get("messages", []))
+
+    def append_conversation_message(
+        self,
+        phone: str,
+        *,
+        role: str,
+        actor_label: str,
+        content: str,
+        seen_at: datetime,
+    ) -> None:
+        if not phone:
+            return
+        normalized_content = str(content or "").strip()
+        if not normalized_content:
+            return
+
+        timestamp = seen_at.isoformat()
+        thread = self.conversation_threads.get(phone) or {"messages": [], "updated_at": timestamp}
+        messages = list(thread.get("messages", []))
+        previous = messages[-1] if messages else None
+        if (
+            previous is not None
+            and previous.get("role") == role
+            and previous.get("content") == normalized_content
+            and previous.get("timestamp") == timestamp
+        ):
+            return
+
+        messages.append(
+            {
+                "role": role,
+                "actor_label": actor_label,
+                "content": normalized_content,
+                "timestamp": timestamp,
+            }
+        )
+        self.conversation_threads[phone] = {
+            "messages": messages[-200:],
+            "updated_at": timestamp,
+        }
+        self._trim_namespace(self.conversation_threads, limit=5000, sort_key="updated_at")
+
     def clear_runtime_state(self) -> None:
-        for state_map in (self.ai_sessions, self.processed_messages, self.recent_messages):
+        for state_map in (self.ai_sessions, self.conversation_threads, self.processed_messages, self.recent_messages):
             state_map.clear()
 
     @staticmethod

@@ -120,6 +120,31 @@ def get_or_create_session(telefone: str) -> Dict[str, Any]:
         save_session(telefone, session)
     return session
 
+
+def _is_easter_context_follow_up(session: dict, text: str) -> bool:
+    if session.get("seasonal_context") != "easter":
+        return False
+
+    normalized = (text or "").strip().casefold()
+    if not normalized:
+        return False
+
+    unrelated_patterns = (
+        "bolo",
+        "cafeteria",
+        "croissant",
+        "cappuccino",
+        "fatia",
+        "entrega",
+        "retirada",
+        "atendente",
+        "humano",
+    )
+    if any(pattern in normalized for pattern in unrelated_patterns):
+        return False
+
+    return True
+
 # Mapeamento de funções reais para as definições de Tools da OpenAI
 def get_openai_tools(agent, runtime: AIRuntime | None = None):
     runtime = runtime or get_default_ai_runtime()
@@ -195,13 +220,20 @@ async def process_message_with_ai(
     if _requests_human_handoff(text):
         runtime.escalate_to_human(telefone, "Cliente pediu humano")
         session["messages"] = []
+        session.pop("seasonal_context", None)
         save_session(telefone, session)
         increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
         log_event("ai_human_guard_handoff", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
         return HUMAN_HANDOFF_MESSAGE
 
     if _requests_easter_catalog(text):
+        session["seasonal_context"] = "easter"
+        save_session(telefone, session)
         log_event("ai_easter_catalog_link_sent", phone_hash=telefone[-4:] if telefone else "anon")
+        return EASTER_CATALOG_MESSAGE
+
+    if _is_easter_context_follow_up(session, text):
+        log_event("ai_easter_catalog_context_followup", phone_hash=telefone[-4:] if telefone else "anon")
         return EASTER_CATALOG_MESSAGE
 
     if _should_force_same_day_cafeteria_handoff(session, text, now):

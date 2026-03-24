@@ -56,6 +56,45 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
 
+    async def test_process_message_handles_ovo_recheado_de_prestigio(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "Quero um ovo de chocolate recheado de prestigio",
+                "Teste",
+                99,
+            )
+
+        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_keeps_easter_context_for_follow_up(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            first_reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "Quero ver o cardapio de pascoa",
+                "Teste",
+                99,
+            )
+            second_reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "tem de prestigio?",
+                "Teste",
+                99,
+            )
+
+        self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
+        self.assertEqual(second_reply, EASTER_CATALOG_MESSAGE)
+        fake_client.chat.completions.create.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

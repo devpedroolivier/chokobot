@@ -23,6 +23,13 @@ _CONFIRMATION_MARKERS = (
     "fechado",
 )
 
+_TRANSFER_MESSAGES = {
+    "CakeOrderAgent": "Vou transferir voce para a especialista em encomendas de bolos. Um momento, por favor! 😊\n🔄 Transferindo...",
+    "SweetOrderAgent": "Vou transferir voce para a especialista em docinhos e encomendas. Um momento, por favor! 😊\n🔄 Transferindo...",
+    "CafeteriaAgent": "Vou transferir voce para o agente que pode ajudar com pronta entrega e cafeteria. Um momento, por favor! 😊\n🔄 Transferindo...",
+    "KnowledgeAgent": "Vou transferir voce para o agente que pode te ajudar com cardapio e informacoes da loja. Um momento, por favor! 😊\n🔄 Transferindo...",
+}
+
 
 def _latest_user_message(session: dict) -> str:
     for message in reversed(session.get("messages", [])):
@@ -46,6 +53,18 @@ def _is_saved_order_result(tool_result: str) -> bool:
     )
 
 
+def _transfer_message_for_agent(agent_name: str | None) -> str:
+    return _TRANSFER_MESSAGES.get(
+        agent_name or "",
+        "Vou te transferir para o agente certo. Um momento, por favor! 😊\n🔄 Transferindo...",
+    )
+
+
+def _reset_session(session: dict) -> None:
+    session["messages"] = []
+    session.pop("seasonal_context", None)
+
+
 def handle_tool_call(
     *,
     runtime,
@@ -63,8 +82,9 @@ def handle_tool_call(
         new_agent = arguments.get("agent_name")
         if new_agent in AGENTS_MAP:
             session["current_agent"] = new_agent
-            tool_result = f"Sucesso. Conversa transferida para o {new_agent}."
+            tool_result = _transfer_message_for_agent(new_agent)
             save_session_fn(telefone, session)
+            return True, tool_result
         else:
             tool_result = f"Erro: Agente {new_agent} não existe."
     elif function_name == "get_menu":
@@ -75,7 +95,7 @@ def handle_tool_call(
         tool_result = runtime.save_learning(arguments.get("aprendizado"))
     elif function_name == "escalate_to_human":
         runtime.escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
-        session["messages"] = []
+        _reset_session(session)
         save_session_fn(telefone, session)
         return True, HUMAN_HANDOFF_MESSAGE
     elif function_name == "create_cake_order":
@@ -97,7 +117,7 @@ def handle_tool_call(
             else:
                 tool_result = runtime.create_cake_order(telefone, nome_cliente, cliente_id, order)
                 if _is_saved_order_result(str(tool_result)):
-                    session["messages"] = []
+                    _reset_session(session)
                     save_session_fn(telefone, session)
                     return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
         except Exception as exc:
@@ -121,7 +141,7 @@ def handle_tool_call(
             else:
                 tool_result = runtime.create_sweet_order(telefone, nome_cliente, cliente_id, order)
                 if _is_saved_order_result(str(tool_result)):
-                    session["messages"] = []
+                    _reset_session(session)
                     save_session_fn(telefone, session)
                     return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
         except Exception as exc:

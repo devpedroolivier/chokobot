@@ -16,6 +16,7 @@ from app.services.estados import (
     estados_cestas_box,
     estados_encomenda,
     estados_entrega,
+    get_conversation_messages,
     recent_messages,
 )
 from app.settings import get_settings
@@ -234,6 +235,7 @@ def _latest_user_message(session: dict | None) -> str:
 
 
 def _conversation_messages(
+    phone: str,
     session: dict | None,
     recent: dict | None,
     process,
@@ -241,6 +243,27 @@ def _conversation_messages(
     last_seen: datetime | None,
     now: datetime,
 ) -> list[dict]:
+    thread_messages = get_conversation_messages(phone)
+    if thread_messages:
+        formatted_thread: list[dict] = []
+        for message in thread_messages:
+            content = str(message.get("content") or "").strip()
+            if not content:
+                continue
+            timestamp = _parse_runtime_timestamp(str(message.get("timestamp") or "").strip())
+            if timestamp is not None and timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=now.tzinfo)
+            formatted_thread.append(
+                {
+                    "role": str(message.get("role") or "contexto"),
+                    "actor_label": str(message.get("actor_label") or "Contexto"),
+                    "content": content,
+                    "timestamp_label": _format_last_seen(timestamp, now=now) if timestamp is not None else "",
+                }
+            )
+        if formatted_thread:
+            return formatted_thread
+
     items: list[dict] = []
 
     for message in (session or {}).get("messages", []):
@@ -631,10 +654,18 @@ def build_whatsapp_cards(
                 "last_seen_sort": last_seen or datetime.min.replace(tzinfo=reference.tzinfo),
                 "agent": (session or {}).get("current_agent") or (process.process_type if process is not None else source_key),
                 "is_human_handoff": is_human_handoff,
+                "automation_mode": "manual" if is_human_handoff else "ai",
+                "automation_label": "Manual" if is_human_handoff else "IA ativa",
+                "automation_hint": (
+                    "A IA volta automaticamente apos inatividade ou quando o cliente pedir retorno ao bot."
+                    if is_human_handoff
+                    else "A IA segue ativa, mas voce pode assumir manualmente se precisar."
+                ),
                 "owner_slug": "humano" if owner_class == _PROCESS_OWNER_META["humano"]["class"] else "bot",
                 "owner_label": owner_label,
                 "owner_class": owner_class,
                 "messages": _conversation_messages(
+                    phone,
                     session,
                     recent,
                     process,

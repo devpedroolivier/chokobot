@@ -11,6 +11,7 @@ from app.config import get_store_closed_notice, is_store_closed
 from app.observability import log_event
 from app.security import get_admin_phones, hash_phone, preview_text
 from app.services.estados import (
+    append_conversation_message,
     estados_atendimento,
     get_recent_message,
     has_processed_message,
@@ -19,7 +20,7 @@ from app.services.estados import (
     set_bot_ativo,
     set_recent_message,
 )
-from app.utils.mensagens import responder_usuario
+from app.utils.mensagens import responder_usuario, responder_usuario_com_contexto
 from app.utils.payload import normalize_incoming
 
 
@@ -41,10 +42,28 @@ def save_customer_contact(telefone: str, nome_cliente: str) -> int:
     return get_customer_repository().upsert_customer(nome_cliente, telefone)
 
 
+async def _send_message(
+    responder_usuario_fn: Callable[[str, str], Awaitable[bool]],
+    telefone: str,
+    mensagem: str,
+    *,
+    role: str,
+    actor_label: str,
+) -> bool:
+    if responder_usuario_fn in {responder_usuario, responder_usuario_com_contexto}:
+        return await responder_usuario_com_contexto(
+            telefone,
+            mensagem,
+            role=role,
+            actor_label=actor_label,
+        )
+    return await responder_usuario_fn(telefone, mensagem)
+
+
 async def process_inbound_message(
     mensagem: dict,
     *,
-    responder_usuario_fn: Callable[[str, str], Awaitable[bool]] = responder_usuario,
+    responder_usuario_fn: Callable[[str, str], Awaitable[bool]] = responder_usuario_com_contexto,
     gerar_resposta_ia_fn: Callable[[str, str, str, int], Awaitable[str]] = generate_ai_reply,
     save_customer_fn: Callable[[str, str], int] = save_customer_contact,
 ) -> None:
@@ -60,13 +79,25 @@ async def process_inbound_message(
         cmd = texto.lower()
         if cmd in ["desativar bot", "desligar bot", "pausar bot"]:
             set_bot_ativo(False)
-            await responder_usuario_fn(telefone, "🚫 Bot desativado temporariamente.")
+            await _send_message(
+                responder_usuario_fn,
+                telefone,
+                "🚫 Bot desativado temporariamente.",
+                role="bot",
+                actor_label="Bot",
+            )
             log_event("admin_bot_disabled", phone_hash=hash_phone(telefone))
             return
 
         if cmd in ["ativar bot", "ligar bot", "reativar bot"]:
             set_bot_ativo(True)
-            await responder_usuario_fn(telefone, "✅ Bot reativado e pronto para atender!")
+            await _send_message(
+                responder_usuario_fn,
+                telefone,
+                "✅ Bot reativado e pronto para atender!",
+                role="bot",
+                actor_label="Bot",
+            )
             log_event("admin_bot_enabled", phone_hash=hash_phone(telefone))
             return
 
@@ -102,13 +133,26 @@ async def process_inbound_message(
         log_event("handler_duplicate_content", phone_hash=hash_phone(telefone), text=preview_text(texto))
         return
     set_recent_message(telefone, texto, agora)
+    append_conversation_message(
+        telefone,
+        role="cliente",
+        actor_label=nome_cliente or "Cliente",
+        content=texto,
+        seen_at=agora,
+    )
 
     cliente_id = save_customer_fn(telefone, nome_cliente)
 
     if is_store_closed():
         notice = get_store_closed_notice()
         log_event("handler_store_closed_notice_sent", phone_hash=hash_phone(telefone))
-        await responder_usuario_fn(telefone, notice)
+        await _send_message(
+            responder_usuario_fn,
+            telefone,
+            notice,
+            role="bot",
+            actor_label="Bot",
+        )
         return
 
     if telefone in estados_atendimento:
@@ -119,11 +163,23 @@ async def process_inbound_message(
         ultimo_contato = datetime.fromisoformat(estado["inicio"])
         if (agora - ultimo_contato) > timedelta(minutes=30):
             deactivate_human_handoff(telefone)
-            await responder_usuario_fn(telefone, build_reactivation_message())
+            await _send_message(
+                responder_usuario_fn,
+                telefone,
+                build_reactivation_message(),
+                role="bot",
+                actor_label="Bot",
+            )
         else:
             if texto in REATIVAR_BOT_OPCOES:
                 deactivate_human_handoff(telefone)
-                await responder_usuario_fn(telefone, build_reactivation_message())
+                await _send_message(
+                    responder_usuario_fn,
+                    telefone,
+                    build_reactivation_message(),
+                    role="bot",
+                    actor_label="Bot",
+                )
                 return
 
             estados_atendimento[telefone]["inicio"] = agora.isoformat()
@@ -138,4 +194,10 @@ async def process_inbound_message(
             reply=resposta_ia,
         )
     )
-    await responder_usuario_fn(telefone, resposta_ia)
+    await _send_message(
+        responder_usuario_fn,
+        telefone,
+        resposta_ia,
+        role="ia",
+        actor_label="IA",
+    )

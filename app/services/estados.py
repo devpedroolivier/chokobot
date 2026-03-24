@@ -9,6 +9,7 @@ estados_cestas_box = _store.estados_cestas_box
 estados_atendimento = _store.estados_atendimento
 ai_sessions = _store.ai_sessions
 recent_messages = _store.recent_messages
+conversation_threads = _store.conversation_threads
 
 
 def is_bot_ativo() -> bool:
@@ -33,6 +34,20 @@ def get_recent_message(phone: str) -> dict | None:
 
 def set_recent_message(phone: str, text: str, seen_at) -> None:
     _store.set_recent_message(phone, text, seen_at)
+
+
+def get_conversation_messages(phone: str) -> list[dict]:
+    return _store.get_conversation_messages(phone)
+
+
+def append_conversation_message(phone: str, *, role: str, actor_label: str, content: str, seen_at) -> None:
+    _store.append_conversation_message(
+        phone,
+        role=role,
+        actor_label=actor_label,
+        content=content,
+        seen_at=seen_at,
+    )
 
 
 def clear_runtime_state() -> None:

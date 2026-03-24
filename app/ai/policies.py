@@ -89,6 +89,13 @@ def requests_easter_catalog(text: str) -> bool:
         r"\bpascoa\b",
         r"\bovo(s)?\s+de\s+pascoa\b",
         r"\bcardapio\s+de\s+pascoa\b",
+        r"\bovo(s)?\s+de\s+chocolate\b",
+        r"\bovo(s)?\s+rechead[oa]s?\b",
+        r"\bovo(s)?\s+de\s+colher\b",
+        r"\bcasca\s+recheada\b",
+        r"\bcoelho\s+de\s+pascoa\b",
+        r"\bovo(s)?\b.*\b(prestigio|prestigio|brigadeiro|ninho|pistache|oreo|rechead[oa])\b",
+        r"\b(prestigio|prestigio|brigadeiro|ninho|pistache|oreo)\b.*\bovo(s)?\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 
