@@ -42,6 +42,10 @@ class FrontendSnapshotRoutesTests(unittest.TestCase):
                     "nao",
                     "entrega",
                     "2026-03-23 18:10:00",
+                    "pendente",
+                    "Bolo Tradicional",
+                    "2026-03-23 18:10:00",
+                    120.0,
                 )
             ],
             statuses_by_id={10: "em_preparo"},
@@ -70,6 +74,9 @@ class FrontendSnapshotRoutesTests(unittest.TestCase):
                     "entrega",
                     "2026-03-23 18:10:00",
                     "agendada",
+                    "Bolo Tradicional",
+                    "2026-03-23 18:10:00",
+                    120.0,
                 )
             ]
         )
