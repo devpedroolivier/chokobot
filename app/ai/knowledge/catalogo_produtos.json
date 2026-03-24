@@ -1,0 +1,957 @@
+{
+  "metadata": {
+    "currency": "BRL",
+    "generated_from": [
+      "Cafeteria_20mb.pdf",
+      "Pascoa_20mb.pdf",
+      "Mimos_Presentes_Pascoa_20mb.pdf"
+    ],
+    "notes": [
+      "Catalogo estruturado extraido manualmente a partir dos PDFs enviados pelo usuario.",
+      "Campos de descricao foram mantidos concisos quando a arte do PDF nao permitia leitura integral sem ambiguidade.",
+      "Este arquivo contem apenas dados. Nao altera a logica de negocio existente."
+    ]
+  },
+  "items": [
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Pao de Queijo",
+      "price_brl": 5.5,
+      "unit": "unidade",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Pao de Queijo Recheado",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "options": [
+        "Presunto e mucarela",
+        "Presunto e queijo fresco",
+        "Peito de peru e mucarela",
+        "Peito de peru e queijo fresco",
+        "Queijo fresco com tomate e oregano"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Pao de Queijo Tomate Confit",
+      "price_brl": 14.0,
+      "unit": "unidade",
+      "description": "Recheado com mucarela, requeijao e tomate confit.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Bauru",
+      "price_brl": 17.0,
+      "options": [
+        "Presunto e mucarela",
+        "Presunto e queijo fresco",
+        "Peito de peru e mucarela",
+        "Peito de peru e queijo fresco"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Croissant",
+      "price_brl": 14.5,
+      "options": [
+        "Frango com requeijao",
+        "Presunto e mucarela",
+        "Peito de peru e provolone",
+        "Quatro queijos",
+        "Chocolate"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Lanchinho Fit",
+      "price_brl": 14.0,
+      "availability_note": "Apenas de quinta-feira.",
+      "options": [
+        "Atum com pate de cenoura",
+        "Queijo fresco com pate de presunto",
+        "Salame com pate de azeitona",
+        "Frango com mucarela"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Pao de Forma com Manteiga",
+      "price_brl": 6.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Ovos com Bacon",
+      "price_brl": 25.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Mistinho com Omelete",
+      "price_brl": 17.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Omelete Recheado",
+      "price_brl": 21.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Lanche 3 Queijos com Tomate Confit",
+      "price_brl": 25.0,
+      "description": "Recheado com mucarela, requeijao, parmesao e tomate confit.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Croque Madame",
+      "price_brl": 25.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "salgados_e_lanches",
+      "name": "Toast de Parma com Tomate Confit",
+      "price_brl": 26.0,
+      "description": "Requeijao cremoso e azeite no pao italiano artesanal.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "ChokoBenta",
+      "price_brl": 22.0,
+      "description": "Bolo de chocolate com brigadeiro caseiro, cobertura de nha benta de ninho e confeitos belga.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Bolo Gelado",
+      "price_brl": 8.0,
+      "unit": "unidade",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Bolo Gourmet",
+      "variant": "fatia",
+      "price_brl": 14.5,
+      "unit": "unidade",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Explosao de Sabor",
+      "price_brl": 25.0,
+      "description": "Bolinho de chocolate morno com sorvete, esfera de chocolate, calda de chocolate e morangos picados.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Ice Mousse Cake",
+      "price_brl": 25.0,
+      "description": "Bolinho de chocolate morno com calda de chocolate e sorvete.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Cheesecake no Pote",
+      "price_brl": 18.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Torre Ice Mousse Cake",
+      "price_brl": 30.0,
+      "description": "2 bolinhos de chocolate morno recheados com doce de leite ou nutella, acompanhados por sorvete.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Torta",
+      "variant": "fatia",
+      "price_brl": 14.5,
+      "unit": "unidade",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "sobremesas",
+      "name": "Vulcaozinho de Cenoura com Calda de Chocolate",
+      "price_brl": 16.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Cappuccino com Canela",
+      "price_brl": 8.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Cappuccino Italiano",
+      "price_brl": 8.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Achocolatado",
+      "price_brl": 8.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Cafe Curto",
+      "price_brl": 5.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Cafe Longo",
+      "price_brl": 6.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Cafe com Leite",
+      "price_brl": 8.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Mocaccino",
+      "price_brl": 8.5,
+      "description": "Cafe com chocolate.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "cafes_quentes",
+      "name": "Adicional de Borda para Cappuccinos Especiais",
+      "price_brl": 2.0,
+      "options": [
+        "Chantilly",
+        "Doce de leite",
+        "Nutella"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Ice Pistache",
+      "price_brl": 39.9,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Ice Cappuccino",
+      "price_brl": 25.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Ice Chocolate",
+      "price_brl": 25.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Ice Negresco",
+      "price_brl": 27.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Ice Ovomaltine",
+      "price_brl": 27.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Ice Tea",
+      "price_brl": 4.5,
+      "size": "300ml",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Soda Italiana",
+      "price_brl": 13.5,
+      "availability_note": "Consultar sabores.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Suco de Laranja",
+      "price_brl": 8.0,
+      "size": "300ml",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "bebidas_geladas",
+      "name": "Suco Tropical de Abacaxi",
+      "price_brl": 15.0,
+      "description": "Sorvete de creme, abacaxi e agua.",
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Agua",
+      "variant": "sem gas",
+      "size": "500ml",
+      "price_brl": 3.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Agua",
+      "variant": "com gas",
+      "size": "500ml",
+      "price_brl": 4.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Refrigerante Lata",
+      "size": "350ml",
+      "price_brl": 6.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Suco Del Valle",
+      "size": "290ml",
+      "price_brl": 8.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Coca Cola KS",
+      "size": "290ml",
+      "price_brl": 5.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Cerveja Heineken",
+      "size": "330ml",
+      "price_brl": 14.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Monster Energy",
+      "size": "473ml",
+      "price_brl": 17.0,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "outras_bebidas",
+      "name": "Agua Sprite Lemon Fresh",
+      "size": "510ml",
+      "price_brl": 5.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "delicias_de_inverno",
+      "name": "Cappuccino Lotus",
+      "price_brl": 21.9,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "delicias_de_inverno",
+      "name": "Chokolate Quente Nutella e Morango",
+      "price_brl": 16.9,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "delicias_de_inverno",
+      "name": "Chocolate Quente Lotus",
+      "price_brl": 23.9,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "delicias_de_inverno",
+      "name": "Chocolate Quente Pistache",
+      "price_brl": 23.9,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "delicias_de_inverno",
+      "name": "Cappuccino Pistache",
+      "price_brl": 21.9,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Bombom",
+      "price_brl": 3.0,
+      "options": [
+        "Maracuja",
+        "Preto e Branco",
+        "Prestigio",
+        "Sensacao",
+        "Tradicional"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Bombom Fino",
+      "price_brl": 3.5,
+      "options": [
+        "Camafeu",
+        "Cereja",
+        "Prestigio",
+        "Preto e Branco",
+        "Tradicional"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cake",
+      "price_brl": 9.0,
+      "options": [
+        "Brigadeiro",
+        "Camafeu",
+        "Doce de Leite"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Chokobom",
+      "price_brl": 7.5,
+      "options": [
+        "Doce de Leite",
+        "Maracuja",
+        "Prestigio",
+        "Preto e Branco",
+        "Sensacao",
+        "Tradicional"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cone Tradicional",
+      "price_brl": 13.5,
+      "options": [
+        "Brigadeiro",
+        "Cereja",
+        "Maracuja",
+        "Ninho",
+        "Preto e Branco",
+        "Sensacao",
+        "Tradicional",
+        "Prestigio"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cone Cookies com Nutella",
+      "price_brl": 16.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Pote com 5 Docinhos",
+      "price_brl": 8.5,
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Trufas",
+      "price_brl": 7.5,
+      "options": [
+        "Branca",
+        "Brigadeiro",
+        "Cereja",
+        "Maracuja",
+        "Meio Amarga",
+        "Ninho",
+        "Prestigio",
+        "Preto e Branca",
+        "Sensacao",
+        "Tradicional"
+      ],
+      "source_pdf": "Cafeteria_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "lancamentos_premium",
+      "name": "Ovo Supremo",
+      "price_brl": 179.9,
+      "weight_approx": "530g",
+      "notes": "Colecao premium lancamentos.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "lancamentos_premium",
+      "name": "Ovo Supremo",
+      "variant": "sabores destacados",
+      "price_brl": 179.9,
+      "weight_approx": "530g",
+      "options": [
+        "Chocolate Branco com Frutas de Avela e Gianduia",
+        "Chocolate Branco com Negresco e Nutella"
+      ],
+      "availability_note": "A arte promocional indica gomos sortidos; nem todos os textos ficaram legiveis no PDF.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "lancamentos_premium",
+      "name": "Ovo Intenso 65%",
+      "price_brl": 149.9,
+      "weight_approx": "400g",
+      "description": "Chocolate 65% com mix de castanhas e brigadeiro amargo.",
+      "notes": "Colecao premium lancamentos.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "lancamentos_premium",
+      "name": "Ovo Cravejado Lotus",
+      "price_brl": 139.9,
+      "weight_approx": "450g",
+      "description": "Chocolate meio amargo cravejado com chocolate branco e biscoito Lotus.",
+      "notes": "Colecao premium lancamentos.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_especiais",
+      "name": "Ovo Cookie Nutella",
+      "price_brl": 119.9,
+      "weight_approx": "380g",
+      "description": "Casca de cookie recheada com Nutella, brigadeiro branco com negresco e mousse de chocolate.",
+      "notes": "Colecao premium lancamentos.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_especiais",
+      "name": "Ovo Pudim dos Sonhos",
+      "price_brl": 119.9,
+      "weight_approx": "430g",
+      "description": "Ovo com proposta de pudim e chocolate branco.",
+      "notes": "Colecao premium lancamentos.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_especiais",
+      "name": "Ovo Linha Presente",
+      "price_brl": 89.9,
+      "weight_approx": "400g",
+      "availability_note": "O PDF apresenta este item como opcao ideal para presentear.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_trufados",
+      "name": "Ovos Trufados",
+      "variant": "400g",
+      "price_brl": 109.9,
+      "weight_approx": "400g",
+      "options": [
+        "Trufado Brigadeiro",
+        "Trufado Cereja",
+        "Trufado Maracuja",
+        "Trufado Negresco com Nutella"
+      ],
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_trufados",
+      "name": "Ovos Trufados",
+      "variant": "550g",
+      "price_brl": 139.9,
+      "weight_approx": "550g",
+      "options": [
+        "Trufado Brigadeiro",
+        "Trufado Cereja",
+        "Trufado Maracuja",
+        "Trufado Negresco com Nutella"
+      ],
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_trufados",
+      "name": "Ovos Trufados",
+      "variant": "1 kilo",
+      "price_brl": 229.9,
+      "weight_approx": "1 kilo",
+      "options": [
+        "Trufado Brigadeiro",
+        "Trufado Cereja",
+        "Trufado Maracuja",
+        "Trufado Negresco com Nutella"
+      ],
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_crocantes",
+      "name": "Ovos Crocantes",
+      "variant": "400g",
+      "price_brl": 109.9,
+      "weight_approx": "400g",
+      "description": "Chocolate ao leite ou branco com pedacos crocantes de Rocks Ovomaltine.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_crocantes",
+      "name": "Ovos Crocantes",
+      "variant": "550g",
+      "price_brl": 139.9,
+      "weight_approx": "550g",
+      "description": "Chocolate ao leite ou branco com pedacos crocantes de Rocks Ovomaltine.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_crocantes",
+      "name": "Ovos Crocantes",
+      "variant": "1 kilo",
+      "price_brl": 229.9,
+      "weight_approx": "1 kilo",
+      "description": "Chocolate ao leite ou branco com pedacos crocantes de Rocks Ovomaltine.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_de_colher",
+      "name": "Ovo de Colher Brownie",
+      "price_brl": 129.9,
+      "weight_approx": "430g",
+      "description": "Casca artesanal de brownie 65% recheada com creme de Ovomaltine e Leite Ninho.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_de_colher",
+      "name": "Ovo de Colher Kinder",
+      "price_brl": 129.9,
+      "weight_approx": "470g",
+      "description": "Chocolate ao leite com brigadeiro de Nutella, Leite Ninho e pedacos de Kinder Bueno.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_verticais",
+      "name": "Ovo Vertical Pistache",
+      "price_brl": 159.9,
+      "weight_approx": "330g",
+      "description": "Chocolate ao leite cravejado com pistache, recheado com creme intenso de pistache.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "ovos_verticais",
+      "name": "Ovo Vertical Drage",
+      "price_brl": 109.9,
+      "weight_approx": "450g",
+      "description": "Chocolate ao leite cravejado com drages crocantes e recheado com brigadeiro cremoso.",
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "trios_de_colher",
+      "name": "Trio de Colher 1",
+      "price_brl": 109.9,
+      "weight_approx": "430g",
+      "options": [
+        "Cookie com Gianduia",
+        "Coco Nevado",
+        "Kinder"
+      ],
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa",
+      "section": "trios_de_colher",
+      "name": "Trio de Colher 2",
+      "price_brl": 109.9,
+      "weight_approx": "520g",
+      "options": [
+        "Alpino",
+        "Negresco e Nutella",
+        "Brownie Ovomaltine"
+      ],
+      "source_pdf": "Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "boxes",
+      "name": "Box G Premium",
+      "price_brl": 359.9,
+      "options": [
+        "Pelicia de coelho",
+        "Ovo Trufado 400g",
+        "1 Cake",
+        "1 Brownie",
+        "1 Tablete 30g",
+        "2 Chokobons",
+        "3 Trufas",
+        "6 Bombons Trufados"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "boxes",
+      "name": "Box G Trio Desejo",
+      "price_brl": 249.9,
+      "options": [
+        "Trio de Ovos",
+        "1 Brownie",
+        "1 Cake",
+        "2 Chokobons",
+        "4 Trufas",
+        "6 Bombons Trufados"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "boxes",
+      "name": "Box M Especial",
+      "price_brl": 299.9,
+      "options": [
+        "Pelicia de coelho",
+        "Ovo Trufado 400g",
+        "1 Tablete 30g",
+        "1 Chokobon",
+        "2 Trufas",
+        "5 Bombons Trufados",
+        "Balao personalizado"
+      ],
+      "notes": "Arte destaca como mais vendida.",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "boxes",
+      "name": "Box M Encanto",
+      "price_brl": 249.9,
+      "options": [
+        "Ovo Trufado 400g",
+        "1 Brownie",
+        "1 Tablete 30g",
+        "1 Chokobon",
+        "2 Trufas",
+        "5 Bombons Trufados",
+        "Balao personalizado"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "boxes",
+      "name": "Box P Docura",
+      "price_brl": 169.9,
+      "options": [
+        "Ovo Tablete 150g trufado",
+        "Balao personalizado",
+        "1 Brownie",
+        "1 Cake",
+        "2 Trufas",
+        "5 Bombons"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "ovos_tablete",
+      "name": "Ovo Tablete",
+      "price_brl": 44.9,
+      "weight_approx": "150g",
+      "options": [
+        "Blend com recheio Ovomaltine, Brownie e Ninho",
+        "Chocolate branco com recheio Cheesecake",
+        "Chocolate meio amargo 50% com recheio Amarena"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "mini_ovos",
+      "name": "Caixa com 6 Mini Ovos",
+      "price_brl": 59.9,
+      "weight_approx": "200g",
+      "options": [
+        "Chocolate ao leite com brigadeiro cremoso",
+        "Chocolate branco com Rafaello",
+        "Chocolate ao leite com Ovomaltine"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "mini_ovos",
+      "name": "Tubolata com 3 Mini Ovos de Cookies",
+      "price_brl": 59.9,
+      "weight_approx": "230g",
+      "options": [
+        "Cookies com Nutella",
+        "Red Velvet",
+        "Brownie"
+      ],
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "barras_e_cakes",
+      "name": "Barra Recheada",
+      "price_brl": 69.9,
+      "weight_approx": "300g",
+      "description": "Chocolate branco com Negresco e Nutella purinha.",
+      "notes": "Arte destaca como mais vendida.",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "barras_e_cakes",
+      "name": "Caixa com 3 Cakes Coelhinho",
+      "price_brl": 39.9,
+      "weight_approx": "200g",
+      "options": [
+        "Brigadeiro",
+        "Doce de Leite",
+        "Ninho"
+      ],
+      "notes": "Arte destaca como mais vendida.",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "presentes",
+      "name": "Caneca Porcelana com Duo de Cookies",
+      "price_brl": 89.9,
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "presentes",
+      "name": "Blister com Ovinho",
+      "price_brl": 19.9,
+      "weight_approx": "80g",
+      "description": "Brigadeiro cremoso.",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "presentes",
+      "name": "Cookie na Caixinha",
+      "price_brl": 19.9,
+      "availability_note": "Sabores sortidos: Nutella, Black e Red.",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "presentes",
+      "name": "Tablete",
+      "price_brl": 14.9,
+      "weight_approx": "30g",
+      "description": "Chocolate branco com Negresco.",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "presentes",
+      "name": "Brownie 65% na Caixinha",
+      "price_brl": 14.9,
+      "weight_approx": "50g",
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "pelucias",
+      "name": "Pelicia Coelho",
+      "variant": "tam. P",
+      "price_brl": 44.9,
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    },
+    {
+      "catalog": "pascoa_presentes",
+      "section": "pelucias",
+      "name": "Pelicia Coelho",
+      "variant": "tam. G",
+      "price_brl": 79.9,
+      "source_pdf": "Mimos_Presentes_Pascoa_20mb.pdf"
+    }
+  ]
+}

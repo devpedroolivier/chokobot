@@ -29,6 +29,12 @@
 ### 4. Cafeteria e Itens de Vitrine
 - **Cardapio Cafeteria:** http://bit.ly/44ZlKlZ
 - A vitrine pode variar no dia. Se o cliente pedir sabores disponiveis agora, informar somente o que estiver na pronta entrega/cafeteria.
+- Itens extraidos do cardapio da cafeteria:
+  - **Salgados e lanches:** Pao de Queijo (R$5,50), Pao de Queijo Recheado (R$12,00), Pao de Queijo Tomate Confit (R$14,00), Bauru (R$17,00), Croissant (R$14,50), Ovos com Bacon (R$25,00), Mistinho com Omelete (R$17,00), Omelete Recheado (R$21,00), Lanche 3 Queijos com Tomate Confit (R$25,00), Croque Madame (R$25,00), Toast de Parma com Tomate Confit (R$26,00)
+  - **Sobremesas:** ChokoBenta (R$22,00), Bolo Gelado (R$8,00), Bolo Gourmet fatia (R$14,50), Explosao de Sabor (R$25,00), Ice Mousse Cake (R$25,00), Cheesecake no Pote (R$18,00), Torre Ice Mousse Cake (R$30,00), Torta fatia (R$14,50), Vulcaozinho de Cenoura (R$16,50)
+  - **Cafes e quentes:** Cappuccino com Canela (R$8,50), Cappuccino Italiano (R$8,50), Cafe Curto (R$5,00), Cafe Longo (R$6,00), Cafe com Leite (R$8,50), Mocaccino (R$8,50)
+  - **Gelados e bebidas:** Ice Pistache (R$39,90), Ice Cappuccino (R$25,00), Ice Chocolate (R$25,00), Ice Negresco (R$27,00), Ice Ovomaltine (R$27,00), Ice Tea (R$4,50), Soda Italiana (R$13,50), Suco de Laranja (R$8,00), Suco Tropical de Abacaxi (R$15,00)
+  - **Doceria de cafeteria:** Bombom (R$3,00), Bombom Fino (R$3,50), Cake (R$9,00), Chokobom (R$7,50), Cone Tradicional (R$13,50), Cone Cookies com Nutella (R$16,50), Pote com 5 Docinhos (R$8,50), Trufas (R$7,50)
 
 ### 5. Doces Avulsos
 - **Cardapio de Doces:** https://bit.ly/doceschoko
@@ -101,6 +107,50 @@
 ### 7. Cestas e Presentes
 - Oferecemos **cestas (Box Cafe ou Chocolate), caixinha de chocolate e flores**
 - **Catalogo de presentes:** https://bit.ly/presenteschoko
+
+## Pascoa Inesquecivel
+- **Catalogo oficial:** https://pascoachoko.goomer.app
+- Destaques extraidos do catalogo:
+  - Ovo Supremo: R$179,90
+  - Ovo Intenso 65%: R$149,90
+  - Ovo Cravejado Lotus: R$139,90
+  - Ovo Cookie Nutella: R$119,90
+  - Ovo Pudim dos Sonhos: R$119,90
+  - Ovo Linha Presente: R$89,90
+  - Ovos Trufados: 400g R$109,90 | 550g R$139,90 | 1 kilo R$229,90
+  - Ovos Crocantes: 400g R$109,90 | 550g R$139,90 | 1 kilo R$229,90
+  - Ovo de Colher Brownie: R$129,90
+  - Ovo de Colher Kinder: R$129,90
+  - Ovo Vertical Pistache: R$159,90
+  - Ovo Vertical Drage: R$109,90
+  - Trio de Colher 1: R$109,90
+  - Trio de Colher 2: R$109,90
+- **Mimos e Presentes de Pascoa:**
+  - Box G Premium: R$359,90
+  - Box G Trio Desejo: R$249,90
+  - Box M Especial: R$299,90
+  - Box M Encanto: R$249,90
+  - Box P Docura: R$169,90
+  - Ovo Tablete 150g: R$44,90
+  - Caixa com 6 Mini Ovos 200g: R$59,90
+  - Tubolata com 3 Mini Ovos de Cookies 230g: R$59,90
+  - Barra Recheada 300g: R$69,90
+  - Caixa com 3 Cakes Coelhinho 200g: R$39,90
+  - Caneca Porcelana com Duo de Cookies: R$89,90
+  - Blister com Ovinho 80g: R$19,90
+  - Cookie na Caixinha: R$19,90
+  - Tablete 30g: R$14,90
+  - Brownie 65% na Caixinha 50g: R$14,90
+  - Pelucia Coelho tam. P: R$44,90
+  - Pelucia Coelho tam. G: R$79,90
+- Sabores que aparecem no catalogo visual:
+  - Ovos Trufados: Brigadeiro, Cereja, Maracuja, Negresco com Nutella
+  - Trio de Colher 1: Cookie com Gianduia, Coco Nevado, Kinder
+  - Trio de Colher 2: Alpino, Negresco e Nutella, Brownie Ovomaltine
+  - Ovo Tablete: Blend com Ovomaltine/Brownie/Ninho, Cheesecake, Amarena
+  - Mini Ovos: Brigadeiro Cremoso, Rafaello, Ovomaltine
+  - Mini Ovos de Cookies: Cookies com Nutella, Red Velvet, Brownie
+- Base estruturada interna: `app/ai/knowledge/catalogo_produtos.json`
 
 ## Entregas e Pagamento
 - **Horario de funcionamento:** segunda (12h-18h), terca-sabado (9h-18h), domingo (fechado)
