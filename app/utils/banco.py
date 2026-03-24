@@ -1,9 +1,16 @@
 # app/utils/banco.py
+import sqlite3
 from datetime import datetime
 from typing import List, Optional
 
 from app.db.database import get_connection
 from app.infrastructure.repositories.sqlite_order_write_repository import SQLiteOrderWriteRepository
+
+
+def _existing_columns(conn: sqlite3.Connection, table: str, candidates: list[str]) -> list[str]:
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    available = {str(row[1]) for row in cur.fetchall()}
+    return [column for column in candidates if column in available]
 
 
 def salvar_pedido_cafeteria_sqlite(phone: str, itens: List[str], nome: str = "Nome não informado"):

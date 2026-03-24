@@ -5,7 +5,10 @@ from datetime import date, datetime, timedelta
 from typing import Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.domain.repositories.customer_process_repository import CustomerProcessRepository
+from app.domain.repositories.customer_process_repository import (
+    CustomerProcessRecord,
+    CustomerProcessRepository,
+)
 from app.domain.repositories.customer_repository import CustomerRecord, CustomerRepository
 from app.domain.repositories.order_repository import OrderPanelItem
 from app.observability import snapshot_metrics
