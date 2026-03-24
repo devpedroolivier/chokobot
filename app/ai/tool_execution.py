@@ -24,10 +24,26 @@ _CONFIRMATION_MARKERS = (
 )
 
 _TRANSFER_MESSAGES = {
-    "CakeOrderAgent": "Vou transferir voce para a especialista em encomendas de bolos. Um momento, por favor! 😊\n🔄 Transferindo...",
-    "SweetOrderAgent": "Vou transferir voce para a especialista em docinhos e encomendas. Um momento, por favor! 😊\n🔄 Transferindo...",
-    "CafeteriaAgent": "Vou transferir voce para o agente que pode ajudar com pronta entrega e cafeteria. Um momento, por favor! 😊\n🔄 Transferindo...",
-    "KnowledgeAgent": "Vou transferir voce para o agente que pode te ajudar com cardapio e informacoes da loja. Um momento, por favor! 😊\n🔄 Transferindo...",
+    "CakeOrderAgent": (
+        "Transferencia interna concluida para CakeOrderAgent. "
+        "Continue a partir da ultima mensagem do cliente e responda diretamente, "
+        "sem avisar novamente que houve transferencia."
+    ),
+    "SweetOrderAgent": (
+        "Transferencia interna concluida para SweetOrderAgent. "
+        "Continue a partir da ultima mensagem do cliente e responda diretamente, "
+        "sem avisar novamente que houve transferencia."
+    ),
+    "CafeteriaAgent": (
+        "Transferencia interna concluida para CafeteriaAgent. "
+        "Atenda a ultima mensagem do cliente agora, consultando pronta entrega/cafeteria quando necessario, "
+        "e responda diretamente sem avisar novamente que houve transferencia."
+    ),
+    "KnowledgeAgent": (
+        "Transferencia interna concluida para KnowledgeAgent. "
+        "Continue a partir da ultima mensagem do cliente e responda diretamente, "
+        "sem avisar novamente que houve transferencia."
+    ),
 }
 
 
@@ -56,7 +72,10 @@ def _is_saved_order_result(tool_result: str) -> bool:
 def _transfer_message_for_agent(agent_name: str | None) -> str:
     return _TRANSFER_MESSAGES.get(
         agent_name or "",
-        "Vou te transferir para o agente certo. Um momento, por favor! 😊\n🔄 Transferindo...",
+        (
+            "Transferencia interna concluida para o agente correto. "
+            "Continue a partir da ultima mensagem do cliente e responda diretamente."
+        ),
     )
 
 
@@ -84,7 +103,7 @@ def handle_tool_call(
             session["current_agent"] = new_agent
             tool_result = _transfer_message_for_agent(new_agent)
             save_session_fn(telefone, session)
-            return True, tool_result
+            return False, tool_result
         else:
             tool_result = f"Erro: Agente {new_agent} não existe."
     elif function_name == "get_menu":

@@ -10,7 +10,7 @@ class AIToolExecutionTests(unittest.TestCase):
     def setUp(self):
         clear_metrics()
 
-    def test_transfer_to_agent_updates_session_and_short_circuits_with_transfer_message(self):
+    def test_transfer_to_agent_updates_session_and_keeps_run_active(self):
         session = {"messages": [], "current_agent": "TriageAgent"}
         saved = []
         runtime = runner.AIRuntime(
@@ -33,9 +33,9 @@ class AIToolExecutionTests(unittest.TestCase):
             save_session_fn=lambda telefone, state: saved.append((telefone, dict(state))),
         )
 
-        self.assertTrue(should_return)
+        self.assertFalse(should_return)
         self.assertEqual(session["current_agent"], "CafeteriaAgent")
-        self.assertIn("Transferindo", tool_result)
+        self.assertIn("Transferencia interna concluida", tool_result)
         self.assertEqual(saved[0][0], "5511999999999")
 
     def test_escalate_to_human_clears_messages_and_short_circuits(self):

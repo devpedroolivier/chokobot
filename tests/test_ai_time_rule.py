@@ -88,7 +88,8 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
                             _tool_call("transfer_to_agent", {"agent_name": "CafeteriaAgent"})
                         ]
                     )
-                )
+                ),
+                _response(_message("Temos bolos de pronta entrega e itens de cafeteria disponíveis hoje."))
             ]
         )
         fake_client = SimpleNamespace(
@@ -104,9 +105,13 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
                 now=now,
             )
 
-        self.assertIn("Transferindo", reply)
+        self.assertEqual(reply, "Temos bolos de pronta entrega e itens de cafeteria disponíveis hoje.")
         self.assertEqual(runner.CONVERSATIONS["5516999999999"]["current_agent"], "CafeteriaAgent")
-        self.assertEqual(create_mock.await_count, 1)
+        self.assertEqual(create_mock.await_count, 2)
+        second_messages = create_mock.await_args_list[1].kwargs["messages"]
+        tool_messages = [message for message in second_messages if message["role"] == "tool"]
+        self.assertTrue(tool_messages)
+        self.assertIn("Transferencia interna concluida para CafeteriaAgent", tool_messages[-1]["content"])
 
     async def test_process_message_retries_when_model_hallucinates_cutoff_before_1730(self):
         now = datetime(2026, 3, 18, 13, 22, tzinfo=ZoneInfo("America/Sao_Paulo"))
