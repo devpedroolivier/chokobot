@@ -16,7 +16,11 @@ from app.application.service_registry import (
 from app.db.database import get_connection
 from app.infrastructure.gateways.local_catalog_gateway import _normalize_text
 from app.security import ai_learning_enabled, security_audit
-from app.services.commercial_rules import DELIVERY_FEE_STANDARD
+from app.services.commercial_rules import (
+    CARD_INSTALLMENT_MAX,
+    CARD_INSTALLMENT_MIN_TOTAL,
+    DELIVERY_FEE_STANDARD,
+)
 from app.services.encomendas_utils import (
     GOURMET_ALIASES,
     LIMITE_HORARIO_ENTREGA,
@@ -220,19 +224,50 @@ def _normalize_payment_data(pagamento: dict | None) -> dict:
     payload = dict(pagamento or {})
     forma = (payload.get("forma") or "").strip()
     troco_para = payload.get("troco_para")
+    parcelas = payload.get("parcelas")
 
     if forma != "Dinheiro":
         payload["troco_para"] = None
+    elif troco_para in (None, ""):
+        payload["troco_para"] = None
+    else:
+        try:
+            payload["troco_para"] = float(troco_para)
+        except (TypeError, ValueError):
+            payload["troco_para"] = None
+
+    try:
+        parcelas_int = int(parcelas)
+    except (TypeError, ValueError):
+        parcelas_int = None
+
+    payload["parcelas"] = parcelas_int if parcelas_int and parcelas_int > 1 else None
+    return payload
+
+
+def _apply_card_installment_rule(pagamento: dict | None, total_value: float) -> dict:
+    payload = dict(pagamento or {})
+    forma = (payload.get("forma") or "").strip()
+    parcelas = payload.get("parcelas")
+
+    if forma != "Cartão (débito/crédito)":
+        payload["parcelas"] = None
         return payload
 
-    if troco_para in (None, ""):
-        payload["troco_para"] = None
+    if float(total_value or 0) <= CARD_INSTALLMENT_MIN_TOTAL:
+        payload["parcelas"] = None
         return payload
 
     try:
-        payload["troco_para"] = float(troco_para)
+        parcelas_int = int(parcelas)
     except (TypeError, ValueError):
-        payload["troco_para"] = None
+        parcelas_int = None
+
+    if parcelas_int is None or parcelas_int <= 1:
+        payload["parcelas"] = None
+        return payload
+
+    payload["parcelas"] = min(parcelas_int, CARD_INSTALLMENT_MAX)
     return payload
 
 
@@ -547,6 +582,7 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
     if dados["modo_recebimento"] == "entrega" and taxa_entrega <= 0:
         taxa_entrega = TAXA_ENTREGA_PADRAO
     valor_total = round(subtotal + taxa_entrega, 2)
+    dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), valor_total)
 
     return {
         "itens": validated_items,
@@ -952,7 +988,7 @@ def _build_service_line(dados: dict) -> str:
 
 def _build_draft_confirmation_message(*, title: str, flavor_line: str, service_line: str, total_value: float) -> str:
     lines = [
-        "Resumo final do pedido",
+        "Resumo final do pedido (rascunho)",
         "",
         title,
     ]
@@ -1048,6 +1084,11 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
         dados["valor_total"] = 0
         dados["serve_pessoas"] = 0
 
+    dados["pagamento"] = _apply_card_installment_rule(
+        dados.get("pagamento"),
+        float(dados.get("valor_total") or 0),
+    )
+
     if dados["modo_recebimento"] == "entrega" and dados.get("taxa_entrega", 0) == 0:
         dados["taxa_entrega"] = TAXA_ENTREGA_PADRAO
 
@@ -1105,6 +1146,7 @@ def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict |
 
     taxa_entrega = TAXA_ENTREGA_PADRAO if dados["modo_recebimento"] == "entrega" else 0.0
     valor_final = round(total_doces + taxa_entrega, 2)
+    dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), valor_final)
     data_iso = _normalizar_data_iso(dados["data_entrega"])
     desc_itens = ", ".join(f"{it['nome']} x{it['qtd']}" for it in itens_validados)
     order_data = {
@@ -1141,6 +1183,10 @@ class PagamentoSchema(BaseModel):
         ..., description="Forma de pagamento escolhida"
     )
     troco_para: Optional[float] = Field(None, description="Valor para troco, se a forma for Dinheiro")
+    parcelas: Optional[int] = Field(
+        None,
+        description="Parcelas no Cartao. So permitido acima de R$100,00 e no maximo 2x",
+    )
 
 
 class CakeOrderSchema(BaseModel):

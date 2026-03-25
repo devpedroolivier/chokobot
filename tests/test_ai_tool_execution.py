@@ -238,6 +238,56 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertIsNone(order.adicional)
         self.assertNotIn("Cereja", order.descricao)
 
+    def test_create_cake_order_applies_card_installments_from_conversation_correction(self):
+        session = {
+            "messages": [{"role": "user", "content": "Pode deixar no cartão em 2x"}],
+            "current_agent": "CakeOrderAgent",
+            "conversation_correction_context": {
+                "pagamento_forma": "Cartão (débito/crédito)",
+                "parcelas": 2,
+                "latest_source_text": "Pode deixar no cartão em 2x",
+            },
+        }
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+        )
+
+        with patch("app.ai.tool_execution.save_cake_order_draft_process", return_value="rascunho") as mocked_draft:
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name="create_cake_order",
+                arguments={
+                    "linha": "tradicional",
+                    "categoria": "tradicional",
+                    "descricao": "Bolo B4 de chocolate",
+                    "data_entrega": "10/10/2030",
+                    "horario_retirada": "15:00",
+                    "modo_recebimento": "retirada",
+                    "pagamento": {"forma": "PIX"},
+                    "massa": "Chocolate",
+                    "recheio": "Brigadeiro",
+                    "mousse": "Ninho",
+                    "tamanho": "B4",
+                },
+                telefone="5511999999999",
+                nome_cliente="Cliente",
+                cliente_id=1,
+                session=session,
+                save_session_fn=lambda telefone, state: None,
+            )
+
+        self.assertFalse(should_return)
+        self.assertEqual(tool_result, "rascunho")
+        order = mocked_draft.call_args.args[3]
+        self.assertEqual(order.pagamento.forma, "Cartão (débito/crédito)")
+        self.assertEqual(order.pagamento.parcelas, 2)
+
     def test_create_sweet_order_with_explicit_confirmation_persists_and_clears_session(self):
         session = {
             "messages": [{"role": "user", "content": "Sim, pode fechar."}],

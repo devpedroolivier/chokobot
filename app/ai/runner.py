@@ -259,6 +259,21 @@ def _extract_cash_change_amount(normalized_text: str) -> float | None:
         return None
 
 
+def _extract_installments(normalized_text: str) -> int | None:
+    match = re.search(r"\b(?:em\s*)?(\d+)x\b", normalized_text)
+    if not match:
+        match = re.search(r"\b(\d+)\s+vezes\b", normalized_text)
+    if match:
+        try:
+            value = int(match.group(1))
+            return value if value > 1 else None
+        except ValueError:
+            return None
+    if "parcelado" in normalized_text or "parcelar" in normalized_text:
+        return 2
+    return None
+
+
 def _update_conversation_correction_context(session: dict, text: str) -> None:
     normalized = normalize_intent_text(text)
     if not normalized.strip():
@@ -274,6 +289,7 @@ def _update_conversation_correction_context(session: dict, text: str) -> None:
     if payment_form:
         updates["pagamento_forma"] = payment_form
         updates["troco_para"] = _extract_cash_change_amount(normalized) if payment_form == "Dinheiro" else None
+        updates["parcelas"] = _extract_installments(normalized) if payment_form == "Cartão (débito/crédito)" else None
 
     pickup_time = _extract_hour_reference(text)
     if pickup_time:

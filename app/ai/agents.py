@@ -16,6 +16,7 @@ from app.services.commercial_rules import (
     DELIVERY_CUTOFF_LABEL,
     DELIVERY_RULE_LINE,
     PAYMENT_CHANGE_RULE_LINE,
+    PAYMENT_INSTALLMENT_RULE_LINE,
     SAME_DAY_CAKE_ORDER_CUTOFF_LABEL,
     STORE_OPERATION_RULE_LINE,
     SUNDAY_RULE_LINE,
@@ -160,6 +161,7 @@ CAMPOS COMUNS (coletar para TODAS as linhas):
 - modo_recebimento: "retirada" ou "entrega". Se entrega, colete o endereço completo.
 - pagamento: PIX, Cartão ou Dinheiro.
 - {PAYMENT_CHANGE_RULE_LINE} Para tools, troco_para deve ficar vazio.
+- {PAYMENT_INSTALLMENT_RULE_LINE} Se for Cartao e o total passar de R$100,00, voce pode registrar 2x. Fora disso, nao ofereca parcelamento.
 
 REGRA DE LINGUAGEM PARA RESPOSTAS:
 - Se o cliente perguntar "quais recheios temos?", responda listando apenas recheios.
@@ -211,6 +213,7 @@ FLUXO DE COLETA:
 3.1. Se existir `MEMORIA DE DATA DA CONVERSA`, mantenha essa data nos resumos e tools ate o cliente mudar.
 3.1.1. Se existir `MEMORIA DE CORRECOES DA CONVERSA`, use a versao mais recente de modo de recebimento, pagamento e horario; nao retorne para um resumo antigo.
 3.2. Se o [CONTEXTO DO SISTEMA] trouxer calendario operacional especial, siga essa regra ao montar a retirada/entrega.
+3.3. Parcelamento so no Cartao, acima de R$100,00 e no maximo 2x.
 4. Se entrega: colete endereço completo.
 5. Faça um resumo final com todos os itens, quantidades, preços e total.
 6. Peça confirmação (SIM/NÃO).
@@ -243,6 +246,7 @@ INFORMAÇÃO SOBRE ENTREGAS:
 - {SUNDAY_RULE_LINE}
 - NUNCA diga que não fazemos entrega. Informe a taxa e o horário limite.
 - {PAYMENT_CHANGE_RULE_LINE}
+- {PAYMENT_INSTALLMENT_RULE_LINE}
 
 Se o cliente decidir fazer um pedido baseado na sua resposta, pergunte se é bolo ou doces e transfira para o agente correto:
 - Bolo/torta/encomenda personalizada → 'CakeOrderAgent'
@@ -270,6 +274,7 @@ Regras de consulta:
 - So use `create_cafeteria_order` depois de coletar item/variacao/quantidade e os dados finais de retirada ou entrega. Se a ultima mensagem do cliente ainda nao for confirmacao explicita, a ferramenta deve gerar apenas rascunho.
 - Se o detalhe de sabores, preco ou disponibilidade nao estiver nas ferramentas, nao invente. Informe que a disponibilidade varia no dia ou encaminhe o link oficial da Pascoa quando fizer sentido.
 - {CROISSANT_PREP_RULE_LINE}
+- {PAYMENT_INSTALLMENT_RULE_LINE}
 ATENÇÃO: Você NÃO aceita encomendas de bolos personalizados, tortas, cestas ou escolhas de massa/recheio de tamanhos como B3, B4, P4 e P6 para outro dia. Isso é encomenda.
 Se o cliente pedir algo que seja encomenda de bolo, transfira para 'CakeOrderAgent'.
 Se o cliente pedir doces em quantidade para outro dia (ex: "50 brigadeiros para sábado"), transfira para 'SweetOrderAgent'.

@@ -37,6 +37,9 @@ class AIAgentPromptsTests(unittest.TestCase):
     def test_prompts_cover_cash_change_rule_and_croissant_prep_time(self):
         self.assertIn("troco so existe para Dinheiro", KNOWLEDGE_PROMPT)
         self.assertIn("troco so existe para Dinheiro", CAFETERIA_PROMPT)
+        self.assertIn("Parcelamento so no Cartao", KNOWLEDGE_PROMPT)
+        self.assertIn("Parcelamento so no Cartao", CAFETERIA_PROMPT)
+        self.assertIn("Parcelamento so no Cartao", CAKE_ORDER_PROMPT)
         self.assertIn("tempo de preparo do croissant, informe 20 minutos", CAFETERIA_PROMPT)
 
     def test_cake_prompt_requires_canonical_pricing_tool(self):

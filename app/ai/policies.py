@@ -397,6 +397,9 @@ def build_conversation_correction_instruction(correction_context: dict | None) -
     troco_para = correction_context.get("troco_para")
     if payment_form == "Dinheiro" and troco_para not in (None, ""):
         parts.append(f"troco para = {troco_para}")
+    parcelas = correction_context.get("parcelas")
+    if payment_form == "Cartão (débito/crédito)" and parcelas not in (None, ""):
+        parts.append(f"parcelamento mais recente = {parcelas}x")
 
     pickup_time = (correction_context.get("horario_retirada") or "").strip()
     if pickup_time:

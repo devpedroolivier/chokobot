@@ -151,8 +151,13 @@ def _apply_conversation_correction_resolution(arguments: dict, session: dict) ->
         payment_payload["forma"] = payment_form
         if payment_form == "Dinheiro":
             payment_payload["troco_para"] = correction_context.get("troco_para")
+            payment_payload["parcelas"] = None
+        elif payment_form == "Cartão (débito/crédito)":
+            payment_payload["troco_para"] = None
+            payment_payload["parcelas"] = correction_context.get("parcelas")
         else:
             payment_payload["troco_para"] = None
+            payment_payload["parcelas"] = None
         arguments["pagamento"] = payment_payload
 
     pickup_time = (correction_context.get("horario_retirada") or "").strip()

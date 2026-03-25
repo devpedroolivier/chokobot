@@ -163,3 +163,4 @@
 - **Taxa de entrega padrao:** geralmente R$10,00, salvo regra especifica
 - **Formas de pagamento:** PIX, Cartao (debito/credito), Dinheiro
 - **Troco:** somente para pagamento em Dinheiro. PIX e Cartao nao usam troco
+- **Parcelamento:** somente no Cartao, acima de R$100,00, em ate 2x

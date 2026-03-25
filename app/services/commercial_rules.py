@@ -5,6 +5,8 @@ SAME_DAY_CAKE_ORDER_CUTOFF = (11, 0)
 DELIVERY_CUTOFF = (17, 30)
 DELIVERY_FEE_STANDARD = 10.0
 CROISSANT_PREP_MINUTES = 20
+CARD_INSTALLMENT_MIN_TOTAL = 100.0
+CARD_INSTALLMENT_MAX = 2
 
 STORE_WINDOWS = {
     0: ("12:00", "18:00"),
@@ -38,4 +40,7 @@ DELIVERY_RULE_LINE = (
 )
 PAYMENT_CHANGE_RULE_LINE = "Regras de pagamento: troco so existe para Dinheiro. PIX e Cartao nao usam troco."
 SIMPLE_PAYMENT_CHANGE_RULE_LINE = "Troco so existe para Dinheiro. PIX e Cartao nao usam troco."
+PAYMENT_INSTALLMENT_RULE_LINE = (
+    f"Parcelamento so no Cartao e somente acima de {_format_brl(CARD_INSTALLMENT_MIN_TOTAL)}, em ate {CARD_INSTALLMENT_MAX}x."
+)
 CROISSANT_PREP_RULE_LINE = f"Se o cliente perguntar tempo de preparo do croissant, informe {CROISSANT_PREP_MINUTES} minutos."
