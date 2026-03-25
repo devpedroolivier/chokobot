@@ -50,13 +50,14 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
     def test_build_system_time_context_uses_provided_datetime(self):
         now = datetime(2026, 3, 7, 15, 30, tzinfo=ZoneInfo("America/Sao_Paulo"))
         context = runner.build_system_time_context(now)
-        self.assertEqual(
-            context,
-            "Hoje é 07/03/2026, e agora são 15:30. "
-            "Horario oficial de Brasilia (America/Sao_Paulo). "
-            "Status do corte das encomendas para hoje às 11:00: depois do limite. "
-            "Status do corte das entregas às 17:30: antes do limite.",
-        )
+        self.assertIn("Hoje é 07/03/2026, e agora são 15:30.", context)
+        self.assertIn("Horario oficial de Brasilia (America/Sao_Paulo).", context)
+        self.assertIn("Status do corte das encomendas para hoje às 11:00: depois do limite.", context)
+        self.assertIn("Status do corte das entregas às 17:30: antes do limite.", context)
+        self.assertIn("Referencias rapidas de calendario:", context)
+        self.assertIn("Calendario operacional especial:", context)
+        self.assertIn("sabado = 07/03/2026", context)
+        self.assertIn("sabado da semana que vem", context)
 
     async def test_process_message_injects_time_context_into_system_prompt(self):
         now = datetime(2026, 3, 7, 15, 30, tzinfo=ZoneInfo("America/Sao_Paulo"))
@@ -79,6 +80,53 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Hoje é 07/03/2026, e agora são 15:30.", messages[0]["content"])
         self.assertIn("Status do corte das encomendas para hoje às 11:00: depois do limite.", messages[0]["content"])
         self.assertIn("Status do corte das entregas às 17:30: antes do limite.", messages[0]["content"])
+        self.assertIn("Referencias rapidas de calendario:", messages[0]["content"])
+        self.assertIn("Calendario operacional especial:", messages[0]["content"])
+
+    async def test_process_message_injects_service_date_memory_into_request(self):
+        now = datetime(2026, 3, 24, 17, 23, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        create_mock = AsyncMock(return_value=_response(_message("Certo, seguimos com essa data.")))
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516994646910",
+                "Data de entrega: sábado",
+                "Suzana",
+                99,
+                now=now,
+            )
+
+        self.assertEqual(reply, "Certo, seguimos com essa data.")
+        messages = create_mock.await_args.kwargs["messages"]
+        self.assertEqual(messages[-1]["role"], "system")
+        self.assertIn("MEMORIA DE DATA DA CONVERSA", messages[-1]["content"])
+        self.assertIn("28/03/2026 (Sabado)", messages[-1]["content"])
+
+    async def test_process_message_injects_conversation_correction_memory_into_request(self):
+        create_mock = AsyncMock(return_value=_response(_message("Perfeito, atualizei o pedido.")))
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516992821034",
+                "Entao vou retirar as 17:30 e pagar no cartao sem cereja",
+                "Angela",
+                99,
+            )
+
+        self.assertEqual(reply, "Perfeito, atualizei o pedido.")
+        messages = create_mock.await_args.kwargs["messages"]
+        self.assertEqual(messages[-1]["role"], "system")
+        self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", messages[-1]["content"])
+        self.assertIn("modo de recebimento mais recente = retirada", messages[-1]["content"])
+        self.assertIn("pagamento mais recente = Cartão (débito/crédito)", messages[-1]["content"])
+        self.assertIn("horario mais recente = 17:30", messages[-1]["content"])
+        self.assertIn("adicional removido = Cereja", messages[-1]["content"])
 
     async def test_process_message_updates_agent_after_handoff(self):
         now = datetime(2026, 3, 7, 15, 30, tzinfo=ZoneInfo("America/Sao_Paulo"))

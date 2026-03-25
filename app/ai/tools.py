@@ -16,6 +16,7 @@ from app.application.service_registry import (
 from app.db.database import get_connection
 from app.infrastructure.gateways.local_catalog_gateway import _normalize_text
 from app.security import ai_learning_enabled, security_audit
+from app.services.commercial_rules import DELIVERY_FEE_STANDARD
 from app.services.encomendas_utils import (
     GOURMET_ALIASES,
     LIMITE_HORARIO_ENTREGA,
@@ -26,7 +27,8 @@ from app.services.encomendas_utils import (
     _normaliza_tamanho,
     _normaliza_produto,
 )
-from app.services.store_schedule import validate_service_schedule
+from app.services.store_schedule import format_service_date, validate_service_schedule
+from app.utils.datetime_utils import now_in_bot_timezone
 from app.services.precos import (
     DOCES_UNITARIOS,
     DOCES_ALIASES,
@@ -109,7 +111,7 @@ CATEGORIAS_VALIDAS = {"tradicional", "ingles", "redondo", "torta", "mesversario"
 LINE_SIMPLE_FLAVORS = ("Chocolate", "Cenoura")
 LINE_SIMPLE_COVERAGES = ("Vulcão", "Simples")
 
-TAXA_ENTREGA_PADRAO = 10.0
+TAXA_ENTREGA_PADRAO = DELIVERY_FEE_STANDARD
 CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
 CAFETERIA_VARIANT_REQUIRED_HINTS = {
     "Croissant": "Informe o sabor do croissant e a quantidade.",
@@ -427,22 +429,84 @@ def _build_cafeteria_process_payload(
     }
 
 
+def _today_service_date_str() -> str:
+    return format_service_date(now_in_bot_timezone().date()) or ""
+
+
+def _cafeteria_item_merge_key(item: dict) -> tuple[str, str, str]:
+    return (
+        str(item.get("nome") or "").strip(),
+        str(item.get("variante") or "").strip(),
+        str(item.get("observacao") or "").strip(),
+    )
+
+
+def _merge_cafeteria_validated_items(items: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    index_by_key: dict[tuple[str, str, str], int] = {}
+
+    for item in items:
+        key = _cafeteria_item_merge_key(item)
+        existing_index = index_by_key.get(key)
+        if existing_index is None:
+            merged.append(dict(item))
+            index_by_key[key] = len(merged) - 1
+            continue
+
+        current = merged[existing_index]
+        current["quantidade"] += int(item.get("quantidade") or 0)
+        current["preco_total"] = round(float(current.get("preco_total") or 0) + float(item.get("preco_total") or 0), 2)
+        current["descricao"] = f"{current['quantidade']}x {current['label']}"
+    return merged
+
+
+def _build_cafeteria_confirmation_message(prepared: dict) -> str:
+    item_lines = [f"- {item['descricao']}: {_format_currency_brl(float(item['preco_total']))}" for item in prepared["itens"]]
+    lines = [
+        "Resumo final do pedido",
+        "",
+        "Pedido cafeteria",
+        "Itens:",
+        *item_lines,
+        _build_service_line(
+            {
+                "modo_recebimento": prepared["modo_recebimento"],
+                "data_entrega": prepared.get("data_entrega"),
+                "horario_retirada": prepared.get("horario_retirada"),
+            }
+        ),
+        f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
+    ]
+    if float(prepared.get("taxa_entrega") or 0) > 0:
+        lines.append(f"Taxa entrega: {_format_currency_brl(float(prepared['taxa_entrega']))}")
+    lines.append(f"Valor: {_format_currency_brl(float(prepared['valor_total']))}")
+    lines.append("")
+    lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
+    lines.append("Se estiver tudo certo, me envie uma confirmacao final explicita para concluir.")
+    return "\n".join(lines)
+
+
 def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    if not (dados.get("data_entrega") or "").strip():
+        dados["data_entrega"] = _today_service_date_str()
 
     schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
     if schedule_error:
         return None, schedule_error
+
+    if dados["modo_recebimento"] == "entrega" and not (dados.get("endereco") or "").strip():
+        return None, "Informe o endereco completo para entrega."
+
+    if dados["modo_recebimento"] == "entrega" and not (dados.get("horario_retirada") or "").strip():
+        return None, "Informe o horario da entrega."
 
     if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
         return None, (
             f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. "
             "Ajuste o horario ou altere para retirada."
         )
-
-    if dados["modo_recebimento"] == "entrega" and not (dados.get("endereco") or "").strip():
-        return None, "Informe o endereco completo para entrega."
 
     validated_items: list[dict] = []
     subtotal = 0.0
@@ -464,17 +528,25 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
             {
                 "nome": str(item.get("name") or ""),
                 "variante": selected_variant,
+                "observacao": (raw_item.get("observacao") or "").strip() or None,
                 "quantidade": quantity,
                 "preco_unitario": unit_price,
                 "preco_total": line_total,
+                "label": label,
                 "descricao": f"{quantity}x {label}",
             }
         )
 
+    if not validated_items:
+        return None, "Informe pelo menos um item valido da cafeteria."
+
+    validated_items = _merge_cafeteria_validated_items(validated_items)
+    subtotal = round(sum(float(item["preco_total"]) for item in validated_items), 2)
+
     taxa_entrega = float(dados.get("taxa_entrega") or 0)
     if dados["modo_recebimento"] == "entrega" and taxa_entrega <= 0:
         taxa_entrega = TAXA_ENTREGA_PADRAO
-    valor_total = subtotal + taxa_entrega
+    valor_total = round(subtotal + taxa_entrega, 2)
 
     return {
         "itens": validated_items,
@@ -1444,12 +1516,15 @@ def create_cafeteria_order(
             taxa_entrega=float(prepared.get("taxa_entrega") or 0),
         ),
     )
-    return (
-        "Pedido cafeteria salvo com sucesso!\n"
-        + "Itens: "
-        + ", ".join(item_lines)
-        + f"\nTotal final: {_format_currency_brl(float(prepared['valor_total']))}"
-    )
+    response_lines = [
+        "Pedido cafeteria salvo com sucesso!",
+        "Itens: " + ", ".join(item_lines),
+        f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
+    ]
+    if float(prepared.get("taxa_entrega") or 0) > 0:
+        response_lines.append(f"Taxa entrega: {_format_currency_brl(float(prepared['taxa_entrega']))}")
+    response_lines.append(f"Total final: {_format_currency_brl(float(prepared['valor_total']))}")
+    return "\n".join(response_lines)
 
 
 def save_cake_order_draft_process(
@@ -1549,15 +1624,4 @@ def save_cafeteria_order_draft_process(
             taxa_entrega=float(prepared.get("taxa_entrega") or 0),
         ),
     )
-    return _build_draft_confirmation_message(
-        title="Pedido cafeteria",
-        flavor_line="Itens: " + ", ".join(item["descricao"] for item in prepared["itens"]),
-        service_line=_build_service_line(
-            {
-                "modo_recebimento": prepared["modo_recebimento"],
-                "data_entrega": prepared.get("data_entrega"),
-                "horario_retirada": prepared.get("horario_retirada"),
-            }
-        ),
-        total_value=float(prepared["valor_total"]),
-    )
+    return _build_cafeteria_confirmation_message(prepared)

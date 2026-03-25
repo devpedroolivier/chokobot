@@ -8,6 +8,12 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.security import ai_learning_enabled, security_audit
+from app.services.commercial_rules import (
+    CROISSANT_PREP_MINUTES,
+    DELIVERY_CUTOFF_LABEL,
+    STORE_OPERATION_RULE_LINE,
+    SUNDAY_RULE_LINE,
+)
 from app.services.precos import KIT_FESTOU_PRECO, LINHA_SIMPLES, TRADICIONAL_BASE
 from app.services.store_schedule import GIFT_CATALOG_SUMMARY, READY_DELIVERY_SUMMARY, STORE_HOURS_SUMMARY
 from app.settings import get_settings
@@ -43,7 +49,7 @@ SECTION_LABELS = {
 }
 
 CATALOG_ITEM_RUNTIME_NOTES = {
-    ("cafeteria", "Croissant"): "Tempo medio de preparo: 20 minutos.",
+    ("cafeteria", "Croissant"): f"Tempo medio de preparo: {CROISSANT_PREP_MINUTES} minutos.",
 }
 
 LOOKUP_STOPWORDS = {
@@ -284,9 +290,9 @@ class LocalCatalogGateway:
             "☕ Cafeteria e Vitrine\n"
             f"- Cardapio Cafeteria: {cafeteria_url}\n"
             "- A vitrine pode variar no dia.\n"
-            f"- Horario de funcionamento: {STORE_HOURS_SUMMARY}\n"
-            "- Nao fazemos pedidos, retiradas ou encomendas para domingo.\n"
-            "- Entregas sao realizadas ate 17:30.\n"
+            f"- {STORE_OPERATION_RULE_LINE}\n"
+            f"- {SUNDAY_RULE_LINE}.\n"
+            f"- Entregas sao realizadas ate {DELIVERY_CUTOFF_LABEL}.\n"
             "- Se o cliente pedir o cardapio completo da cafeteria, consulte get_menu('cafeteria').\n"
             "- Se o cliente pedir opcoes/sabores/gramagem de um item especifico, consulte lookup_catalog_items.\n"
             f"\n🎁 Presentes\n- Oferecemos {GIFT_CATALOG_SUMMARY}.\n"

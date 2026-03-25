@@ -5,11 +5,14 @@ import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from app.services.commercial_rules import (
+    DELIVERY_CUTOFF,
+    DELIVERY_CUTOFF_LABEL,
+    SAME_DAY_CAKE_ORDER_CUTOFF,
+    SAME_DAY_CAKE_ORDER_CUTOFF_LABEL,
+)
+from app.services.store_schedule import build_calendar_reference_context, build_operational_calendar_context
 from app.utils.datetime_utils import get_bot_timezone, normalize_to_bot_timezone, now_in_bot_timezone
-
-
-SAME_DAY_CAKE_ORDER_CUTOFF = (11, 0)
-DELIVERY_CUTOFF = (17, 30)
 
 
 def current_timezone() -> ZoneInfo:
@@ -322,7 +325,7 @@ def build_time_conflict_retry_instruction(now: datetime | None = None) -> str:
     current_time = normalize_reference_time(now)
     return (
         "CORRECAO DE SISTEMA: use exclusivamente o horario oficial de Brasilia. "
-        f"Agora sao {current_time.strftime('%H:%M')} em Brasilia e ainda NAO passou das 11:00 para encomendas de bolo no mesmo dia. "
+        f"Agora sao {current_time.strftime('%H:%M')} em Brasilia e ainda NAO passou das {SAME_DAY_CAKE_ORDER_CUTOFF_LABEL} para encomendas de bolo no mesmo dia. "
         "Reescreva a resposta sem afirmar que o horario limite das encomendas para hoje foi ultrapassado."
     )
 
@@ -352,6 +355,65 @@ def build_system_time_context(now: datetime | None = None) -> str:
     return (
         current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
         + " Horario oficial de Brasilia (America/Sao_Paulo)."
-        + f" Status do corte das encomendas para hoje às 11:00: {same_day_cutoff_status}."
-        + f" Status do corte das entregas às 17:30: {delivery_cutoff_status}."
+        + f" Status do corte das encomendas para hoje às {SAME_DAY_CAKE_ORDER_CUTOFF_LABEL}: {same_day_cutoff_status}."
+        + f" Status do corte das entregas às {DELIVERY_CUTOFF_LABEL}: {delivery_cutoff_status}."
+        + f" {build_calendar_reference_context(current_time)}"
+        + f" {build_operational_calendar_context(current_time)}"
     )
+
+
+def build_service_date_memory_instruction(service_date_context: dict | None) -> str | None:
+    if not service_date_context:
+        return None
+
+    display = (service_date_context.get("display") or "").strip()
+    source_text = (service_date_context.get("source_text") or "").strip()
+    if not display:
+        return None
+
+    instruction = (
+        "MEMORIA DE DATA DA CONVERSA: a referencia temporal mais recente e "
+        f"{display}. Mantenha essa data em resumos, perguntas e tools ate o cliente corrigir explicitamente."
+    )
+    if source_text:
+        instruction += f" Origem: '{source_text}'."
+    return instruction
+
+
+def build_conversation_correction_instruction(correction_context: dict | None) -> str | None:
+    if not correction_context:
+        return None
+
+    parts: list[str] = []
+
+    mode = (correction_context.get("modo_recebimento") or "").strip()
+    if mode:
+        parts.append(f"modo de recebimento mais recente = {mode}")
+
+    payment_form = (correction_context.get("pagamento_forma") or "").strip()
+    if payment_form:
+        parts.append(f"pagamento mais recente = {payment_form}")
+
+    troco_para = correction_context.get("troco_para")
+    if payment_form == "Dinheiro" and troco_para not in (None, ""):
+        parts.append(f"troco para = {troco_para}")
+
+    pickup_time = (correction_context.get("horario_retirada") or "").strip()
+    if pickup_time:
+        parts.append(f"horario mais recente = {pickup_time}")
+
+    removed_additional = (correction_context.get("removed_adicional") or "").strip()
+    if removed_additional:
+        parts.append(f"adicional removido = {removed_additional}")
+
+    if not parts:
+        return None
+
+    source_text = (correction_context.get("latest_source_text") or "").strip()
+    instruction = (
+        "MEMORIA DE CORRECOES DA CONVERSA: aplique estas correcoes mais recentes em resumos, perguntas e tools "
+        "ate o cliente mudar explicitamente de novo. " + "; ".join(parts) + "."
+    )
+    if source_text:
+        instruction += f" Origem: '{source_text}'."
+    return instruction

@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -11,11 +12,14 @@ except ModuleNotFoundError:
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.policies import (
+    build_conversation_correction_instruction,
     build_cafeteria_specificity_retry_instruction as _build_cafeteria_specificity_retry_instruction,
+    build_service_date_memory_instruction,
     build_system_time_context,
     build_time_conflict_retry_instruction as _build_time_conflict_retry_instruction,
     response_conflicts_with_cafeteria_specificity as _response_conflicts_with_cafeteria_specificity,
     current_local_datetime,
+    normalize_intent_text,
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
     requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
@@ -23,6 +27,7 @@ from app.ai.policies import (
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
 )
+from app.services.store_schedule import resolve_service_date_context
 from app.ai.tool_execution import handle_tool_call
 from app.ai.tool_registry import build_openai_tools
 from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
@@ -45,6 +50,16 @@ from app.settings import get_settings
 client = None
 
 CONVERSATIONS = ai_sessions
+_PAYMENT_FORMS = {
+    "pix": "PIX",
+    "cartao": "Cartão (débito/crédito)",
+    "cartao debito": "Cartão (débito/crédito)",
+    "cartao credito": "Cartão (débito/crédito)",
+    "credito": "Cartão (débito/crédito)",
+    "debito": "Cartão (débito/crédito)",
+    "dinheiro": "Dinheiro",
+}
+_REMOVABLE_ADDITIONALS = ("morango", "ameixa", "nozes", "cereja", "abacaxi")
 
 
 @dataclass(frozen=True)
@@ -187,6 +202,100 @@ def get_or_create_session(telefone: str) -> Dict[str, Any]:
     return session
 
 
+def _update_service_date_context(session: dict, text: str, now: datetime | None = None) -> None:
+    resolved_context = resolve_service_date_context(text, now)
+    if resolved_context is not None:
+        session["service_date_context"] = resolved_context
+
+
+def _conversation_service_date_instruction(session: dict) -> str | None:
+    return build_service_date_memory_instruction(session.get("service_date_context"))
+
+
+def _extract_payment_form(normalized_text: str) -> str | None:
+    for token, payment_form in _PAYMENT_FORMS.items():
+        if re.search(rf"\b{re.escape(token)}\b", normalized_text):
+            return payment_form
+    return None
+
+
+def _extract_mode_recebimento(normalized_text: str) -> str | None:
+    if re.search(r"\b(retir(ar|o|ada)|buscar|busca|vou buscar|iremos buscar)\b", normalized_text):
+        return "retirada"
+    if re.search(r"\b(quero q entrega|quero entrega|pode entregar|manda entregar|entregar|delivery)\b", normalized_text):
+        return "entrega"
+    if re.search(r"\b(data|horario|horario da|taxa)\s+de\s+entrega\b", normalized_text):
+        return None
+    if re.search(r"\bentrega\b", normalized_text):
+        return "entrega"
+    return None
+
+
+def _extract_hour_reference(text: str) -> str | None:
+    match = re.search(r"\b(\d{1,2})[:h](\d{2})\b", text or "", flags=re.IGNORECASE)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return f"{hour:02d}:{minute:02d}"
+    return None
+
+
+def _extract_removed_additional(normalized_text: str) -> str | None:
+    for additional in _REMOVABLE_ADDITIONALS:
+        if re.search(rf"\b(tirar|tirando|remove|remover|sem)\b.*\b{re.escape(additional)}\b", normalized_text):
+            return additional.title()
+    return None
+
+
+def _extract_cash_change_amount(normalized_text: str) -> float | None:
+    match = re.search(r"\btroco\s+para\s+(\d+(?:[.,]\d{1,2})?)\b", normalized_text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _update_conversation_correction_context(session: dict, text: str) -> None:
+    normalized = normalize_intent_text(text)
+    if not normalized.strip():
+        return
+
+    updates: dict[str, Any] = {}
+
+    mode = _extract_mode_recebimento(normalized)
+    if mode:
+        updates["modo_recebimento"] = mode
+
+    payment_form = _extract_payment_form(normalized)
+    if payment_form:
+        updates["pagamento_forma"] = payment_form
+        updates["troco_para"] = _extract_cash_change_amount(normalized) if payment_form == "Dinheiro" else None
+
+    pickup_time = _extract_hour_reference(text)
+    if pickup_time:
+        updates["horario_retirada"] = pickup_time
+
+    removed_additional = _extract_removed_additional(normalized)
+    if removed_additional:
+        updates["removed_adicional"] = removed_additional
+
+    if not updates:
+        return
+
+    correction_context = dict(session.get("conversation_correction_context") or {})
+    correction_context.update(updates)
+    correction_context["latest_source_text"] = text.strip()
+    session["conversation_correction_context"] = correction_context
+
+
+def _conversation_correction_instruction(session: dict) -> str | None:
+    return build_conversation_correction_instruction(session.get("conversation_correction_context"))
+
+
 def _should_repeat_easter_catalog_link(session: dict, text: str) -> bool:
     if session.get("seasonal_context") != "easter":
         return False
@@ -321,12 +430,16 @@ async def process_message_with_ai(
     
     # Adiciona a mensagem do usuário
     session["messages"].append({"role": "user", "content": text})
+    _update_service_date_context(session, text, now)
+    _update_conversation_correction_context(session, text)
     save_session(telefone, session)
 
     if _requests_human_handoff(text):
         runtime.escalate_to_human(telefone, "Cliente pediu humano")
         session["messages"] = []
         session.pop("seasonal_context", None)
+        session.pop("service_date_context", None)
+        session.pop("conversation_correction_context", None)
         save_session(telefone, session)
         increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
         log_event("ai_human_guard_handoff", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
@@ -336,6 +449,8 @@ async def process_message_with_ai(
         runtime.escalate_to_human(telefone, "Ovos pronta entrega exigem atendimento humano")
         session["messages"] = []
         session.pop("seasonal_context", None)
+        session.pop("service_date_context", None)
+        session.pop("conversation_correction_context", None)
         save_session(telefone, session)
         increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
         log_event(
@@ -393,6 +508,12 @@ async def process_message_with_ai(
             
         tools_config = get_openai_tools(agent, runtime)
         request_messages = list(session["messages"])
+        service_date_instruction = _conversation_service_date_instruction(session)
+        if service_date_instruction:
+            request_messages.append({"role": "system", "content": service_date_instruction})
+        correction_instruction = _conversation_correction_instruction(session)
+        if correction_instruction:
+            request_messages.append({"role": "system", "content": correction_instruction})
         if transient_system_note:
             request_messages.append({"role": "system", "content": transient_system_note})
 
@@ -494,6 +615,7 @@ async def process_message_with_ai(
                 cliente_id=cliente_id,
                 session=session,
                 save_session_fn=save_session,
+                now=now,
             )
             if should_return:
                 if function_name == "transfer_to_agent":

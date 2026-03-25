@@ -10,12 +10,15 @@ class AIAgentPromptsTests(unittest.TestCase):
 
     def test_cake_order_prompt_uses_1100_cutoff_for_same_day_orders(self):
         self.assertIn('já passou das 11:00', CAKE_ORDER_PROMPT)
+        self.assertIn("MEMORIA DE DATA DA CONVERSA", CAKE_ORDER_PROMPT)
+        self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAKE_ORDER_PROMPT)
 
     def test_order_prompts_require_explicit_last_message_confirmation(self):
         self.assertIn("ULTIMA mensagem do cliente", CAKE_ORDER_PROMPT)
         self.assertIn('"pode fechar"', CAKE_ORDER_PROMPT)
         self.assertIn("ULTIMA mensagem do cliente", SWEET_ORDER_PROMPT)
         self.assertIn('"confirmo"', SWEET_ORDER_PROMPT)
+        self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", SWEET_ORDER_PROMPT)
 
     def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
@@ -65,6 +68,8 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("item exato + sabor/tipo/versao", CAFETERIA_PROMPT)
         self.assertIn("Nao responda com \"vou anotar\"", CAFETERIA_PROMPT)
         self.assertIn("use `create_cafeteria_order`", CAFETERIA_PROMPT)
+        self.assertIn("MEMORIA DE DATA DA CONVERSA", CAFETERIA_PROMPT)
+        self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAFETERIA_PROMPT)
 
 
 

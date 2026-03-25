@@ -1,5 +1,7 @@
 import unittest
+from datetime import datetime
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from app.ai import runner
 from app.ai.tool_execution import handle_tool_call
@@ -128,6 +130,113 @@ class AIToolExecutionTests(unittest.TestCase):
             if name == "ai_order_confirmation_blocks_total"
         )
         self.assertEqual(blocked_total, 1.0)
+
+    def test_create_cake_order_uses_conversation_date_memory_when_model_sends_wrong_date(self):
+        session = {
+            "messages": [{"role": "user", "content": "Data de entrega: sábado"}],
+            "current_agent": "CakeOrderAgent",
+            "service_date_context": {
+                "date": "28/03/2026",
+                "weekday": "Sabado",
+                "display": "28/03/2026 (Sabado)",
+                "source_text": "Data de entrega: sábado",
+            },
+        }
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+        )
+
+        with patch("app.ai.tool_execution.save_cake_order_draft_process", return_value="rascunho") as mocked_draft:
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name="create_cake_order",
+                arguments={
+                    "linha": "tradicional",
+                    "categoria": "tradicional",
+                    "descricao": "Bolo tradicional",
+                    "data_entrega": "25/03/2026",
+                    "horario_retirada": "15:00",
+                    "modo_recebimento": "retirada",
+                    "pagamento": {"forma": "PIX"},
+                },
+                telefone="5511999999999",
+                nome_cliente="Cliente",
+                cliente_id=1,
+                session=session,
+                save_session_fn=lambda telefone, state: None,
+                now=datetime(2026, 3, 24, 17, 23, tzinfo=ZoneInfo("America/Sao_Paulo")),
+            )
+
+        self.assertFalse(should_return)
+        self.assertEqual(tool_result, "rascunho")
+        order = mocked_draft.call_args.args[3]
+        self.assertEqual(order.data_entrega, "28/03/2026")
+
+    def test_create_cake_order_applies_conversation_corrections_before_saving_draft(self):
+        session = {
+            "messages": [{"role": "user", "content": "Então vou tirar cereja e retirar às 17:30 no cartão"}],
+            "current_agent": "CakeOrderAgent",
+            "conversation_correction_context": {
+                "modo_recebimento": "retirada",
+                "pagamento_forma": "Cartão (débito/crédito)",
+                "horario_retirada": "17:30",
+                "removed_adicional": "Cereja",
+                "latest_source_text": "Então vou tirar cereja e retirar às 17:30 no cartão",
+            },
+        }
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+        )
+
+        with patch("app.ai.tool_execution.save_cake_order_draft_process", return_value="rascunho") as mocked_draft:
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name="create_cake_order",
+                arguments={
+                    "linha": "tradicional",
+                    "categoria": "tradicional",
+                    "descricao": "Bolo B3 mesclado com Brigadeiro de Nutella e mousse de Ninho + Cereja",
+                    "adicional": "Cereja",
+                    "data_entrega": "10/10/2030",
+                    "horario_retirada": "15:00",
+                    "modo_recebimento": "entrega",
+                    "endereco": "Rua Teste, 123",
+                    "taxa_entrega": 10.0,
+                    "pagamento": {"forma": "PIX"},
+                    "massa": "Mesclada",
+                    "recheio": "Brigadeiro de Nutella",
+                    "mousse": "Ninho",
+                    "tamanho": "B3",
+                },
+                telefone="5511999999999",
+                nome_cliente="Cliente",
+                cliente_id=1,
+                session=session,
+                save_session_fn=lambda telefone, state: None,
+            )
+
+        self.assertFalse(should_return)
+        self.assertEqual(tool_result, "rascunho")
+        order = mocked_draft.call_args.args[3]
+        self.assertEqual(order.modo_recebimento, "retirada")
+        self.assertIsNone(order.endereco)
+        self.assertEqual(order.pagamento.forma, "Cartão (débito/crédito)")
+        self.assertIsNone(order.pagamento.troco_para)
+        self.assertEqual(order.horario_retirada, "17:30")
+        self.assertIsNone(order.adicional)
+        self.assertNotIn("Cereja", order.descricao)
 
     def test_create_sweet_order_with_explicit_confirmation_persists_and_clears_session(self):
         session = {

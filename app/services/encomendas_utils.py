@@ -3,7 +3,9 @@ import re
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict
 
-LIMITE_HORARIO_ENTREGA = "17:30"
+from app.services.commercial_rules import DELIVERY_CUTOFF_LABEL
+
+LIMITE_HORARIO_ENTREGA = DELIVERY_CUTOFF_LABEL
 
 # === ALIASES DE PRODUTO (evita KeyError por variações de digitação) ===
 TORTAS_ALIASES: Dict[str, str] = {

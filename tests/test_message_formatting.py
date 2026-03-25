@@ -1,6 +1,8 @@
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 os.environ.setdefault("ZAPI_TOKEN", "test-token")
 os.environ.setdefault("ZAPI_BASE", "https://example.test")
@@ -88,6 +90,31 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("Retirada 28/3 Sabado 17h", result)
         self.assertIn("Valor: R$190,00", result)
         self.assertIn("Ainda nao foi salvo como pedido confirmado no sistema.", result)
+
+    def test_save_cafeteria_order_draft_process_formata_resumo_com_subtotal(self):
+        with patch("app.ai.tools.now_in_bot_timezone", return_value=datetime(2026, 3, 25, 14, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))):
+            with patch("app.ai.tools._sync_ai_process", return_value=None):
+                result = ai_tools.save_cafeteria_order_draft_process(
+                    telefone="5511999999999",
+                    nome_cliente="Ana",
+                    cliente_id=7,
+                    order_details=ai_tools.CafeteriaOrderSchema(
+                        itens=[
+                            {"nome": "Croissant", "variante": "Chocolate", "quantidade": 2},
+                            {"nome": "Coca Cola KS", "quantidade": 1},
+                        ],
+                        horario_retirada="17:00",
+                        modo_recebimento="retirada",
+                        pagamento={"forma": "PIX"},
+                    ),
+                )
+
+        self.assertIn("Pedido cafeteria", result)
+        self.assertIn("- 2x Croissant (Chocolate): R$29,00", result)
+        self.assertIn("- 1x Coca Cola KS: R$5,50", result)
+        self.assertIn("Retirada 25/3 Quarta 17h", result)
+        self.assertIn("Subtotal: R$34,50", result)
+        self.assertIn("Valor: R$34,50", result)
 
     def test_triage_prompt_reutiliza_mensagem_de_boas_vindas(self):
         self.assertIn(WELCOME_MESSAGE, TRIAGE_PROMPT)

@@ -59,6 +59,7 @@ class AppSettings:
     outbox_path: str
     outbox_events_path: str
     ai_learnings_path: str
+    operational_calendar_path: str
     tz: str
     bot_timezone: str
     cafeteria_url: str
@@ -111,6 +112,10 @@ def get_settings() -> AppSettings:
         outbox_path=_env_str("OUTBOX_PATH", "dados/outbox.jsonl"),
         outbox_events_path=_env_str("OUTBOX_EVENTS_PATH", "dados/domain_events.jsonl"),
         ai_learnings_path=_env_str("AI_LEARNINGS_PATH", "app/ai/knowledge/learnings.md"),
+        operational_calendar_path=_env_str(
+            "OPERATIONAL_CALENDAR_PATH",
+            "app/ai/knowledge/operational_calendar.json",
+        ),
         tz=_env_str("TZ", "America/Sao_Paulo") or "America/Sao_Paulo",
         bot_timezone=_env_str("BOT_TIMEZONE") or "America/Sao_Paulo",
         cafeteria_url=_env_str("CAFETERIA_URL", "http://bit.ly/44ZlKlZ"),
