@@ -17,6 +17,7 @@ from app.api.routes import painel as painel_module
 from app.api.routes import pedidos as pedidos_module
 from app.api.routes import webhook as webhook_module
 from app.security import clear_replay_cache, require_panel_auth
+from app.utils.payload import is_automated_order_message
 
 
 class FakeRequest:
@@ -86,6 +87,62 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertEqual(first, {"status": "ok"})
         self.assertEqual(second["status"], "ignored")
         self.assertEqual(mocked_process.await_count, 1)
+
+    def test_automated_goomer_order_message_is_detected(self):
+        payload = {
+            "id": "msg-goomer-1",
+            "phone": "5511999999999",
+            "message": (
+                "⭐ GOSTOU DE PEDIR NO NOSSO APP? ⭐\n"
+                "Não precisa baixar nada.\n"
+                "Confira o pedido abaixo:\n"
+                "*Pedido Goomer Delivery #0004*\n"
+                "_Pedido gerado pelo Goomer Delivery às 11:45_"
+            ),
+        }
+
+        self.assertTrue(is_automated_order_message(payload))
+
+    def test_webhook_ignores_automated_goomer_order_message(self):
+        request = FakeRequest(
+            {
+                "id": "msg-goomer-2",
+                "phone": "5511999999999",
+                "message": (
+                    "⭐ GOSTOU DE PEDIR NO NOSSO APP? ⭐\n"
+                    "Não precisa baixar nada, adicione o nosso restaurante na tela inicial.\n"
+                    "https://pascoachoko.goomer.app/?utm_source=whatsapp\n"
+                    "Confira o pedido abaixo:\n"
+                    "*Pedido Goomer Delivery #0004*\n"
+                    "_Pedido gerado pelo Goomer Delivery às 11:45_"
+                ),
+            },
+            headers={"X-Webhook-Secret": "super-secret"},
+        )
+
+        with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
+            with patch.object(webhook_module, "dispatch_inbound_message", AsyncMock()) as mocked_process:
+                result = asyncio.run(webhook_module.receber_webhook(request))
+
+        self.assertEqual(result, {"status": "ignored"})
+        mocked_process.assert_not_awaited()
+
+    def test_regular_customer_message_with_order_word_still_processes(self):
+        request = FakeRequest(
+            {
+                "id": "msg-customer-order-1",
+                "phone": "5511999999999",
+                "message": "Esse pedido e real, pode colocar para domingo?",
+            },
+            headers={"X-Webhook-Secret": "super-secret"},
+        )
+
+        with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
+            with patch.object(webhook_module, "dispatch_inbound_message", AsyncMock()) as mocked_process:
+                result = asyncio.run(webhook_module.receber_webhook(request))
+
+        self.assertEqual(result, {"status": "ok"})
+        mocked_process.assert_awaited_once()
 
     def test_save_learning_is_blocked_by_default(self):
         with tempfile.TemporaryDirectory() as tmpdir:

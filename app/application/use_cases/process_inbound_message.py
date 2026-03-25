@@ -21,6 +21,7 @@ from app.services.estados import (
     set_recent_message,
 )
 from app.utils.mensagens import responder_usuario, responder_usuario_com_contexto
+from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 from app.utils.payload import normalize_incoming
 
 
@@ -114,7 +115,7 @@ async def process_inbound_message(
         )
         return
 
-    agora = datetime.now()
+    agora = now_in_bot_timezone()
 
     if msg_id and has_processed_message(msg_id):
         log_event("handler_duplicate_webhook", message_id=msg_id, phone_hash=hash_phone(telefone))
@@ -126,7 +127,7 @@ async def process_inbound_message(
     ultima_hora = None
     if ultima and ultima.get("hora"):
         try:
-            ultima_hora = datetime.fromisoformat(ultima["hora"])
+            ultima_hora = normalize_to_bot_timezone(datetime.fromisoformat(ultima["hora"]))
         except Exception:
             ultima_hora = None
     if ultima and ultima.get("texto") == texto and ultima_hora and (agora - ultima_hora) < timedelta(seconds=2):
@@ -160,7 +161,7 @@ async def process_inbound_message(
         if "inicio" not in estado:
             estado["inicio"] = agora.isoformat()
 
-        ultimo_contato = datetime.fromisoformat(estado["inicio"])
+        ultimo_contato = normalize_to_bot_timezone(datetime.fromisoformat(estado["inicio"]))
         if (agora - ultimo_contato) > timedelta(minutes=30):
             deactivate_human_handoff(telefone)
             await _send_message(

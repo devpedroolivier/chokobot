@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 import {
   AdminWorkspace,
@@ -13,27 +13,34 @@ import {
 import { ConversationList, ConversationThread } from "@/components/conversation-queue";
 import { ProcessList } from "@/components/process-card-list";
 import type { PanelSnapshot, ProcessCard } from "@/lib/panel-types";
+import { useLivePanelSnapshot } from "@/lib/use-live-panel-snapshot";
 
 type ConversationsShellProps = {
   snapshot: PanelSnapshot;
   warning?: string;
+  initialSelectedPhone?: string;
 };
 
 function flattenProcessCards(snapshot: PanelSnapshot): ProcessCard[] {
   return snapshot.process_sections.flatMap((section) => section.cards);
 }
 
-export function ConversationsShell({ snapshot, warning }: ConversationsShellProps) {
+export function ConversationsShell({ snapshot, warning, initialSelectedPhone }: ConversationsShellProps) {
+  const live = useLivePanelSnapshot(snapshot, warning);
+  const liveSnapshot = live.snapshot;
+  const liveWarning = live.warning;
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState("all");
   const deferredSearch = useDeferredValue(search);
 
-  const processCards = flattenProcessCards(snapshot);
-  const visibleConversations = snapshot.whatsapp_cards.filter((card) => {
+  const processCards = flattenProcessCards(liveSnapshot);
+  const visibleConversations = liveSnapshot.whatsapp_cards.filter((card) => {
     const term = deferredSearch.trim().toLowerCase();
     const matchesSearch =
       !term ||
-      `${card.cliente_nome} ${card.phone} ${card.last_message} ${card.agent}`.toLowerCase().includes(term);
+      `${card.cliente_nome} ${card.phone} ${card.last_message} ${card.agent} ${card.context_summary || ""} ${card.next_step_hint || ""}`
+        .toLowerCase()
+        .includes(term);
 
     if (!matchesSearch) {
       return false;
@@ -51,7 +58,18 @@ export function ConversationsShell({ snapshot, warning }: ConversationsShellProp
     return true;
   });
 
-  const [selectedPhone, setSelectedPhone] = useState(snapshot.whatsapp_cards[0]?.phone || "");
+  const [selectedPhone, setSelectedPhone] = useState(initialSelectedPhone || liveSnapshot.whatsapp_cards[0]?.phone || "");
+  useEffect(() => {
+    if (visibleConversations.length === 0) {
+      if (selectedPhone !== "") {
+        setSelectedPhone("");
+      }
+      return;
+    }
+    if (!visibleConversations.some((card) => card.phone === selectedPhone)) {
+      setSelectedPhone(visibleConversations[0]?.phone || "");
+    }
+  }, [selectedPhone, visibleConversations]);
   const selectedConversation =
     visibleConversations.find((card) => card.phone === selectedPhone) || visibleConversations[0] || null;
 
@@ -61,10 +79,14 @@ export function ConversationsShell({ snapshot, warning }: ConversationsShellProp
   const humanFollowUp = processCards.filter((card) => card.owner_class.includes("human"));
 
   const filteredReadyToClose = readyToClose.filter((card) =>
-    `${card.cliente_nome} ${card.phone} ${card.summary}`.toLowerCase().includes(deferredSearch.trim().toLowerCase()),
+    `${card.cliente_nome} ${card.phone} ${card.summary} ${card.next_step_hint || ""} ${card.business_state_label || ""}`
+      .toLowerCase()
+      .includes(deferredSearch.trim().toLowerCase()),
   );
   const filteredHumanFollowUp = humanFollowUp.filter((card) =>
-    `${card.cliente_nome} ${card.phone} ${card.summary}`.toLowerCase().includes(deferredSearch.trim().toLowerCase()),
+    `${card.cliente_nome} ${card.phone} ${card.summary} ${card.next_step_hint || ""} ${(card.risk_flags || []).join(" ")}`
+      .toLowerCase()
+      .includes(deferredSearch.trim().toLowerCase()),
   );
 
   return (
@@ -73,8 +95,8 @@ export function ConversationsShell({ snapshot, warning }: ConversationsShellProp
         eyebrow="Conversas"
         title="Cliente, IA e decisão humana"
         description="Visão mínima para acompanhar contexto, handoff e os fluxos que estão prontos para virar pedido."
-        referenceDate={snapshot.dashboard.reference_date}
-        generatedAt={snapshot.dashboard.generated_at}
+        referenceDate={liveSnapshot.dashboard.reference_date}
+        generatedAt={liveSnapshot.dashboard.generated_at}
         actions={
           <a
             href="/"
@@ -85,11 +107,11 @@ export function ConversationsShell({ snapshot, warning }: ConversationsShellProp
         }
       />
 
-      <WarningBanner warning={warning} />
+      <WarningBanner warning={liveWarning} />
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KPI label="Conversas ativas" value={String(snapshot.whatsapp_cards.length)} hint="Sessoes ainda em andamento" />
-        <KPI label="Handoffs" value={String(snapshot.whatsapp_cards.filter((card) => card.is_human_handoff).length)} hint="Casos sob acao humana" />
+        <KPI label="Conversas ativas" value={String(liveSnapshot.whatsapp_cards.length)} hint={live.isRefreshing ? "Atualizando ao vivo" : "Sessoes ainda em andamento"} />
+        <KPI label="Handoffs" value={String(liveSnapshot.whatsapp_cards.filter((card) => card.is_human_handoff).length)} hint="Casos sob acao humana" />
         <KPI label="Prontos para fechar" value={String(readyToClose.length)} hint="Aguardando confirmacao final" />
         <KPI label="Processos ativos" value={String(processCards.length)} hint="Trilha persistida no painel" />
       </section>

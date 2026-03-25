@@ -28,8 +28,10 @@ from app.ai.tools import (
     create_sweet_order,
     escalate_to_human,
     get_cake_options,
+    get_cake_pricing,
     get_learnings,
     get_menu,
+    lookup_catalog_items,
     save_learning,
 )
 from app.observability import increment_counter, log_event, observe_duration
@@ -50,11 +52,15 @@ class AIRuntime:
     escalate_to_human: Any
     create_cake_order: Any
     create_sweet_order: Any
+    lookup_catalog_items: Any | None = None
+    get_cake_pricing: Any | None = None
 
 
 def get_default_ai_runtime() -> AIRuntime:
     return AIRuntime(
         get_menu=get_menu,
+        lookup_catalog_items=lookup_catalog_items,
+        get_cake_pricing=get_cake_pricing,
         get_cake_options=get_cake_options,
         get_learnings=get_learnings,
         save_learning=save_learning,
@@ -175,7 +181,7 @@ def get_or_create_session(telefone: str) -> Dict[str, Any]:
     return session
 
 
-def _is_easter_context_follow_up(session: dict, text: str) -> bool:
+def _should_repeat_easter_catalog_link(session: dict, text: str) -> bool:
     if session.get("seasonal_context") != "easter":
         return False
 
@@ -183,21 +189,50 @@ def _is_easter_context_follow_up(session: dict, text: str) -> bool:
     if not normalized:
         return False
 
-    unrelated_patterns = (
-        "bolo",
-        "cafeteria",
-        "croissant",
-        "cappuccino",
-        "fatia",
-        "entrega",
-        "retirada",
-        "atendente",
-        "humano",
+    link_patterns = (
+        "cardapio",
+        "cardápio",
+        "catalogo",
+        "catálogo",
+        "menu",
+        "link",
+        "manda",
+        "me envia",
+        "me envia o link",
     )
-    if any(pattern in normalized for pattern in unrelated_patterns):
-        return False
 
-    return True
+    return any(pattern in normalized for pattern in link_patterns)
+
+
+def _is_draft_order_result(tool_result: str | None) -> bool:
+    normalized = (tool_result or "").casefold()
+    return normalized.startswith("pedido em rascunho salvo no atendimento") or normalized.startswith(
+        "pedido de doces em rascunho salvo no atendimento"
+    )
+
+
+def _response_claims_order_saved(reply: str | None) -> bool:
+    normalized = (reply or "").casefold()
+    patterns = (
+        "pedido foi salvo",
+        "seu pedido foi salvo",
+        "pedido salvo",
+        "pedido finalizado",
+        "seu pedido esta garantido",
+        "seu pedido estará garantido",
+        "pedido confirmado no sistema",
+    )
+    return any(pattern in normalized for pattern in patterns)
+
+
+def _latest_draft_tool_result(session: dict) -> str | None:
+    for message in reversed(session.get("messages", [])):
+        if message.get("role") != "tool":
+            continue
+        content = str(message.get("content") or "")
+        if _is_draft_order_result(content):
+            return content
+    return None
 
 # Mapeamento de funções reais para as definições de Tools da OpenAI
 def get_openai_tools(agent, runtime: AIRuntime | None = None):
@@ -297,7 +332,7 @@ async def process_message_with_ai(
         log_event("ai_easter_catalog_link_sent", phone_hash=telefone[-4:] if telefone else "anon")
         return EASTER_CATALOG_MESSAGE
 
-    if _is_easter_context_follow_up(session, text):
+    if _should_repeat_easter_catalog_link(session, text):
         log_event("ai_easter_catalog_context_followup", phone_hash=telefone[-4:] if telefone else "anon")
         return EASTER_CATALOG_MESSAGE
 
@@ -373,6 +408,28 @@ async def process_message_with_ai(
         
         # Se a IA respondeu com texto final
         if not msg.tool_calls:
+            if _response_claims_order_saved(msg.content):
+                draft_tool_result = _latest_draft_tool_result(session)
+                if draft_tool_result:
+                    log_event(
+                        "ai_persistence_claim_blocked",
+                        agent=session["current_agent"],
+                        phone_hash=telefone[-4:] if telefone else "anon",
+                        reason="draft_process_only",
+                    )
+                    increment_counter(
+                        "ai_persistence_claim_blocks_total",
+                        agent=session["current_agent"],
+                        reason="draft_process_only",
+                    )
+                    _finalize_ai_run(
+                        start_time=start_time,
+                        session=session,
+                        iteration_count=iteration_count,
+                        prompt_tokens=total_prompt_tokens,
+                        completion_tokens=total_completion_tokens,
+                    )
+                    return draft_tool_result
             _finalize_ai_run(
                 start_time=start_time,
                 session=session,
@@ -415,3 +472,19 @@ async def process_message_with_ai(
                 "content": str(tool_result)
             })
             save_session(telefone, session)
+
+            if _is_draft_order_result(str(tool_result)):
+                log_event(
+                    "ai_draft_order_response_short_circuit",
+                    agent=session["current_agent"],
+                    phone_hash=telefone[-4:] if telefone else "anon",
+                    tool_name=function_name,
+                )
+                _finalize_ai_run(
+                    start_time=start_time,
+                    session=session,
+                    iteration_count=iteration_count,
+                    prompt_tokens=total_prompt_tokens,
+                    completion_tokens=total_completion_tokens,
+                )
+                return str(tool_result)

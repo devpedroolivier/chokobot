@@ -4,7 +4,7 @@ WELCOME_MESSAGE = (
     "Hoje posso te ajudar com:\n"
     "🎂🍫 Pronta entrega para hoje (bolos, Kit Festou e ovos)\n"
     "🍰🍬 Encomendas de bolos e docinhos\n"
-    "☕🥐 Itens da cafeteria (croissant, cappuccino, combos e bolos de fatia)\n"
+    "☕🥐 Itens da cafeteria (croissant, cappuccino, salgados e bolos de fatia)\n"
     "🎁 Presentes especiais (cestas box, caixinha de chocolate e flores)\n"
     "🐇 Cardápio Páscoa Inesquecível\n\n"
     "Me conta o que você está procurando 😊"

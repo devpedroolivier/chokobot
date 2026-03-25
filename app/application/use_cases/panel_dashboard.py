@@ -349,20 +349,41 @@ def _conversation_messages(
         ]
 
     if process is not None:
-        fallback_content = (
-            str(process.draft_payload.get("motivo") or "").strip()
-            if process.process_type == "human_handoff"
-            else _build_process_summary(process.draft_payload)
-        )
-        if fallback_content:
-            return [
-                {
-                    "role": "contexto",
-                    "actor_label": "Contexto",
-                    "content": fallback_content,
-                    "timestamp_label": _format_last_seen(last_seen, now=now),
-                }
-            ]
+        fallback_messages: list[dict] = []
+        if process.process_type == "human_handoff":
+            summary = _build_handoff_summary(process.draft_payload)
+            customer_message = _handoff_last_customer_message(process.draft_payload)
+            if summary:
+                fallback_messages.append(
+                    {
+                        "role": "contexto",
+                        "actor_label": "Contexto",
+                        "content": summary,
+                        "timestamp_label": _format_last_seen(last_seen, now=now),
+                    }
+                )
+            if customer_message:
+                fallback_messages.append(
+                    {
+                        "role": "cliente",
+                        "actor_label": "Cliente",
+                        "content": customer_message,
+                        "timestamp_label": _format_last_seen(last_seen, now=now),
+                    }
+                )
+        else:
+            fallback_content = _build_process_summary(process.draft_payload)
+            if fallback_content:
+                fallback_messages.append(
+                    {
+                        "role": "contexto",
+                        "actor_label": "Contexto",
+                        "content": fallback_content,
+                        "timestamp_label": _format_last_seen(last_seen, now=now),
+                    }
+                )
+        if fallback_messages:
+            return fallback_messages
 
     return []
 
@@ -422,6 +443,51 @@ def _build_process_summary(payload: dict) -> str:
     if payload.get("horario_retirada") or payload.get("horario"):
         parts.append((payload.get("horario_retirada") or payload.get("horario") or "").strip())
     return " • ".join(part for part in parts if part) or category
+
+
+def _handoff_context(payload: dict) -> dict:
+    context = payload.get("contexto")
+    if isinstance(context, dict):
+        return context
+    return {}
+
+
+def _build_handoff_summary(payload: dict) -> str:
+    context = _handoff_context(payload)
+    summary = str(context.get("resumo") or "").strip()
+    if summary:
+        return summary
+    return str(payload.get("motivo") or "").strip()
+
+
+def _handoff_missing_items(payload: dict) -> list[str]:
+    context = _handoff_context(payload)
+    return [str(item).strip() for item in context.get("faltando") or [] if str(item).strip()]
+
+
+def _handoff_next_step_hint(payload: dict) -> str:
+    context = _handoff_context(payload)
+    return str(context.get("proximo_passo") or "").strip()
+
+
+def _handoff_risk_flags(payload: dict) -> list[str]:
+    context = _handoff_context(payload)
+    return [str(item).strip() for item in context.get("risk_flags") or [] if str(item).strip()]
+
+
+def _handoff_last_customer_message(payload: dict) -> str:
+    context = _handoff_context(payload)
+    return str(context.get("ultima_mensagem_cliente") or "").strip()
+
+
+def _process_business_state(process) -> tuple[str, str, str]:
+    if process.process_type == "human_handoff" or process.stage == "handoff_humano":
+        return "handoff", "Handoff humano", "stage-human"
+    if process.order_id is not None or process.stage == "pedido_confirmado" or process.status == "converted":
+        return "confirmed", "Pedido confirmado", "stage-gift"
+    if process.process_type.startswith("ai_"):
+        return "draft_ai", "Rascunho IA", "stage-sweet"
+    return "draft_manual", "Rascunho operacional", "stage-cafe"
 
 
 def _process_missing_items(process_type: str, stage: str, payload: dict) -> list[str]:
@@ -516,11 +582,19 @@ def build_process_cards(
                 "action_label": "Revisar processo",
             },
         )
-        missing_items = _process_missing_items(process.process_type, process.stage, process.draft_payload)
+        if process.process_type == "human_handoff" or process.stage == "handoff_humano":
+            summary = _build_handoff_summary(process.draft_payload)
+            missing_items = _handoff_missing_items(process.draft_payload)
+        else:
+            summary = _build_process_summary(process.draft_payload)
+            missing_items = _process_missing_items(process.process_type, process.stage, process.draft_payload)
         origin_slug = "ai" if process.process_type.startswith("ai_") else "manual"
         origin_meta = _PROCESS_ORIGIN_META[origin_slug]
         owner_slug, owner_hint = _resolve_process_owner(process.process_type, process.stage, missing_items)
+        if process.process_type == "human_handoff" or process.stage == "handoff_humano":
+            owner_hint = _handoff_next_step_hint(process.draft_payload) or owner_hint
         owner_meta = _PROCESS_OWNER_META[owner_slug]
+        business_state_slug, business_state_label, business_state_class = _process_business_state(process)
         cards.append(
             {
                 "process_id": process.id,
@@ -535,7 +609,7 @@ def build_process_cards(
                 "stage_class": stage_meta["class"],
                 "priority_rank": stage_meta["priority"],
                 "action_label": stage_meta["action_label"],
-                "summary": _build_process_summary(process.draft_payload),
+                "summary": summary,
                 "missing_items": missing_items,
                 "missing_summary": ", ".join(missing_items),
                 "origin_slug": origin_slug,
@@ -545,6 +619,15 @@ def build_process_cards(
                 "owner_label": owner_meta["label"],
                 "owner_class": owner_meta["class"],
                 "owner_hint": owner_hint,
+                "next_step_hint": _handoff_next_step_hint(process.draft_payload)
+                if process.process_type == "human_handoff" or process.stage == "handoff_humano"
+                else owner_hint,
+                "risk_flags": _handoff_risk_flags(process.draft_payload)
+                if process.process_type == "human_handoff" or process.stage == "handoff_humano"
+                else [],
+                "business_state_slug": business_state_slug,
+                "business_state_label": business_state_label,
+                "business_state_class": business_state_class,
                 "stage_slug": process.stage,
                 "updated_label": _format_last_seen(updated_at, now=reference),
                 "updated_sort": updated_at or datetime.min.replace(tzinfo=reference.tzinfo),
@@ -662,16 +745,17 @@ def build_whatsapp_cards(
 
         stage_label, stage_class = _WHATSAPP_STAGE_META[source_key]
         if process is not None:
-            missing_items = _process_missing_items(process.process_type, process.stage, process.draft_payload)
+            if process.process_type == "human_handoff" or process.stage == "handoff_humano":
+                process_message = _build_handoff_summary(process.draft_payload)
+                missing_items = _handoff_missing_items(process.draft_payload)
+            else:
+                process_message = _build_process_summary(process.draft_payload)
+                missing_items = _process_missing_items(process.process_type, process.stage, process.draft_payload)
             owner_slug, _owner_hint = _resolve_process_owner(process.process_type, process.stage, missing_items)
             owner_meta = _PROCESS_OWNER_META[owner_slug]
             owner_label = owner_meta["label"]
             owner_class = owner_meta["class"]
-            process_message = (
-                (process.draft_payload.get("motivo") or "").strip()
-                if process.process_type == "human_handoff"
-                else _build_process_summary(process.draft_payload)
-            )
+            business_state_slug, business_state_label, business_state_class = _process_business_state(process)
             last_message = (
                 (recent or {}).get("texto")
                 or _latest_user_message(session)
@@ -692,6 +776,9 @@ def build_whatsapp_cards(
             )
             last_message = (recent or {}).get("texto") or _latest_user_message(session) or "Sem mensagem recente"
             is_human_handoff = source_key == "estados_atendimento"
+            business_state_slug = "handoff" if is_human_handoff else "runtime_only"
+            business_state_label = "Handoff humano" if is_human_handoff else "Fluxo em andamento"
+            business_state_class = "stage-human" if is_human_handoff else "stage-cafe"
 
         cards.append(
             {
@@ -715,6 +802,18 @@ def build_whatsapp_cards(
                 "owner_slug": "humano" if owner_class == _PROCESS_OWNER_META["humano"]["class"] else "bot",
                 "owner_label": owner_label,
                 "owner_class": owner_class,
+                "context_summary": _build_handoff_summary(process.draft_payload)
+                if process is not None and (process.process_type == "human_handoff" or process.stage == "handoff_humano")
+                else (process_message if process is not None else ""),
+                "next_step_hint": _handoff_next_step_hint(process.draft_payload)
+                if process is not None and (process.process_type == "human_handoff" or process.stage == "handoff_humano")
+                else "",
+                "risk_flags": _handoff_risk_flags(process.draft_payload)
+                if process is not None and (process.process_type == "human_handoff" or process.stage == "handoff_humano")
+                else [],
+                "business_state_slug": business_state_slug,
+                "business_state_label": business_state_label,
+                "business_state_class": business_state_class,
                 "messages": _conversation_messages(
                     phone,
                     session,

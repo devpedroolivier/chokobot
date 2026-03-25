@@ -86,7 +86,11 @@ class AIToolExecutionTests(unittest.TestCase):
 
         with patch(
             "app.ai.tool_execution.save_cake_order_draft_process",
-            return_value="Pedido em rascunho salvo no atendimento e aguardando confirmacao final explicita do cliente.",
+            return_value=(
+                "Pedido em rascunho salvo no atendimento. Valor oficial calculado: R$135,00. "
+                "Ainda nao foi salvo como pedido confirmado no sistema. "
+                "Peca uma confirmacao final explicita do cliente antes de concluir."
+            ),
         ) as mocked_draft:
             should_return, tool_result = handle_tool_call(
                 runtime=runtime,
@@ -112,6 +116,7 @@ class AIToolExecutionTests(unittest.TestCase):
         mocked_draft.assert_called_once()
         self.assertEqual(session["messages"][0]["content"], "Quero esse bolo para sexta às 15:00")
         self.assertIn("rascunho", tool_result)
+        self.assertIn("Ainda nao foi salvo como pedido confirmado no sistema", tool_result)
         counters, _ = snapshot_metrics()
         blocked_total = sum(
             value
@@ -185,6 +190,62 @@ class AIToolExecutionTests(unittest.TestCase):
 
         self.assertFalse(should_return)
         self.assertEqual(tool_result, "tradicional:recheio")
+
+    def test_get_cake_pricing_uses_runtime_and_keeps_run_active(self):
+        session = {"messages": [], "current_agent": "KnowledgeAgent"}
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+            get_cake_pricing=lambda category="tradicional", tamanho=None, produto=None, adicional=None, cobertura=None, kit_festou=False, quantidade=1: (
+                f"{category}:{tamanho}:{produto}:{adicional}:{cobertura}:{kit_festou}:{quantidade}"
+            ),
+        )
+
+        should_return, tool_result = handle_tool_call(
+            runtime=runtime,
+            function_name="get_cake_pricing",
+            arguments={"category": "tradicional", "tamanho": "B3", "kit_festou": True},
+            telefone="5511999999999",
+            nome_cliente="Cliente",
+            cliente_id=1,
+            session=session,
+            save_session_fn=lambda telefone, state: None,
+        )
+
+        self.assertFalse(should_return)
+        self.assertEqual(tool_result, "tradicional:B3:None:None:None:True:1")
+
+    def test_lookup_catalog_items_uses_runtime_and_keeps_run_active(self):
+        session = {"messages": [], "current_agent": "KnowledgeAgent"}
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+            lookup_catalog_items=lambda query, catalog="auto": f"{catalog}:{query}",
+        )
+
+        should_return, tool_result = handle_tool_call(
+            runtime=runtime,
+            function_name="lookup_catalog_items",
+            arguments={"query": "croasant de chocolate", "catalog": "cafeteria"},
+            telefone="5511999999999",
+            nome_cliente="Cliente",
+            cliente_id=1,
+            session=session,
+            save_session_fn=lambda telefone, state: None,
+        )
+
+        self.assertFalse(should_return)
+        self.assertEqual(tool_result, "cafeteria:croasant de chocolate")
 
 
 if __name__ == "__main__":

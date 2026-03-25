@@ -214,6 +214,104 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         fake_client.chat.completions.create.assert_not_awaited()
         self.assertEqual(runner.CONVERSATIONS["5516997777777"]["messages"], [])
 
+    async def test_process_message_short_circuits_when_order_stays_draft(self):
+        create_mock = AsyncMock(
+            return_value=_response(
+                _message(
+                    tool_calls=[
+                        _tool_call(
+                            "create_cake_order",
+                            {
+                                "linha": "tradicional",
+                                "categoria": "tradicional",
+                                "tamanho": "B3",
+                                "massa": "Mesclada",
+                                "recheio": "Brigadeiro de Nutella",
+                                "mousse": "Ninho",
+                                "adicional": "Cereja",
+                                "descricao": "Bolo B3 mesclado com Brigadeiro de Nutella e mousse de Ninho + Cereja",
+                                "data_entrega": "25/03/2026",
+                                "horario_retirada": "17:30",
+                                "modo_recebimento": "retirada",
+                                "pagamento": {"forma": "PIX"},
+                            },
+                        )
+                    ]
+                )
+            )
+        )
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        draft_result = (
+            "Pedido em rascunho salvo no atendimento. Valor oficial calculado: R$135,00. "
+            "Ainda nao foi salvo como pedido confirmado no sistema. "
+            "Peca uma confirmacao final explicita do cliente antes de concluir."
+        )
+
+        with patch.object(runner, "client", fake_client):
+            with patch("app.ai.tool_execution.save_cake_order_draft_process", return_value=draft_result):
+                reply = await runner.process_message_with_ai(
+                    "5516992821034",
+                    "quero esse bolo para hoje",
+                    "Teste",
+                    99,
+                    now=datetime(2026, 3, 25, 15, 0, tzinfo=ZoneInfo("America/Sao_Paulo")),
+                )
+
+        self.assertEqual(reply, draft_result)
+        self.assertEqual(create_mock.await_count, 1)
+        tool_messages = [m for m in runner.CONVERSATIONS["5516992821034"]["messages"] if m.get("role") == "tool"]
+        self.assertTrue(tool_messages)
+        self.assertEqual(tool_messages[-1]["content"], draft_result)
+
+    async def test_process_message_blocks_hallucinated_saved_reply_when_last_truth_is_draft(self):
+        phone = "5516992821034"
+        draft_result = (
+            "Pedido em rascunho salvo no atendimento. Valor oficial calculado: R$135,00. "
+            "Ainda nao foi salvo como pedido confirmado no sistema. "
+            "Peca uma confirmacao final explicita do cliente antes de concluir."
+        )
+        runner.CONVERSATIONS[phone] = {
+            "current_agent": "CakeOrderAgent",
+            "messages": [
+                {"role": "system", "content": "system"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "tool-1",
+                            "type": "function",
+                            "function": {"name": "create_cake_order", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "tool-1",
+                    "name": "create_cake_order",
+                    "content": draft_result,
+                },
+            ],
+        }
+        create_mock = AsyncMock(return_value=_response(_message("Seu pedido foi salvo!")))
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                phone,
+                "pode sim",
+                "Teste",
+                99,
+                now=datetime(2026, 3, 25, 15, 5, tzinfo=ZoneInfo("America/Sao_Paulo")),
+            )
+
+        self.assertEqual(reply, draft_result)
+
 
 if __name__ == "__main__":
     unittest.main()

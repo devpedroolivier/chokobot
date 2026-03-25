@@ -13,7 +13,10 @@ from app.application.service_registry import (
 from app.db.database import get_connection
 from app.security import ai_learning_enabled, security_audit
 from app.services.encomendas_utils import (
+    GOURMET_ALIASES,
     LIMITE_HORARIO_ENTREGA,
+    REDONDOS_ALIASES,
+    TORTAS_ALIASES,
     _horario_entrega_permitido,
     _linha_canonica,
     _normaliza_tamanho,
@@ -23,7 +26,13 @@ from app.services.store_schedule import validate_service_schedule
 from app.services.precos import (
     DOCES_UNITARIOS,
     DOCES_ALIASES,
+    INGLES,
     KIT_FESTOU_PRECO,
+    LINHA_SIMPLES,
+    MESVERSARIO,
+    REDONDOS_P6,
+    TORTAS,
+    TRADICIONAL_BASE,
     calcular_total,
     _canonical_doce,
     _norm,
@@ -156,6 +165,196 @@ def _normalize_cake_option_type(option_type: str) -> str:
         "adicionais": "adicional",
     }
     return aliases.get(normalized, normalized)
+
+
+def _normalize_payment_data(pagamento: dict | None) -> dict:
+    payload = dict(pagamento or {})
+    forma = (payload.get("forma") or "").strip()
+    troco_para = payload.get("troco_para")
+
+    if forma != "Dinheiro":
+        payload["troco_para"] = None
+        return payload
+
+    if troco_para in (None, ""):
+        payload["troco_para"] = None
+        return payload
+
+    try:
+        payload["troco_para"] = float(troco_para)
+    except (TypeError, ValueError):
+        payload["troco_para"] = None
+    return payload
+
+
+def _format_currency_brl(value: float | int) -> str:
+    return f"R${float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _match_catalog_value(
+    raw_value: str | None,
+    valid_values: tuple[str, ...] | list[str],
+    *,
+    aliases: dict[str, str] | None = None,
+) -> str | None:
+    if not raw_value:
+        return None
+
+    normalized = _norm(raw_value)
+    if aliases and normalized in aliases:
+        alias_value = aliases[normalized]
+        for valid in valid_values:
+            if _norm(valid) == _norm(alias_value):
+                return valid
+        for valid in valid_values:
+            if _norm(alias_value) in _norm(valid):
+                return valid
+
+    for valid in valid_values:
+        valid_normalized = _norm(valid)
+        if normalized == valid_normalized:
+            return valid
+        if normalized in valid_normalized or valid_normalized in normalized:
+            return valid
+    return None
+
+
+def _normalize_cake_pricing_category(category: str) -> str:
+    normalized = _normalize_cake_option_category(category)
+    aliases = {
+        "gourmet": "gourmet",
+        "gourmet ingles": "ingles",
+        "gourmet inglês": "ingles",
+        "ingles": "ingles",
+        "inglês": "ingles",
+        "redondo": "redondo",
+        "redondo p6": "redondo",
+        "gourmet redondo": "redondo",
+        "gourmet redondo p6": "redondo",
+        "torta": "torta",
+        "simples": "simples",
+        "linha simples": "simples",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _build_cake_pricing_payload(
+    *,
+    category: str,
+    tamanho: str | None,
+    produto: str | None,
+    adicional: str | None,
+    cobertura: str | None,
+    kit_festou: bool,
+    quantidade: int,
+) -> tuple[dict | None, str | None]:
+    try:
+        normalized_quantity = max(1, int(quantidade or 1))
+    except (TypeError, ValueError):
+        normalized_quantity = 1
+
+    payload: dict = {
+        "categoria": category,
+        "kit_festou": kit_festou,
+        "quantidade": normalized_quantity,
+    }
+
+    if category == "tradicional":
+        normalized_size = _normaliza_tamanho(tamanho or "")
+        if normalized_size not in TAMANHOS_TRADICIONAIS:
+            return None, "Informe um tamanho valido da linha tradicional: B3, B4, B6 ou B7."
+        payload["tamanho"] = normalized_size
+        payload["fruta_ou_nozes"] = _match_closest(adicional or "", set(ADICIONAIS_TRADICIONAIS)) or adicional
+        return payload, None
+
+    if category == "mesversario":
+        normalized_size = _normaliza_tamanho(tamanho or "")
+        if normalized_size not in TAMANHOS_MESVERSARIO:
+            return None, "Informe um tamanho valido do mesversario: P4 ou P6."
+        payload["tamanho"] = normalized_size
+        return payload, None
+
+    if category == "ingles":
+        matched = _match_catalog_value(produto, tuple(INGLES.keys()), aliases=GOURMET_ALIASES)
+        if not matched:
+            return None, "Informe um sabor valido do gourmet ingles."
+        payload["produto"] = matched
+        return payload, None
+
+    if category == "redondo":
+        matched = _match_catalog_value(produto, tuple(REDONDOS_P6.keys()), aliases=REDONDOS_ALIASES)
+        if not matched:
+            return None, "Informe um sabor valido do gourmet redondo P6."
+        payload["produto"] = matched
+        return payload, None
+
+    if category == "torta":
+        matched = _match_catalog_value(produto, tuple(TORTAS.keys()), aliases=TORTAS_ALIASES)
+        if not matched:
+            return None, "Informe um sabor valido de torta."
+        payload["produto"] = matched
+        return payload, None
+
+    if category == "simples":
+        normalized_cover = _match_catalog_value(cobertura, tuple(LINHA_SIMPLES["coberturas"].keys()))
+        if not normalized_cover:
+            return None, "Informe uma cobertura valida da linha simples: Vulcao ou Simples."
+        payload["cobertura"] = normalized_cover
+        return payload, None
+
+    return None, "Categoria de bolo invalida para consulta de preco."
+
+
+def _build_cake_pricing_overview(category: str) -> str:
+    if category == "tradicional":
+        lines = ["Precos canonicos da linha tradicional:"]
+        for size in TAMANHOS_TRADICIONAIS:
+            info = TRADICIONAL_BASE[size]
+            lines.append(f"- {size} (ate {info['serve']} pessoas): {_format_currency_brl(info['preco'])}")
+        lines.append("- Adicionais alteram o valor final: Morango, Ameixa, Nozes, Cereja e Abacaxi.")
+        return "\n".join(lines)
+
+    if category == "mesversario":
+        lines = ["Precos canonicos do mesversario:"]
+        for size in TAMANHOS_MESVERSARIO:
+            info = MESVERSARIO[size]
+            lines.append(f"- {size} (ate {info['serve']} pessoas): {_format_currency_brl(info['preco'])}")
+        return "\n".join(lines)
+
+    if category == "ingles":
+        lines = ["Precos canonicos do gourmet ingles (serve cerca de 10 pessoas):"]
+        for name, info in INGLES.items():
+            lines.append(f"- {name}: {_format_currency_brl(info['preco'])}")
+        return "\n".join(lines)
+
+    if category == "redondo":
+        lines = ["Precos canonicos do gourmet redondo P6 (serve cerca de 20 pessoas):"]
+        for name, info in REDONDOS_P6.items():
+            lines.append(f"- {name}: {_format_currency_brl(info['preco'])}")
+        return "\n".join(lines)
+
+    if category == "torta":
+        lines = ["Precos canonicos das tortas (serve 16 fatias):"]
+        for name, info in TORTAS.items():
+            lines.append(f"- {name}: {_format_currency_brl(info['preco'])}")
+        return "\n".join(lines)
+
+    if category == "simples":
+        lines = ["Precos canonicos da linha simples (serve 8 fatias):"]
+        for cover, price in LINHA_SIMPLES["coberturas"].items():
+            lines.append(f"- {cover}: {_format_currency_brl(price)}")
+        lines.append("- Sabores disponiveis: Chocolate e Cenoura.")
+        return "\n".join(lines)
+
+    if category == "gourmet":
+        return (
+            "A linha gourmet tem dois formatos com precos diferentes:\n"
+            "- Gourmet ingles: serve cerca de 10 pessoas.\n"
+            "- Gourmet redondo P6: serve cerca de 20 pessoas.\n"
+            "Informe se o cliente quer ingles ou redondo P6 antes de citar o preco."
+        )
+
+    return "Categoria de bolo invalida para consulta de preco."
 
 
 def _validar_campos_bolo(dados: dict) -> list[str]:
@@ -295,6 +494,7 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
     dados["linha"] = _linha_canonica(dados.get("linha"))
     categoria = (dados.get("categoria") or "").lower()
     dados["categoria"] = categoria
+    dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
 
     schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
     if schedule_error:
@@ -345,6 +545,7 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
 
 def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
+    dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
     itens_validados: List[Dict] = []
     total_doces = 0.0
     erros: list[str] = []
@@ -471,6 +672,90 @@ class SweetOrderSchema(BaseModel):
 def get_menu(category: str = "todas") -> str:
     """Retorna o cardapio completo ou filtrado entre pronta entrega e encomendas."""
     return get_catalog_gateway().get_menu(category)
+
+
+def lookup_catalog_items(query: str, catalog: str = "auto") -> str:
+    """Busca itens exatos ou aproximados no catalogo estruturado de cafeteria e Pascoa."""
+    return get_catalog_gateway().lookup_catalog_items(query, catalog)
+
+
+def get_cake_pricing(
+    category: str = "tradicional",
+    tamanho: str | None = None,
+    produto: str | None = None,
+    adicional: str | None = None,
+    cobertura: str | None = None,
+    kit_festou: bool = False,
+    quantidade: int = 1,
+) -> str:
+    """Retorna precos canonicos de bolos e tortas a partir da base estruturada do sistema."""
+    normalized_category = _normalize_cake_pricing_category(category)
+    try:
+        normalized_quantity = max(1, int(quantidade or 1))
+    except (TypeError, ValueError):
+        normalized_quantity = 1
+
+    if (
+        not tamanho
+        and not produto
+        and not adicional
+        and not cobertura
+        and not kit_festou
+        and normalized_quantity == 1
+    ):
+        return _build_cake_pricing_overview(normalized_category)
+
+    payload, error = _build_cake_pricing_payload(
+        category=normalized_category,
+        tamanho=tamanho,
+        produto=produto,
+        adicional=adicional,
+        cobertura=cobertura,
+        kit_festou=kit_festou,
+        quantidade=normalized_quantity,
+    )
+    if error:
+        return error
+    assert payload is not None
+
+    total_price, serve_people = calcular_total(payload)
+    unit_payload = dict(payload)
+    unit_payload["quantidade"] = 1
+    unit_price, _ = calcular_total(unit_payload)
+
+    description = ""
+    if normalized_category == "tradicional":
+        description = f"Bolo tradicional {payload['tamanho']}"
+        if adicional:
+            matched_additional = _match_closest(adicional, set(ADICIONAIS_TRADICIONAIS)) or adicional
+            description += f" com adicional {matched_additional}"
+    elif normalized_category == "mesversario":
+        description = f"Bolo mesversario {payload['tamanho']}"
+    elif normalized_category == "ingles":
+        description = f"Gourmet ingles {payload['produto']}"
+    elif normalized_category == "redondo":
+        description = f"Gourmet redondo P6 {payload['produto']}"
+    elif normalized_category == "torta":
+        description = f"Torta {payload['produto']}"
+    elif normalized_category == "simples":
+        description = f"Linha simples com cobertura {payload['cobertura']}"
+
+    lines = [
+        "Preco canonico consultado no sistema:",
+        f"- Item: {description}",
+        f"- Valor unitario: {_format_currency_brl(unit_price)}",
+    ]
+    if serve_people:
+        lines.append(f"- Serve aproximadamente: {serve_people} pessoas")
+    if kit_festou:
+        lines.append(f"- Kit Festou incluido: +{_format_currency_brl(KIT_FESTOU_PRECO)} por unidade")
+    if normalized_quantity > 1:
+        lines.append(f"- Quantidade: {normalized_quantity}")
+        lines.append(f"- Total calculado: {_format_currency_brl(total_price)}")
+    else:
+        lines.append(f"- Total calculado: {_format_currency_brl(total_price)}")
+    lines.append("Use este valor como referencia oficial e nao invente preco fora deste retorno.")
+    return "\n".join(lines)
 
 
 def get_cake_options(category: str = "tradicional", option_type: str = "recheio") -> str:
@@ -682,10 +967,12 @@ def save_cake_order_draft_process(
         source="ai_cake_order",
         draft_payload=_build_cake_process_payload(dados),
     )
-    preco_txt = f" Valor estimado: R${dados['valor_total']:.2f}." if dados.get("valor_total") else ""
+    preco_txt = f" Valor oficial calculado: {_format_currency_brl(dados['valor_total'])}." if dados.get("valor_total") else ""
+    modo_txt = f" {dados['modo_recebimento'].capitalize()}." if dados.get("modo_recebimento") else ""
     return (
-        "Pedido em rascunho salvo no atendimento e aguardando confirmacao final explicita do cliente."
-        f"{preco_txt} Peca a confirmacao antes de concluir."
+        "Pedido em rascunho salvo no atendimento."
+        f"{preco_txt}{modo_txt} Ainda nao foi salvo como pedido confirmado no sistema. "
+        "Peca uma confirmacao final explicita do cliente antes de concluir."
     )
 
 
@@ -718,6 +1005,8 @@ def save_sweet_order_draft_process(
         ),
     )
     return (
-        "Pedido de doces em rascunho salvo no atendimento e aguardando confirmacao final explicita do cliente. "
-        "Peca a confirmacao antes de concluir."
+        "Pedido de doces em rascunho salvo no atendimento. "
+        f"Valor oficial calculado: {_format_currency_brl(prepared['valor_final'])}. "
+        "Ainda nao foi salvo como pedido confirmado no sistema. "
+        "Peca uma confirmacao final explicita do cliente antes de concluir."
     )

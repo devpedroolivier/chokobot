@@ -31,6 +31,7 @@
 - A vitrine pode variar no dia. Se o cliente pedir sabores disponiveis agora, informar somente o que estiver na pronta entrega/cafeteria.
 - Itens extraidos do cardapio da cafeteria:
   - **Salgados e lanches:** Pao de Queijo (R$5,50), Pao de Queijo Recheado (R$12,00), Pao de Queijo Tomate Confit (R$14,00), Bauru (R$17,00), Croissant (R$14,50), Ovos com Bacon (R$25,00), Mistinho com Omelete (R$17,00), Omelete Recheado (R$21,00), Lanche 3 Queijos com Tomate Confit (R$25,00), Croque Madame (R$25,00), Toast de Parma com Tomate Confit (R$26,00)
+  - **Croissant:** tempo medio de preparo de 20 minutos
   - **Sobremesas:** ChokoBenta (R$22,00), Bolo Gelado (R$8,00), Bolo Gourmet fatia (R$14,50), Explosao de Sabor (R$25,00), Ice Mousse Cake (R$25,00), Cheesecake no Pote (R$18,00), Torre Ice Mousse Cake (R$30,00), Torta fatia (R$14,50), Vulcaozinho de Cenoura (R$16,50)
   - **Cafes e quentes:** Cappuccino com Canela (R$8,50), Cappuccino Italiano (R$8,50), Cafe Curto (R$5,00), Cafe Longo (R$6,00), Cafe com Leite (R$8,50), Mocaccino (R$8,50)
   - **Gelados e bebidas:** Ice Pistache (R$39,90), Ice Cappuccino (R$25,00), Ice Chocolate (R$25,00), Ice Negresco (R$27,00), Ice Ovomaltine (R$27,00), Ice Tea (R$4,50), Soda Italiana (R$13,50), Suco de Laranja (R$8,00), Suco Tropical de Abacaxi (R$15,00)
@@ -159,3 +160,4 @@
 - **Horário limite para entregas:** até 17:30
 - **Taxa de entrega padrao:** geralmente R$10,00, salvo regra especifica
 - **Formas de pagamento:** PIX, Cartao (debito/credito), Dinheiro
+- **Troco:** somente para pagamento em Dinheiro. PIX e Cartao nao usam troco

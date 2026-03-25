@@ -108,6 +108,26 @@ def handle_tool_call(
             tool_result = f"Erro: Agente {new_agent} não existe."
     elif function_name == "get_menu":
         tool_result = runtime.get_menu(arguments.get("category", "todas"))
+    elif function_name == "lookup_catalog_items":
+        lookup_fn = getattr(runtime, "lookup_catalog_items", None)
+        if lookup_fn is None:
+            tool_result = "Busca estruturada de catalogo indisponivel neste runtime."
+        else:
+            tool_result = lookup_fn(arguments.get("query", ""), arguments.get("catalog", "auto"))
+    elif function_name == "get_cake_pricing":
+        pricing_fn = getattr(runtime, "get_cake_pricing", None)
+        if pricing_fn is None:
+            tool_result = "Consulta canonica de preco de bolo indisponivel neste runtime."
+        else:
+            tool_result = pricing_fn(
+                arguments.get("category", "tradicional"),
+                arguments.get("tamanho"),
+                arguments.get("produto"),
+                arguments.get("adicional"),
+                arguments.get("cobertura"),
+                arguments.get("kit_festou", False),
+                arguments.get("quantidade", 1),
+            )
     elif function_name == "get_cake_options":
         tool_result = runtime.get_cake_options(
             arguments.get("category", "tradicional"),

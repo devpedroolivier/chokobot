@@ -67,9 +67,11 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
 
-    async def test_process_message_handles_ovo_recheado_de_prestigio(self):
+    async def test_process_message_handles_ovo_recheado_de_prestigio_via_ai_flow(self):
         fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Resposta catalogada"))))
+            )
         )
 
         with patch.object(runner, "client", fake_client):
@@ -80,8 +82,8 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
                 99,
             )
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
+        self.assertEqual(reply, "Resposta catalogada")
+        fake_client.chat.completions.create.assert_awaited_once()
 
     async def test_process_message_handles_generic_ovo_request_as_easter(self):
         fake_client = SimpleNamespace(
@@ -116,9 +118,11 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, ai_reply)
         fake_client.chat.completions.create.assert_awaited_once()
 
-    async def test_process_message_handles_ovo_pacoca_as_easter(self):
+    async def test_process_message_handles_ovo_pacoca_via_ai_flow(self):
         fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Consulta específica"))))
+            )
         )
 
         with patch.object(runner, "client", fake_client):
@@ -129,12 +133,14 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
                 99,
             )
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
+        self.assertEqual(reply, "Consulta específica")
+        fake_client.chat.completions.create.assert_awaited_once()
 
-    async def test_process_message_keeps_easter_context_for_follow_up(self):
+    async def test_process_message_does_not_loop_easter_link_on_specific_follow_up(self):
         fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Temos consulta específica"))))
+            )
         )
 
         with patch.object(runner, "client", fake_client):
@@ -152,8 +158,8 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
-        self.assertEqual(second_reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
+        self.assertEqual(second_reply, "Temos consulta específica")
+        fake_client.chat.completions.create.assert_awaited_once()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 import json
 import traceback
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -16,7 +15,8 @@ from app.security import (
     webhook_secret_header,
 )
 from app.utils.mensagens import responder_usuario
-from app.utils.payload import is_group_message, normalize_incoming
+from app.utils.datetime_utils import now_in_bot_timezone
+from app.utils.payload import is_automated_order_message, is_group_message, normalize_incoming
 
 router = APIRouter()
 
@@ -26,7 +26,7 @@ def print_painel(body: dict):
     nome = norm["chat_name"]
     numero = hash_phone(norm["phone"])
     texto = norm["text"]
-    hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    hora = now_in_bot_timezone().strftime("%d/%m/%Y %H:%M")
 
     log_event(
         "webhook_inbound",
@@ -59,6 +59,10 @@ async def receber_webhook(request: Request):
     if is_group_message(body):
         increment_counter("webhook_events_total", status="ignored", reason="group_message")
         log_event("webhook_ignored", reason="group_message")
+        return {"status": "ignored"}
+    if is_automated_order_message(body):
+        increment_counter("webhook_events_total", status="ignored", reason="automated_order_message")
+        log_event("webhook_ignored", reason="automated_order_message")
         return {"status": "ignored"}
 
     norm = normalize_incoming(body)

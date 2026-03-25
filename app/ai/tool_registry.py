@@ -14,7 +14,10 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                     "name": "get_menu",
                     "description": (
                         "Busca os cardapios, produtos e precos da Chokodelicia. "
-                        'Use `category="pronta_entrega"` para vitrine/cafeteria/bolo pronta entrega/Kit Festou/ovos e '
+                        'Use `category="pronta_entrega"` para a visao geral de pronta entrega, '
+                        '`category="cafeteria"` para o cardapio detalhado da cafeteria, '
+                        '`category="pascoa"` para o cardapio de Pascoa, '
+                        '`category="pascoa_presentes"` para mimos e presentes de Pascoa e '
                         '`category="encomendas"` para bolos personalizados, tortas e presentes.'
                     ),
                     "parameters": {
@@ -22,10 +25,90 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                         "properties": {
                             "category": {
                                 "type": "string",
-                                "description": "Categoria do menu: pronta_entrega, encomendas ou todas",
+                                "description": "Categoria do menu: pronta_entrega, cafeteria, pascoa, pascoa_presentes, encomendas ou todas",
                             }
                         },
                         "required": [],
+                    },
+                },
+            }
+        )
+
+    if runtime.lookup_catalog_items in agent.tools:
+        openai_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup_catalog_items",
+                    "description": (
+                        "Busca itens especificos no catalogo estruturado da cafeteria e da Pascoa. "
+                        "Use quando o cliente perguntar se tem um item, quais opcoes/sabores ele possui, "
+                        "qual o preco, peso ou composicao. Nao use para cardapio geral."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Nome do item, sabor, peso ou termo que o cliente mencionou",
+                            },
+                            "catalog": {
+                                "type": "string",
+                                "enum": ["auto", "pronta_entrega", "cafeteria", "pascoa", "pascoa_presentes"],
+                                "description": "Escopo do catalogo a consultar",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        )
+
+    if runtime.get_cake_pricing in agent.tools:
+        openai_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_cake_pricing",
+                    "description": (
+                        "Consulta os precos canonicos de bolos, tortas e linha simples na base oficial. "
+                        "Use sempre que o cliente perguntar valor, faixa de preco, tamanho, quantas pessoas serve "
+                        "ou total com adicional e Kit Festou. Nao invente preco fora desta ferramenta."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "category": {
+                                "type": "string",
+                                "enum": ["tradicional", "gourmet", "ingles", "redondo", "mesversario", "torta", "simples"],
+                                "description": "Categoria ou linha do bolo",
+                            },
+                            "tamanho": {
+                                "type": "string",
+                                "description": "Tamanho como B3, B4, B6, B7, P4 ou P6 quando aplicavel",
+                            },
+                            "produto": {
+                                "type": "string",
+                                "description": "Sabor fixo do gourmet ingles, gourmet redondo ou torta",
+                            },
+                            "adicional": {
+                                "type": "string",
+                                "description": "Adicional da linha tradicional: Morango, Ameixa, Nozes, Cereja ou Abacaxi",
+                            },
+                            "cobertura": {
+                                "type": "string",
+                                "description": "Cobertura da linha simples: Vulcao ou Simples",
+                            },
+                            "kit_festou": {
+                                "type": "boolean",
+                                "description": "Se deve somar o Kit Festou ao calculo",
+                            },
+                            "quantidade": {
+                                "type": "integer",
+                                "description": "Quantidade de unidades para calcular o total",
+                            },
+                        },
+                        "required": ["category"],
                     },
                 },
             }

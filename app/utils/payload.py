@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 
@@ -61,6 +62,36 @@ def extract_message_id(payload: dict) -> str:
 def extract_message_type(payload: dict) -> str:
     msg_type = payload.get("type") or _get(payload, "message", "type") or ""
     return str(msg_type) if msg_type else ""
+
+
+def _normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+
+
+def is_automated_order_message(payload: dict) -> bool:
+    text = _normalize_text(extract_text(payload))
+    if not text:
+        return False
+
+    strong_markers = (
+        "pedido goomer delivery",
+        "pedido gerado pelo goomer delivery",
+        "utm_source=whatsapp",
+    )
+    if any(marker in text for marker in strong_markers):
+        return True
+
+    supporting_markers = (
+        "nao precisa baixar nada",
+        "gostou de pedir no nosso app",
+        "confira o pedido abaixo",
+        "retirada agendada:",
+        "pagamento:",
+        "total:",
+    )
+    support_hits = sum(1 for marker in supporting_markers if marker in text)
+    return "goomer" in text and support_hits >= 2
 
 
 def is_group_message(payload: dict) -> bool:

@@ -3,33 +3,24 @@ from __future__ import annotations
 import re
 import unicodedata
 from datetime import datetime
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
-from app.settings import get_settings
+from app.utils.datetime_utils import get_bot_timezone, normalize_to_bot_timezone, now_in_bot_timezone
 
 
 DELIVERY_CUTOFF = (17, 30)
 
 
 def current_timezone() -> ZoneInfo:
-    settings = get_settings()
-    timezone_name = settings.bot_timezone or settings.tz or "America/Sao_Paulo"
-    try:
-        return ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
-        return ZoneInfo("America/Sao_Paulo")
+    return get_bot_timezone()
 
 
 def current_local_datetime() -> datetime:
-    return datetime.now(current_timezone())
+    return now_in_bot_timezone()
 
 
 def normalize_reference_time(now: datetime | None = None) -> datetime:
-    current_time = now or current_local_datetime()
-    timezone = current_timezone()
-    if current_time.tzinfo is None:
-        return current_time.replace(tzinfo=timezone)
-    return current_time.astimezone(timezone)
+    return normalize_to_bot_timezone(now)
 
 
 def is_after_delivery_cutoff(now: datetime | None = None) -> bool:
@@ -92,23 +83,44 @@ def _mentions_non_easter_egg_context(normalized: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in patterns)
 
 
-def requests_easter_catalog(text: str) -> bool:
-    normalized = normalize_intent_text(text)
-    if re.search(r"\bovos?\b", normalized):
-        if _mentions_non_easter_egg_context(normalized):
-            return False
-        if re.search(r"\bpronta\s*entrega\b", normalized):
-            return False
-        return True
-
+def _mentions_specific_easter_item(normalized: str) -> bool:
     patterns = (
-        r"\bpascoa\b",
-        r"\bcardapio\s+de\s+pascoa\b",
-        r"\bcasca\s+recheada\b",
-        r"\bcoelho\s+de\s+pascoa\b",
-        r"\bpre[\s-]?pascoa\b",
+        r"\b\d+\s*(g|kg|kilo)\b",
+        r"\b(supremo|intenso|lotus|cookie|pudim|trufad|crocant|colher|vertical|drage|kinder|brownie)\b",
+        r"\b(trio|tablete|mini ovos|mini ovo|blister|caneca|box|pelucia)\b",
+        r"\b(brigadeiro|cereja|maracuja|negresco|nutella|alpino|ovomaltine|rafaello|amarena|cheesecake|pistache)\b",
+        r"\b(prestigio|sensacao|sensação|pacoca|paçoca)\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_easter_catalog(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if _mentions_non_easter_egg_context(normalized):
+        return False
+    if re.search(r"\bpronta\s*entrega\b", normalized):
+        return False
+    if _mentions_specific_easter_item(normalized):
+        return False
+
+    explicit_catalog_patterns = (
+        r"\b(cardapio|catalogo|menu|link)\b.*\bpascoa\b",
+        r"\bpascoa\b.*\b(cardapio|catalogo|menu|link)\b",
+        r"\b(link|cardapio|catalogo|menu)\b.*\bovos?\b",
+        r"\bquero\s+ver\b.*\bpascoa\b",
+        r"\bme\s+manda\b.*\bpascoa\b",
+        r"\bpre[\s-]?pascoa\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in explicit_catalog_patterns):
+        return True
+
+    generic_egg_patterns = (
+        r"\b(encomendar|encomenda|comprar|pedido|pedir|quero)\b.*\bovos?\b",
+        r"\bovos?\s+de\s+pascoa\b",
+        r"\btem\s+ovos?\b",
+        r"\btem\s+ovo\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in generic_egg_patterns)
 
 
 def response_conflicts_with_cutoff(reply: str | None, *, user_text: str, now: datetime | None = None) -> bool:

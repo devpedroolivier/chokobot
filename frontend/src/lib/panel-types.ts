@@ -34,6 +34,11 @@ export type ProcessCard = {
   owner_label: string;
   owner_class: string;
   owner_hint: string;
+  next_step_hint?: string;
+  risk_flags?: string[];
+  business_state_slug?: string;
+  business_state_label?: string;
+  business_state_class?: string;
   updated_label: string;
   stage_slug?: string;
 };
@@ -61,6 +66,12 @@ export type WhatsAppCard = {
   owner_slug?: string;
   owner_label: string;
   owner_class: string;
+  context_summary?: string;
+  next_step_hint?: string;
+  risk_flags?: string[];
+  business_state_slug?: string;
+  business_state_label?: string;
+  business_state_class?: string;
   messages: ConversationMessage[];
 };
 

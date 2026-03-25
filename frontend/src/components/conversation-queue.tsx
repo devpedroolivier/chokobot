@@ -5,7 +5,7 @@ import { FormEvent, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import type { WhatsAppCard } from "@/lib/panel-types";
-import { EmptyState, customerHref, orderHref, stageClasses } from "@/components/admin-workspace";
+import { EmptyState, conversationHref, customerHref, orderHref, riskFlagLabel, stageClasses } from "@/components/admin-workspace";
 
 function messageTone(role: string): string {
   if (role === "ia") {
@@ -25,6 +25,47 @@ function messageTone(role: string): string {
 
 function automationBadge(card: WhatsAppCard): string {
   return card.automation_mode === "manual" ? "stage-human" : "stage-delivery";
+}
+
+function AutomationToggleButton({
+  card,
+  notifyCustomer = false,
+  compact = false,
+}: {
+  card: WhatsAppCard;
+  notifyCustomer?: boolean;
+  compact?: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const enabled = card.automation_mode === "manual";
+
+  async function handleClick() {
+    const response = await fetch(`/api/conversations/${encodeURIComponent(card.phone)}/automation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, notify_customer: notifyCustomer }),
+    });
+    if (!response.ok) {
+      return;
+    }
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isPending}
+      className={`rounded-full border border-line bg-paper font-semibold text-ink transition hover:bg-sand disabled:cursor-not-allowed disabled:opacity-60 ${
+        compact ? "px-3 py-1 text-xs" : "px-4 py-2 text-sm"
+      }`}
+    >
+      {isPending ? "Atualizando..." : enabled ? "Reativar IA" : "Assumir manual"}
+    </button>
+  );
 }
 
 export function ConversationList({
@@ -59,6 +100,11 @@ export function ConversationList({
                 <p className="mt-1 text-xs uppercase tracking-[0.16em] text-cocoa/55">{card.agent}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
+                {card.business_state_label ? (
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageClasses(card.business_state_class || "stage-cafe")}`}>
+                    {card.business_state_label}
+                  </span>
+                ) : null}
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageClasses(card.stage_class)}`}>
                   {card.stage_label}
                 </span>
@@ -68,6 +114,7 @@ export function ConversationList({
               </div>
             </div>
             <p className="mt-3 text-sm text-ink">{card.last_message}</p>
+            {card.next_step_hint ? <p className="mt-2 text-xs text-cocoa/70">Próximo passo: {card.next_step_hint}</p> : null}
             <div className="mt-3 flex items-center justify-between text-xs text-cocoa/65">
               <span className="font-mono">{card.phone}</span>
               <span>{card.last_seen_label}</span>
@@ -100,6 +147,11 @@ export function ConversationQueue({
               <p className="mt-1 text-xs uppercase tracking-[0.16em] text-cocoa/55">{card.agent}</p>
             </div>
             <div className="flex flex-col items-end gap-2">
+              {card.business_state_label ? (
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageClasses(card.business_state_class || "stage-cafe")}`}>
+                  {card.business_state_label}
+                </span>
+              ) : null}
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageClasses(card.stage_class)}`}>
                 {card.stage_label}
               </span>
@@ -109,14 +161,33 @@ export function ConversationQueue({
             </div>
           </div>
           <p className="mt-3 text-sm text-ink">{card.last_message}</p>
+          {card.next_step_hint ? <p className="mt-2 text-xs text-cocoa/70">Próximo passo: {card.next_step_hint}</p> : null}
+          {(card.risk_flags || []).length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(card.risk_flags || []).slice(0, 2).map((flag) => (
+                <span key={flag} className="rounded-full bg-[#fff1e4] px-3 py-1 text-xs font-semibold text-[#9a4d12]">
+                  {riskFlagLabel(flag)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-4 flex items-center justify-between gap-3 text-xs text-cocoa/65">
             <span className="font-mono">{card.phone}</span>
-            <a
-              href={customerHref(card.phone)}
-              className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold text-ink transition hover:bg-sand"
-            >
-              Ver cliente
-            </a>
+            <div className="flex flex-wrap gap-2">
+              <AutomationToggleButton card={card} compact />
+              <a
+                href={conversationHref(card.phone)}
+                className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold text-ink transition hover:bg-sand"
+              >
+                Abrir thread
+              </a>
+              <a
+                href={customerHref(card.phone)}
+                className="rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-cocoa transition hover:bg-paper"
+              >
+                Ver cliente
+              </a>
+            </div>
           </div>
         </article>
       ))}
@@ -202,6 +273,11 @@ export function ConversationThread({ card }: { card: WhatsAppCard | null }) {
           <p className="mt-2 font-mono text-xs text-cocoa/60">{card.phone}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {card.business_state_label ? (
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageClasses(card.business_state_class || "stage-cafe")}`}>
+              {card.business_state_label}
+            </span>
+          ) : null}
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageClasses(card.stage_class)}`}>
             {card.stage_label}
           </span>
@@ -213,6 +289,23 @@ export function ConversationThread({ card }: { card: WhatsAppCard | null }) {
           </span>
         </div>
       </div>
+
+      {card.context_summary || card.next_step_hint || (card.risk_flags || []).length > 0 ? (
+        <div className="mt-4 rounded-[22px] border border-line bg-[#fffaf6] px-4 py-4 text-sm text-cocoa">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cocoa/60">Leitura operacional</p>
+          {card.context_summary ? <p className="mt-2 text-ink">{card.context_summary}</p> : null}
+          {card.next_step_hint ? <p className="mt-2">Próximo passo: {card.next_step_hint}</p> : null}
+          {(card.risk_flags || []).length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(card.risk_flags || []).map((flag) => (
+                <span key={flag} className="rounded-full bg-[#fff1e4] px-3 py-1 text-xs font-semibold text-[#9a4d12]">
+                  {riskFlagLabel(flag)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 rounded-[22px] border border-line bg-paper/90 px-4 py-3 text-sm text-cocoa">
         {card.automation_hint ||
@@ -252,6 +345,12 @@ export function ConversationThread({ card }: { card: WhatsAppCard | null }) {
           className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition hover:bg-sand"
         >
           Ver cliente
+        </a>
+        <a
+          href={conversationHref(card.phone)}
+          className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition hover:bg-sand"
+        >
+          Abrir conversa
         </a>
         <a
           href={orderHref(card.order_id)}

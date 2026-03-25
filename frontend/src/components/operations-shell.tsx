@@ -15,6 +15,7 @@ import {
 import { ConversationQueue } from "@/components/conversation-queue";
 import { ProcessList } from "@/components/process-card-list";
 import type { KanbanItem, PanelSnapshot, ProcessCard } from "@/lib/panel-types";
+import { useLivePanelSnapshot } from "@/lib/use-live-panel-snapshot";
 
 type OperationsShellProps = {
   snapshot: PanelSnapshot;
@@ -77,29 +78,34 @@ function OrderList({ items, emptyMessage }: { items: KanbanItem[]; emptyMessage:
 }
 
 export function OperationsShell({ snapshot, warning }: OperationsShellProps) {
+  const live = useLivePanelSnapshot(snapshot, warning);
+  const liveSnapshot = live.snapshot;
+  const liveWarning = live.warning;
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState("all");
   const deferredSearch = useDeferredValue(search);
 
-  const processCards = flattenProcessCards(snapshot);
+  const processCards = flattenProcessCards(liveSnapshot);
   const cafeteriaCards = processCards.filter((card) => `${card.process_label} ${card.stage_label}`.toLowerCase().includes("cafeteria"));
   const logisticsCards = processCards.filter((card) => card.stage_class.includes("delivery"));
-  const humanCards = snapshot.whatsapp_cards.filter((card) => card.is_human_handoff || card.owner_slug === "humano");
+  const humanCards = liveSnapshot.whatsapp_cards.filter((card) => card.is_human_handoff || card.owner_slug === "humano");
   const deliveryOrders = sortByDate(
-    snapshot.dashboard.kanban_columns.flatMap((column) => column.items).filter((item) => item.tipo_slug === "entrega"),
+    liveSnapshot.dashboard.kanban_columns.flatMap((column) => column.items).filter((item) => item.tipo_slug === "entrega"),
   );
 
   const term = deferredSearch.trim().toLowerCase();
   const matches = (value: string) => !term || value.toLowerCase().includes(term);
 
   const visibleHumanCards = humanCards.filter((card) =>
-    matches(`${card.cliente_nome} ${card.phone} ${card.last_message} ${card.agent}`),
+    matches(`${card.cliente_nome} ${card.phone} ${card.last_message} ${card.agent} ${card.context_summary || ""} ${card.next_step_hint || ""}`),
   );
   const visibleCafeteriaCards = cafeteriaCards.filter((card) =>
-    matches(`${card.cliente_nome} ${card.phone} ${card.summary}`) && (mode === "all" || mode === "cafeteria"),
+    matches(`${card.cliente_nome} ${card.phone} ${card.summary} ${card.next_step_hint || ""}`) &&
+    (mode === "all" || mode === "cafeteria"),
   );
   const visibleLogisticsCards = logisticsCards.filter((card) =>
-    matches(`${card.cliente_nome} ${card.phone} ${card.summary}`) && (mode === "all" || mode === "logistics"),
+    matches(`${card.cliente_nome} ${card.phone} ${card.summary} ${card.next_step_hint || ""} ${(card.risk_flags || []).join(" ")}`) &&
+    (mode === "all" || mode === "logistics"),
   );
   const visibleDeliveryOrders = deliveryOrders.filter((item) =>
     matches(`${item.cliente_nome} ${item.id} ${item.produto}`) && (mode === "all" || mode === "confirmed"),
@@ -111,8 +117,8 @@ export function OperationsShell({ snapshot, warning }: OperationsShellProps) {
         eyebrow="Operações"
         title="Fila humana, pendências e execução"
         description="Uma visão seca do que exige ação agora: handoff, processos em aberto e entregas confirmadas por data."
-        referenceDate={snapshot.dashboard.reference_date}
-        generatedAt={snapshot.dashboard.generated_at}
+        referenceDate={liveSnapshot.dashboard.reference_date}
+        generatedAt={liveSnapshot.dashboard.generated_at}
         actions={
           <a
             href="/"
@@ -123,10 +129,10 @@ export function OperationsShell({ snapshot, warning }: OperationsShellProps) {
         }
       />
 
-      <WarningBanner warning={warning} />
+      <WarningBanner warning={liveWarning} />
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KPI label="Fila humana" value={String(humanCards.length)} hint="Conversas em ação manual" />
+        <KPI label="Fila humana" value={String(humanCards.length)} hint={live.isRefreshing ? "Atualizando ao vivo" : "Conversas em ação manual"} />
         <KPI label="Cafeteria" value={String(cafeteriaCards.length)} hint="Pedidos em montagem" />
         <KPI label="Logística" value={String(logisticsCards.length)} hint="Endereço, data ou confirmação" />
         <KPI label="Entregas confirmadas" value={String(deliveryOrders.length)} hint="Pedidos já operacionais" />

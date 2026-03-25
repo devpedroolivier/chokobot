@@ -5,7 +5,7 @@ os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("ZAPI_TOKEN", "test-token")
 os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
-from app.ai.agents import CakeOrderAgent, SweetOrderAgent
+from app.ai.agents import CakeOrderAgent, KnowledgeAgent, SweetOrderAgent
 from app.ai.runner import get_openai_tools
 from app.ai.tools import get_cake_options
 
@@ -16,6 +16,13 @@ class AIRunnerToolWiringTests(unittest.TestCase):
         function_names = {tool["function"]["name"] for tool in tools}
 
         self.assertIn("get_cake_options", function_names)
+        self.assertIn("get_cake_pricing", function_names)
+
+    def test_knowledge_agent_registers_cake_pricing_tool(self):
+        tools = get_openai_tools(KnowledgeAgent)
+        function_names = {tool["function"]["name"] for tool in tools}
+
+        self.assertIn("get_cake_pricing", function_names)
 
     def test_sweet_order_agent_registers_sweet_tool(self):
         tools = get_openai_tools(SweetOrderAgent)

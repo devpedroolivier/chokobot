@@ -50,7 +50,16 @@ class PanelWhatsAppCardsTests(unittest.TestCase):
                         stage="handoff_humano",
                         status="active",
                         source="human_handoff",
-                        draft_payload={"motivo": "cliente pediu ajuda"},
+                        draft_payload={
+                            "motivo": "cliente pediu ajuda",
+                            "contexto": {
+                                "resumo": "Bolo branco • 26/03/2026 • 15:00",
+                                "ultima_mensagem_cliente": "Quero confirmar o bolo branco",
+                                "faltando": ["Confirmacao final"],
+                                "proximo_passo": "Confirmar resumo final com o cliente",
+                                "risk_flags": ["nao_confirmado"],
+                            },
+                        },
                         order_id=None,
                         created_at="2026-03-24 15:00:00",
                         updated_at="2026-03-24 15:01:00",
@@ -82,7 +91,12 @@ class PanelWhatsAppCardsTests(unittest.TestCase):
         self.assertEqual(cards[0]["stage_label"], "Aguardando humano")
         self.assertTrue(cards[0]["is_human_handoff"])
         self.assertEqual(cards[0]["owner_label"], "Ação humana")
-        self.assertIn("cliente pediu ajuda", cards[0]["last_message"])
+        self.assertEqual(cards[0]["business_state_label"], "Handoff humano")
+        self.assertEqual(cards[0]["context_summary"], "Bolo branco • 26/03/2026 • 15:00")
+        self.assertEqual(cards[0]["next_step_hint"], "Confirmar resumo final com o cliente")
+        self.assertIn("Bolo branco", cards[0]["last_message"])
+        self.assertEqual(cards[0]["messages"][0]["content"], "Bolo branco • 26/03/2026 • 15:00")
+        self.assertEqual(cards[0]["messages"][1]["content"], "Quero confirmar o bolo branco")
         self.assertEqual(cards[0]["messages"][0]["role"], "contexto")
 
     def test_build_whatsapp_cards_keeps_active_process_without_runtime_message(self):

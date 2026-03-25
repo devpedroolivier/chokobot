@@ -44,11 +44,26 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertNotIn("DOCES AVULSOS", menu)
         self.assertNotIn("doceschoko", menu)
 
+    def test_get_menu_cafeteria_expoe_cardapio_estruturado(self):
+        menu = ai_tools.get_menu("cafeteria")
+
+        self.assertIn("☕ Cardápio da Cafeteria", menu)
+        self.assertIn("Salgados e Lanches", menu)
+        self.assertIn("Croissant", menu)
+
+    def test_lookup_catalog_items_expoe_opcoes_de_item_especifico(self):
+        result = ai_tools.lookup_catalog_items("croasant de chocolate", "cafeteria")
+
+        self.assertIn("Croissant", result)
+        self.assertIn("Chocolate", result)
+        self.assertIn("20 minutos", result)
+
     def test_triage_prompt_reutiliza_mensagem_de_boas_vindas(self):
         self.assertIn(WELCOME_MESSAGE, TRIAGE_PROMPT)
         self.assertIn("Me conta o que você está procurando", WELCOME_MESSAGE)
         self.assertIn("Páscoa Inesquecível", WELCOME_MESSAGE)
         self.assertIn("Kit Festou e ovos", WELCOME_MESSAGE)
+        self.assertNotIn("combos", WELCOME_MESSAGE.casefold())
         self.assertIn("caixinha de chocolate e flores", WELCOME_MESSAGE)
 
     def test_mensagem_de_pascoa_expoe_link_direto(self):

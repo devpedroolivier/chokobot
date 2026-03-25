@@ -27,8 +27,27 @@ export function stageClasses(stageClass: string): string {
   return "bg-mist text-cocoa";
 }
 
+export function riskFlagLabel(flag: string): string {
+  switch (flag) {
+    case "rascunho_ia":
+      return "Rascunho IA";
+    case "nao_confirmado":
+      return "Nao confirmado";
+    case "aguardando_confirmacao":
+      return "Aguardando confirmacao";
+    case "dados_incompletos":
+      return "Dados incompletos";
+    default:
+      return flag.replaceAll("_", " ");
+  }
+}
+
 export function customerHref(phone: string): string {
   return `/clientes?q=${encodeURIComponent(phone)}`;
+}
+
+export function conversationHref(phone: string): string {
+  return `/conversas?phone=${encodeURIComponent(phone)}`;
 }
 
 export function orderHref(orderId?: number | null): string {

@@ -4,8 +4,8 @@ from app.application.use_cases.manage_human_handoff import activate_human_handof
 
 
 class LocalAttentionGateway:
-    def activate_human_handoff(self, *, telefone: str, motivo: str) -> str:
-        return activate_human_handoff(telefone, motivo=motivo)
+    def activate_human_handoff(self, *, telefone: str, motivo: str, context: dict | None = None) -> str:
+        return activate_human_handoff(telefone, motivo=motivo, context=context)
 
     def deactivate_human_handoff(self, *, telefone: str) -> bool:
         return deactivate_human_handoff(telefone)

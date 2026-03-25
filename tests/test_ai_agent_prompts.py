@@ -1,6 +1,6 @@
 import unittest
 
-from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
+from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, KNOWLEDGE_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
 
 
 class AIAgentPromptsTests(unittest.TestCase):
@@ -22,8 +22,24 @@ class AIAgentPromptsTests(unittest.TestCase):
     def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
         self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
-        self.assertIn("bolo pronta entrega, Kit Festou ou ovos pronta entrega", CAFETERIA_PROMPT)
+        self.assertIn("bolo pronta entrega, Kit Festou, ovos pronta entrega ou cafeteria", CAFETERIA_PROMPT)
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", CAFETERIA_PROMPT)
+
+    def test_prompts_differentiate_menu_from_specific_options(self):
+        self.assertIn("Se o cliente pedir CARDAPIO", KNOWLEDGE_PROMPT)
+        self.assertIn("use `lookup_catalog_items`", KNOWLEDGE_PROMPT)
+        self.assertIn("use `get_cake_pricing`", KNOWLEDGE_PROMPT)
+        self.assertIn("Se o cliente perguntar por um item especifico", CAFETERIA_PROMPT)
+        self.assertIn("use `lookup_catalog_items`", CAFETERIA_PROMPT)
+
+    def test_prompts_cover_cash_change_rule_and_croissant_prep_time(self):
+        self.assertIn("troco so existe para Dinheiro", KNOWLEDGE_PROMPT)
+        self.assertIn("troco so existe para Dinheiro", CAFETERIA_PROMPT)
+        self.assertIn("tempo de preparo do croissant, informe 20 minutos", CAFETERIA_PROMPT)
+
+    def test_cake_prompt_requires_canonical_pricing_tool(self):
+        self.assertIn("chame `get_cake_pricing`", CAKE_ORDER_PROMPT)
+        self.assertIn("NUNCA escreva preco de bolo de memoria", CAKE_ORDER_PROMPT)
 
     def test_cake_order_prompt_lists_valid_fillings_and_separates_categories(self):
         self.assertIn("Recheios validos: Beijinho, Brigadeiro, Brigadeiro de Nutella", CAKE_ORDER_PROMPT)

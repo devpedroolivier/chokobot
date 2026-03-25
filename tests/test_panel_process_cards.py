@@ -127,6 +127,58 @@ class PanelProcessCardsTests(unittest.TestCase):
         self.assertIn("Pagamento", cards[2]["missing_items"])
         self.assertIn("Endereco", cards[2]["missing_items"])
 
+    def test_build_process_cards_surfaces_handoff_context_and_business_state(self):
+        class _ProcessRepository:
+            def list_active_processes(self):
+                return [
+                    CustomerProcessRecord(
+                        id=13,
+                        phone="5511666666666",
+                        customer_id=6,
+                        process_type="human_handoff",
+                        stage="handoff_humano",
+                        status="active",
+                        source="human_handoff",
+                        draft_payload={
+                            "motivo": "cliente pediu ajuda",
+                            "contexto": {
+                                "resumo": "Bolo branco • 26/03/2026 • 15:00",
+                                "faltando": ["Confirmacao final", "Endereco"],
+                                "proximo_passo": "Confirmar resumo final e validar endereco",
+                                "risk_flags": ["nao_confirmado", "dados_incompletos"],
+                            },
+                        },
+                        order_id=None,
+                        created_at="2026-03-23 15:00:00",
+                        updated_at="2026-03-23 15:30:00",
+                    )
+                ]
+
+        class _CustomerRepository:
+            def get_customer_by_phone(self, phone: str):
+                return CustomerRecord(
+                    id=6,
+                    nome="Debora",
+                    telefone=phone,
+                    criado_em="2026-03-20 10:00:00",
+                )
+
+        cards = build_process_cards(
+            _ProcessRepository(),
+            _CustomerRepository(),
+            now=datetime(2026, 3, 23, 17, 0, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["cliente_nome"], "Debora")
+        self.assertEqual(cards[0]["summary"], "Bolo branco • 26/03/2026 • 15:00")
+        self.assertEqual(cards[0]["missing_items"], ["Confirmacao final", "Endereco"])
+        self.assertEqual(cards[0]["owner_hint"], "Confirmar resumo final e validar endereco")
+        self.assertEqual(cards[0]["next_step_hint"], "Confirmar resumo final e validar endereco")
+        self.assertEqual(cards[0]["business_state_slug"], "handoff")
+        self.assertEqual(cards[0]["business_state_label"], "Handoff humano")
+        self.assertIn("nao_confirmado", cards[0]["risk_flags"])
+
     def test_build_process_cards_prefers_bulk_customer_lookup_when_repository_supports_it(self):
         class _ProcessRepository:
             def list_active_processes(self):

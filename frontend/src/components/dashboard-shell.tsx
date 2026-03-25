@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import {
   AdminWorkspace,
@@ -16,6 +16,7 @@ import {
 import { ConversationList, ConversationThread } from "@/components/conversation-queue";
 import { ProcessStageList } from "@/components/process-card-list";
 import type { KanbanColumn, KanbanItem, PanelSnapshot, ProcessCard, WhatsAppCard } from "@/lib/panel-types";
+import { useLivePanelSnapshot } from "@/lib/use-live-panel-snapshot";
 
 type DashboardShellProps = {
   snapshot: PanelSnapshot;
@@ -66,7 +67,9 @@ function isConversationVisible(card: WhatsAppCard, search: string, conversation:
   const term = search.trim().toLowerCase();
   const matchesSearch =
     !term ||
-    `${card.cliente_nome} ${card.phone} ${card.last_message} ${card.agent}`.toLowerCase().includes(term);
+    `${card.cliente_nome} ${card.phone} ${card.last_message} ${card.agent} ${card.context_summary || ""} ${card.next_step_hint || ""}`
+      .toLowerCase()
+      .includes(term);
 
   if (!matchesSearch) {
     return false;
@@ -88,7 +91,7 @@ function isProcessVisible(card: ProcessCard, search: string, conversation: strin
   const term = search.trim().toLowerCase();
   const matchesSearch =
     !term ||
-    `${card.cliente_nome} ${card.phone} ${card.summary} ${card.stage_label} ${card.process_label}`
+    `${card.cliente_nome} ${card.phone} ${card.summary} ${card.stage_label} ${card.process_label} ${card.next_step_hint || ""} ${(card.risk_flags || []).join(" ")} ${card.business_state_label || ""}`
       .toLowerCase()
       .includes(term);
 
@@ -267,37 +270,57 @@ function KanbanBoard({
 }
 
 export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
-  const [columns, setColumns] = useState(() => normalizeColumns(snapshot.dashboard.kanban_columns));
+  const live = useLivePanelSnapshot(snapshot, warning);
+  const liveSnapshot = live.snapshot;
+  const liveWarning = live.warning;
+  const [columns, setColumns] = useState(() => normalizeColumns(liveSnapshot.dashboard.kanban_columns));
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     status: "all",
     type: "all",
     conversation: "all",
   });
-  const [selectedPhone, setSelectedPhone] = useState(snapshot.whatsapp_cards[0]?.phone || "");
+  const [selectedPhone, setSelectedPhone] = useState(liveSnapshot.whatsapp_cards[0]?.phone || "");
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const deferredSearch = useDeferredValue(filters.search);
 
-  const allProcessCards = flattenProcessCards(snapshot);
+  useEffect(() => {
+    if (draggingId === null) {
+      setColumns(normalizeColumns(liveSnapshot.dashboard.kanban_columns));
+    }
+  }, [liveSnapshot.dashboard.kanban_columns, draggingId]);
+
+  const allProcessCards = flattenProcessCards(liveSnapshot);
   const readyToClose = allProcessCards.filter(
     (card) => card.stage_slug === "aguardando_confirmacao" || card.stage_slug === "pagamento_pendente",
   ).length;
-  const humanHandoffs = snapshot.whatsapp_cards.filter(
+  const humanHandoffs = liveSnapshot.whatsapp_cards.filter(
     (card) => card.is_human_handoff || card.owner_slug === "humano",
   ).length;
   const orderItems = columns.flatMap((column) => column.items);
   const activeOrderCount = orderItems.filter((item) => item.status_slug !== "entregue").length;
   const dueToday = orderItems.filter((item) => item.schedule_bucket === "today").length;
 
-  const visibleConversations = snapshot.whatsapp_cards.filter((card) =>
+  const visibleConversations = liveSnapshot.whatsapp_cards.filter((card) =>
     isConversationVisible(card, deferredSearch, filters.conversation),
   );
+  useEffect(() => {
+    if (visibleConversations.length === 0) {
+      if (selectedPhone !== "") {
+        setSelectedPhone("");
+      }
+      return;
+    }
+    if (!visibleConversations.some((card) => card.phone === selectedPhone)) {
+      setSelectedPhone(visibleConversations[0]?.phone || "");
+    }
+  }, [selectedPhone, visibleConversations]);
   const selectedConversation =
     visibleConversations.find((card) => card.phone === selectedPhone) || visibleConversations[0] || null;
 
-  const visibleSections = snapshot.process_sections
+  const visibleSections = liveSnapshot.process_sections
     .map((section) => ({
       ...section,
       cards: section.cards.filter((card) => isProcessVisible(card, deferredSearch, filters.conversation)),
@@ -355,8 +378,8 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
         eyebrow="Admin operacional"
         title="Somente o que pede decisao"
         description="KPI direto, etapas do processo, conversa cliente + IA e kanban de pedidos na mesma leitura."
-        referenceDate={snapshot.dashboard.reference_date}
-        generatedAt={snapshot.dashboard.generated_at}
+        referenceDate={liveSnapshot.dashboard.reference_date}
+        generatedAt={liveSnapshot.dashboard.generated_at}
         actions={
           <>
             <a
@@ -375,11 +398,11 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
         }
       />
 
-      <WarningBanner warning={warning} />
+      <WarningBanner warning={liveWarning} />
 
-      {snapshot.sync_overview.alerts.length > 0 ? (
+      {liveSnapshot.sync_overview.alerts.length > 0 ? (
         <section className="mt-4 grid gap-3 lg:grid-cols-2">
-          {snapshot.sync_overview.alerts.slice(0, 2).map((alert) => (
+          {liveSnapshot.sync_overview.alerts.slice(0, 2).map((alert) => (
             <article
               key={`${alert.title}-${alert.description}`}
               className={`rounded-[24px] border border-line px-4 py-4 shadow-panel ${toneClasses(alert.tone)}`}
@@ -402,7 +425,7 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
         summary={
           <>
             <p>{visibleConversations.length} conversas visíveis • {visibleSections.reduce((total, section) => total + section.cards.length, 0)} processos ativos • {visibleColumns.reduce((total, column) => total + column.items.length, 0)} pedidos filtrados</p>
-            <p aria-live="polite">{isPending ? "Atualizando kanban..." : feedback}</p>
+            <p aria-live="polite">{isPending ? "Atualizando kanban..." : live.isRefreshing ? "Atualizando painel ao vivo..." : feedback}</p>
           </>
         }
       >
@@ -425,7 +448,7 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
               className="h-12 rounded-full border border-line bg-paper px-4 text-sm text-ink outline-none transition focus:border-clay focus:ring-2 focus:ring-[#d88d6f]/30"
             >
               <option value="all">Todos</option>
-              {(snapshot.dashboard.filters?.statuses || []).map((status) => (
+              {(liveSnapshot.dashboard.filters?.statuses || []).map((status) => (
                 <option key={status.value} value={status.value}>
                   {status.label}
                 </option>
@@ -441,7 +464,7 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
               className="h-12 rounded-full border border-line bg-paper px-4 text-sm text-ink outline-none transition focus:border-clay focus:ring-2 focus:ring-[#d88d6f]/30"
             >
               <option value="all">Todos</option>
-              {(snapshot.dashboard.filters?.types || []).map((type) => (
+              {(liveSnapshot.dashboard.filters?.types || []).map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
