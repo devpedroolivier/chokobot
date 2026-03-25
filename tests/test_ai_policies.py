@@ -4,6 +4,7 @@ from app.ai.policies import (
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
     requests_easter_catalog,
+    requests_easter_ready_delivery_handoff,
     response_conflicts_with_cafeteria_specificity,
 )
 
@@ -16,11 +17,15 @@ class AIPoliciesTests(unittest.TestCase):
 
     def test_requests_easter_catalog_ignores_ready_delivery_egg_context(self):
         self.assertFalse(requests_easter_catalog("Oi tem ovo pronta entrega?"))
+        self.assertTrue(requests_easter_ready_delivery_handoff("Oi tem ovo pronta entrega?"))
+        self.assertTrue(requests_easter_ready_delivery_handoff("Quero pronta entrega de ovo"))
+        self.assertFalse(requests_easter_ready_delivery_handoff("Quero ver o cardapio de pascoa"))
 
     def test_requests_easter_catalog_ignores_savory_egg_context(self):
         self.assertFalse(requests_easter_catalog("Aquele misto que ela gosta sem orégano no ovo ok"))
         self.assertFalse(requests_easter_catalog("Quero um lanche com ovo"))
         self.assertFalse(requests_easter_catalog("Tem croissant com ovo?"))
+        self.assertFalse(requests_easter_ready_delivery_handoff("Tem croissant com ovo?"))
 
     def test_requests_easter_catalog_does_not_short_circuit_specific_item_queries(self):
         self.assertFalse(requests_easter_catalog("Tem ovo de paçoca?"))

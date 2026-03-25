@@ -129,6 +129,31 @@ def requests_easter_catalog(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in generic_egg_patterns)
 
 
+def requests_easter_ready_delivery_handoff(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if _mentions_non_easter_egg_context(normalized):
+        return False
+
+    egg_patterns = (
+        r"\bovo\b",
+        r"\bovos\b",
+        r"\bpascoa\b",
+        r"\bpascoa\b",
+    )
+    ready_patterns = (
+        r"\bpronta\s*entrega\b",
+        r"\bpronto\s*entrega\b",
+        r"\btem\s+pronta\s*entrega\b",
+        r"\bdisponivel\s+hoje\b",
+        r"\bdisponiveis\s+hoje\b",
+        r"\bpara\s+hoje\b",
+        r"\bhoje\b",
+    )
+    has_egg = any(re.search(pattern, normalized) for pattern in egg_patterns)
+    has_ready = any(re.search(pattern, normalized) for pattern in ready_patterns)
+    return has_egg and has_ready
+
+
 def _mentions_cafeteria_order_intent(normalized: str) -> bool:
     patterns = (
         r"\b(quero|queria|vou querer|pedir|pedido|me ve|separa|separe|adiciona|adicionar|inclui|incluir|manda|manda um|manda uma)\b",

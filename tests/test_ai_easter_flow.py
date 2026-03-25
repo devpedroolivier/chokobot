@@ -16,7 +16,7 @@ sys.modules.setdefault("openai", SimpleNamespace(AsyncOpenAI=_AsyncOpenAIStub))
 
 from app.ai import runner
 from app.observability import clear_metrics
-from app.welcome_message import EASTER_CATALOG_MESSAGE
+from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
 
 
 def _message(content: str):
@@ -101,21 +101,56 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
 
-    async def test_process_message_handles_ovo_pronta_entrega_via_ai_flow(self):
-        ai_reply = "Posso te ajudar com pronta entrega. Voce quer bolo, Kit Festou ou ovos pronta entrega?"
+    async def test_process_message_handles_ovo_pronta_entrega_via_human_handoff(self):
         fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message(ai_reply)))))
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
+                reply = await runner.process_message_with_ai(
+                    "5516999999999",
+                    "Oi tem ovo pronta entrega?",
+                    "Teste",
+                    99,
+                )
+
+        self.assertEqual(reply, HUMAN_HANDOFF_MESSAGE)
+        mocked_escalate.assert_called_once_with("5516999999999", "Ovos pronta entrega exigem atendimento humano")
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_handles_quero_pronta_entrega_de_ovo_via_human_handoff(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
+                reply = await runner.process_message_with_ai(
+                    "5516999999999",
+                    "Quero pronta entrega de ovo",
+                    "Teste",
+                    99,
+                )
+
+        self.assertEqual(reply, HUMAN_HANDOFF_MESSAGE)
+        mocked_escalate.assert_called_once_with("5516999999999", "Ovos pronta entrega exigem atendimento humano")
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_keeps_specific_easter_item_query_in_ai_flow(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Consulta específica")))))
         )
 
         with patch.object(runner, "client", fake_client):
             reply = await runner.process_message_with_ai(
                 "5516999999999",
-                "Oi tem ovo pronta entrega?",
+                "Tem ovo cookie nutella?",
                 "Teste",
                 99,
             )
 
-        self.assertEqual(reply, ai_reply)
+        self.assertEqual(reply, "Consulta específica")
         fake_client.chat.completions.create.assert_awaited_once()
 
     async def test_process_message_handles_ovo_pacoca_via_ai_flow(self):

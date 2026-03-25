@@ -20,7 +20,8 @@ class AIAgentPromptsTests(unittest.TestCase):
     def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
         self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
-        self.assertIn("bolo pronta entrega, ovos pronta entrega ou cafeteria", CAFETERIA_PROMPT)
+        self.assertIn("bolo pronta entrega ou cafeteria", CAFETERIA_PROMPT)
+        self.assertIn("Se o cliente pedir ovos de Pascoa pronta entrega", CAFETERIA_PROMPT)
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", CAFETERIA_PROMPT)
 
     def test_prompts_differentiate_menu_from_specific_options(self):

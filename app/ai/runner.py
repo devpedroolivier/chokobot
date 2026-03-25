@@ -18,6 +18,7 @@ from app.ai.policies import (
     current_local_datetime,
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
+    requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
     requests_human_handoff as _requests_human_handoff,
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
@@ -329,6 +330,19 @@ async def process_message_with_ai(
         save_session(telefone, session)
         increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
         log_event("ai_human_guard_handoff", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
+        return HUMAN_HANDOFF_MESSAGE
+
+    if _requests_easter_ready_delivery_handoff(text):
+        runtime.escalate_to_human(telefone, "Ovos pronta entrega exigem atendimento humano")
+        session["messages"] = []
+        session.pop("seasonal_context", None)
+        save_session(telefone, session)
+        increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
+        log_event(
+            "ai_easter_ready_delivery_handoff",
+            phone_hash=telefone[-4:] if telefone else "anon",
+            agent=session["current_agent"],
+        )
         return HUMAN_HANDOFF_MESSAGE
 
     if _requests_easter_catalog(text):
