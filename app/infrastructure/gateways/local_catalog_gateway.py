@@ -8,13 +8,14 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.security import ai_learning_enabled, security_audit
-from app.services.precos import KIT_FESTOU_PRECO, TRADICIONAL_BASE
+from app.services.precos import KIT_FESTOU_PRECO, LINHA_SIMPLES, TRADICIONAL_BASE
 from app.services.store_schedule import GIFT_CATALOG_SUMMARY, READY_DELIVERY_SUMMARY, STORE_HOURS_SUMMARY
 from app.settings import get_settings
 
 
 CATALOG_LABELS = {
     "cafeteria": "Cafeteria",
+    "encomendas": "Encomendas",
     "pascoa": "Páscoa",
     "pascoa_presentes": "Mimos e Presentes de Páscoa",
 }
@@ -38,6 +39,7 @@ SECTION_LABELS = {
     "barras_e_cakes": "Barras e Cakes",
     "presentes": "Presentes",
     "pelucias": "Pelúcias",
+    "linha_simples": "Linha Simples",
 }
 
 CATALOG_ITEM_RUNTIME_NOTES = {
@@ -95,6 +97,17 @@ LOOKUP_STOPWORDS = {
     "itens",
     "disponivel",
     "disponiveis",
+    "bolo",
+}
+
+LINE_SIMPLE_LOOKUP_ALIASES = {
+    "linha simples",
+    "bolo simples",
+    "simples",
+    "bolo caseiro",
+    "caseiro",
+    "caseirinho",
+    "bolo caseirinho",
 }
 
 
@@ -203,8 +216,44 @@ class LocalCatalogGateway:
             "pascoa_presentes": ("pascoa_presentes",),
             "mimos pascoa": ("pascoa_presentes",),
             "presentes pascoa": ("pascoa_presentes",),
+            "encomendas": ("encomendas",),
         }
         return aliases.get(normalized, ("cafeteria", "pascoa", "pascoa_presentes"))
+
+    def _looks_like_simple_cake_lookup(self, query: str) -> bool:
+        normalized = _normalize_text(query)
+        if any(alias in normalized for alias in LINE_SIMPLE_LOOKUP_ALIASES):
+            return True
+        return (
+            "bolo" in normalized
+            and any(token in normalized for token in ("cenoura", "chocolate"))
+            and any(token in normalized for token in ("vulcao", "vulcão", "simples"))
+        )
+
+    def _build_simple_cake_lookup(self, query: str) -> str:
+        normalized = _normalize_text(query)
+        selected_flavors = [flavor for flavor in LINHA_SIMPLES["sabores"] if _normalize_text(flavor) in normalized]
+        selected_coverages = [
+            coverage for coverage in LINHA_SIMPLES["coberturas"] if _normalize_text(coverage) in normalized
+        ]
+        flavor_line = ", ".join(selected_flavors) if selected_flavors else ", ".join(LINHA_SIMPLES["sabores"])
+        coverage_parts = [
+            f"{coverage} {_format_brl(price)}" for coverage, price in LINHA_SIMPLES["coberturas"].items()
+        ]
+        if selected_coverages:
+            coverage_parts = [
+                f"{coverage} {_format_brl(LINHA_SIMPLES['coberturas'][coverage])}" for coverage in selected_coverages
+            ]
+        return "\n".join(
+            [
+                f"Resultados catalogados para '{query}':",
+                "Use estes dados para responder sem inventar.",
+                f"- Encomendas: Linha Simples / Bolo Caseiro / Caseirinho | serve {LINHA_SIMPLES['serve_pessoas']} fatias",
+                f"  Sabores: {flavor_line}",
+                "  Coberturas: " + " | ".join(coverage_parts),
+                "  Observacao: bolo simples, bolo caseiro e caseirinho referem-se a mesma linha de encomenda.",
+            ]
+        )
 
     def _structured_items(self, *catalogs: str) -> list[dict]:
         allowed = set(catalogs)
@@ -226,7 +275,8 @@ class LocalCatalogGateway:
             "- Regra atual: pronta entrega segue como retirada na loja no fluxo interno.\n\n"
             "🎉 Kit Festou\n"
             f"- 25 brigadeiros + 1 balao personalizado: +R${KIT_FESTOU_PRECO:.2f}\n"
-            "- Confirme se o cliente quer somente o Kit Festou ou bolo com Kit Festou.\n\n"
+            "- So mencionar quando o contexto for bolo pronta entrega ou encomenda de bolo.\n"
+            "- Se houver bolo, confirme se o cliente quer bolo com Kit Festou.\n\n"
             "🥚 Ovos Pronta Entrega\n"
             "- Identifique primeiro se o cliente quer ovos pronta entrega.\n"
             "- Sabores e disponibilidade variam no dia.\n"
@@ -358,6 +408,9 @@ class LocalCatalogGateway:
         if not normalized_query:
             return "Consulta vazia. Informe o nome do item ou a opcao que deseja procurar."
 
+        if self._looks_like_simple_cake_lookup(query):
+            return self._build_simple_cake_lookup(query)
+
         catalogs = self._catalog_scope(catalog)
         matches: list[tuple[float, dict]] = []
 
@@ -365,10 +418,12 @@ class LocalCatalogGateway:
             name = item.get("name", "")
             variant = item.get("variant", "")
             options = item.get("options") or []
+            aliases = item.get("aliases") or []
             searchable_text = " ".join(
                 [
                     name,
                     variant,
+                    " ".join(str(alias) for alias in aliases),
                     item.get("section", ""),
                     item.get("description", ""),
                     item.get("availability_note", ""),
@@ -378,12 +433,12 @@ class LocalCatalogGateway:
             )
             searchable_normalized = _normalize_text(searchable_text)
             searchable_tokens = set(_tokenize_lookup(searchable_text))
-            name_tokens = set(_tokenize_lookup(f"{name} {variant}"))
+            name_tokens = set(_tokenize_lookup(" ".join([name, variant, *[str(alias) for alias in aliases]])))
 
             score = 0.0
             if normalized_query in searchable_normalized:
                 score += 6.0
-            if normalized_query in _normalize_text(f"{name} {variant}"):
+            if normalized_query in _normalize_text(" ".join([name, variant, *[str(alias) for alias in aliases]])):
                 score += 8.0
 
             matched_tokens = 0
@@ -405,7 +460,11 @@ class LocalCatalogGateway:
                 score = 0.0
 
             if score <= 0:
-                name_ratio = SequenceMatcher(None, normalized_query, _normalize_text(f"{name} {variant}")).ratio()
+                name_ratio = SequenceMatcher(
+                    None,
+                    normalized_query,
+                    _normalize_text(" ".join([name, variant, *[str(alias) for alias in aliases]])),
+                ).ratio()
                 if name_ratio >= 0.78:
                     score = name_ratio * 5
 

@@ -1,10 +1,12 @@
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("ZAPI_TOKEN", "test-token")
 os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
 from app.ai import tools as ai_tools
+from app.ai.tools import CakeOrderSchema
 from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, KNOWLEDGE_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
 from app.utils.mensagens import formatar_mensagem_saida
 from app.welcome_message import (
@@ -58,11 +60,41 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("Chocolate", result)
         self.assertIn("20 minutos", result)
 
+    def test_save_cake_order_draft_process_formata_resumo_final_claro(self):
+        with patch("app.ai.tools._sync_ai_process", return_value=None):
+            result = ai_tools.save_cake_order_draft_process(
+                telefone="5511999999999",
+                nome_cliente="Ana",
+                cliente_id=7,
+                order_details=CakeOrderSchema(
+                    linha="tradicional",
+                    categoria="tradicional",
+                    tamanho="B4",
+                    massa="Chocolate",
+                    recheio="Doce de Leite",
+                    mousse="Trufa Preta",
+                    adicional="Nozes",
+                    descricao="Bolo B4 de chocolate",
+                    data_entrega="28/03/2026",
+                    horario_retirada="17:00",
+                    modo_recebimento="retirada",
+                    pagamento={"forma": "PIX"},
+                ),
+            )
+
+        self.assertIn("Resumo final do pedido", result)
+        self.assertIn("Bolo B4 de chocolate", result)
+        self.assertIn("Recheio: Doce de Leite com Trufa Preta e adicional de nozes", result)
+        self.assertIn("Retirada 28/3 Sabado 17h", result)
+        self.assertIn("Valor: R$190,00", result)
+        self.assertIn("Ainda nao foi salvo como pedido confirmado no sistema.", result)
+
     def test_triage_prompt_reutiliza_mensagem_de_boas_vindas(self):
         self.assertIn(WELCOME_MESSAGE, TRIAGE_PROMPT)
         self.assertIn("Me conta o que você está procurando", WELCOME_MESSAGE)
         self.assertIn("Páscoa Inesquecível", WELCOME_MESSAGE)
-        self.assertIn("Kit Festou e ovos", WELCOME_MESSAGE)
+        self.assertIn("bolos e ovos", WELCOME_MESSAGE)
+        self.assertNotIn("Kit Festou e ovos", WELCOME_MESSAGE)
         self.assertNotIn("combos", WELCOME_MESSAGE.casefold())
         self.assertIn("caixinha de chocolate e flores", WELCOME_MESSAGE)
 

@@ -9,7 +9,7 @@ SUNDAY_UNAVAILABLE_MESSAGE = (
     "Nao fazemos pedidos, retiradas ou encomendas para domingo. "
     f"Horario de funcionamento: {STORE_HOURS_SUMMARY}"
 )
-READY_DELIVERY_SUMMARY = "bolo pronta entrega, Kit Festou ou ovos pronta entrega"
+READY_DELIVERY_SUMMARY = "bolo pronta entrega, cafeteria ou ovos pronta entrega"
 GIFT_CATALOG_SUMMARY = "cestas (Box Cafe ou Chocolate), caixinha de chocolate e flores"
 
 _STORE_WINDOWS = {

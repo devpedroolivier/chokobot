@@ -11,8 +11,10 @@ except ModuleNotFoundError:
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.policies import (
+    build_cafeteria_specificity_retry_instruction as _build_cafeteria_specificity_retry_instruction,
     build_system_time_context,
     build_time_conflict_retry_instruction as _build_time_conflict_retry_instruction,
+    response_conflicts_with_cafeteria_specificity as _response_conflicts_with_cafeteria_specificity,
     current_local_datetime,
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
@@ -24,6 +26,7 @@ from app.ai.tool_execution import handle_tool_call
 from app.ai.tool_registry import build_openai_tools
 from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
 from app.ai.tools import (
+    create_cafeteria_order,
     create_cake_order,
     create_sweet_order,
     escalate_to_human,
@@ -52,6 +55,7 @@ class AIRuntime:
     escalate_to_human: Any
     create_cake_order: Any
     create_sweet_order: Any
+    create_cafeteria_order: Any | None = None
     lookup_catalog_items: Any | None = None
     get_cake_pricing: Any | None = None
 
@@ -67,6 +71,7 @@ def get_default_ai_runtime() -> AIRuntime:
         escalate_to_human=escalate_to_human,
         create_cake_order=create_cake_order,
         create_sweet_order=create_sweet_order,
+        create_cafeteria_order=create_cafeteria_order,
     )
 
 
@@ -206,8 +211,8 @@ def _should_repeat_easter_catalog_link(session: dict, text: str) -> bool:
 
 def _is_draft_order_result(tool_result: str | None) -> bool:
     normalized = (tool_result or "").casefold()
-    return normalized.startswith("pedido em rascunho salvo no atendimento") or normalized.startswith(
-        "pedido de doces em rascunho salvo no atendimento"
+    return normalized.startswith("resumo final do pedido") and (
+        "ainda nao foi salvo como pedido confirmado no sistema." in normalized
     )
 
 
@@ -357,6 +362,7 @@ async def process_message_with_ai(
     total_completion_tokens = 0
     iteration_count = 0
     time_conflict_retry_used = False
+    cafeteria_specificity_retry_used = False
     transient_system_note = None
 
     if active_client is None:
@@ -400,6 +406,25 @@ async def process_message_with_ai(
                 agent=session["current_agent"],
                 phone_hash=telefone[-4:] if telefone else "anon",
                 current_time=_normalize_reference_time(now).strftime("%Y-%m-%d %H:%M:%S %z"),
+            )
+            continue
+
+        if (
+            not msg.tool_calls
+            and not cafeteria_specificity_retry_used
+            and _response_conflicts_with_cafeteria_specificity(
+                msg.content,
+                user_text=text,
+                current_agent=current_agent_name,
+            )
+        ):
+            cafeteria_specificity_retry_used = True
+            transient_system_note = _build_cafeteria_specificity_retry_instruction(text)
+            increment_counter("ai_cafeteria_specificity_retries_total", agent=session["current_agent"])
+            log_event(
+                "ai_cafeteria_specificity_retry",
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
             )
             continue
 

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from app.utils.datetime_utils import get_bot_timezone, normalize_to_bot_timezone, now_in_bot_timezone
 
 
+SAME_DAY_CAKE_ORDER_CUTOFF = (11, 0)
 DELIVERY_CUTOFF = (17, 30)
 
 
@@ -21,6 +22,11 @@ def current_local_datetime() -> datetime:
 
 def normalize_reference_time(now: datetime | None = None) -> datetime:
     return normalize_to_bot_timezone(now)
+
+
+def is_after_same_day_cake_order_cutoff(now: datetime | None = None) -> bool:
+    current_time = normalize_reference_time(now)
+    return (current_time.hour, current_time.minute) > SAME_DAY_CAKE_ORDER_CUTOFF
 
 
 def is_after_delivery_cutoff(now: datetime | None = None) -> bool:
@@ -123,12 +129,164 @@ def requests_easter_catalog(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in generic_egg_patterns)
 
 
+def _mentions_cafeteria_order_intent(normalized: str) -> bool:
+    patterns = (
+        r"\b(quero|queria|vou querer|pedir|pedido|me ve|separa|separe|adiciona|adicionar|inclui|incluir|manda|manda um|manda uma)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _mentions_information_only_request(normalized: str) -> bool:
+    patterns = (
+        r"\b(qual|quais|quanto|preco|valor|tem|t[eê]m|opcoes|opcao|sabores|sabor|cardapio|catalogo|menu)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _has_explicit_quantity(normalized: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\b",
+            normalized,
+        )
+    )
+
+
+def _mentions_any(normalized: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def cafeteria_order_needs_specificity(user_text: str) -> bool:
+    normalized = normalize_intent_text(user_text)
+    if not normalized or not _mentions_cafeteria_order_intent(normalized):
+        return False
+    if _mentions_information_only_request(normalized):
+        return False
+
+    has_quantity = _has_explicit_quantity(normalized)
+
+    if _mentions_any(normalized, (r"\b(cafeteria|pronta entrega|alguma coisa|algum item|item da cafeteria|lanche|bebida)\b",)):
+        return True
+
+    if _mentions_any(normalized, (r"\bcroissant\b", r"\bcroassant\b", r"\bcroasant\b")):
+        has_option = _mentions_any(
+            normalized,
+            (
+                r"\bfrango\b",
+                r"\brequeijao\b",
+                r"\bpresunto\b",
+                r"\bmucarela\b",
+                r"\bmuzzarela\b",
+                r"\bperu\b",
+                r"\bprovolone\b",
+                r"\bquatro queijos\b",
+                r"\bchocolate\b",
+            ),
+        )
+        return not has_quantity or not has_option
+
+    if _mentions_any(normalized, (r"\b(cappuccino|capuccino)\b",)):
+        has_option = _mentions_any(normalized, (r"\bcanela\b", r"\bitaliano\b", r"\blotus\b", r"\bpistache\b"))
+        return not has_quantity or not has_option
+
+    if _mentions_any(normalized, (r"\bcafe\b", r"\bcafe com leite\b", r"\bmocaccino\b", r"\bachocolatado\b")):
+        has_option = _mentions_any(normalized, (r"\bcurto\b", r"\blongo\b", r"\bcom leite\b", r"\bmocaccino\b", r"\bachocolatado\b"))
+        return not has_quantity or not has_option
+
+    if _mentions_any(normalized, (r"\b(coca|refrigerante)\b",)):
+        has_option = _mentions_any(normalized, (r"\bzero\b", r"\bks\b", r"\blata\b"))
+        return not has_quantity or not has_option
+
+    if _mentions_any(normalized, (r"\bagua\b",)):
+        has_option = _mentions_any(normalized, (r"\bsem gas\b", r"\bcom gas\b"))
+        return not has_quantity or not has_option
+
+    if _mentions_any(normalized, (r"\bsuco\b", r"\bsoda italiana\b", r"\bice\b")):
+        has_option = _mentions_any(
+            normalized,
+            (
+                r"\blaranja\b",
+                r"\babacaxi\b",
+                r"\bdel valle\b",
+                r"\bpistache\b",
+                r"\bcappuccino\b",
+                r"\bchocolate\b",
+                r"\bnegresco\b",
+                r"\bovomaltine\b",
+            ),
+        )
+        return not has_quantity or not has_option
+
+    if _mentions_any(normalized, (r"\bfatia\b", r"\btorta\b", r"\bbolo gourmet\b", r"\bbolo gelado\b")):
+        has_option = _mentions_any(
+            normalized,
+            (
+                r"\bchocolate\b",
+                r"\bninho\b",
+                r"\bnozes\b",
+                r"\bcheesecake\b",
+                r"\blingua de gato\b",
+                r"\blingua gato\b",
+                r"\bice mousse\b",
+                r"\bvulcaozinho\b",
+                r"\bcenoura\b",
+            ),
+        )
+        return not has_quantity or not has_option
+
+    return False
+
+
+def response_conflicts_with_cafeteria_specificity(
+    reply: str | None,
+    *,
+    user_text: str,
+    current_agent: str | None = None,
+) -> bool:
+    if current_agent != "CafeteriaAgent" or not cafeteria_order_needs_specificity(user_text):
+        return False
+
+    normalized = normalize_intent_text(reply or "")
+    if not normalized:
+        return False
+
+    clarification_patterns = (
+        r"\bqual sabor\b",
+        r"\bquais sabores\b",
+        r"\bqual opcao\b",
+        r"\bquais opcoes\b",
+        r"\bqual tipo\b",
+        r"\bqual versao\b",
+        r"\bqual item\b",
+        r"\bqual bebida\b",
+        r"\bquantos\b",
+        r"\bquantas\b",
+        r"\bks ou lata\b",
+        r"\bzero ou normal\b",
+        r"\bcom gas ou sem gas\b",
+        r"\bespecific\b",
+    )
+    return not any(re.search(pattern, normalized) for pattern in clarification_patterns)
+
+
+def build_cafeteria_specificity_retry_instruction(user_text: str) -> str:
+    return (
+        "CORRECAO DE SISTEMA: o cliente ainda nao especificou o suficiente para fechar um pedido da cafeteria. "
+        "Antes de avancar, peca os detalhes faltantes. "
+        "Colete no minimo item exato, sabor/tipo/versao quando existir e quantidade. "
+        "Exemplos: croissant -> sabor e quantidade; coca/refrigerante -> lata ou KS, zero ou normal, e quantidade; "
+        "cafe/cappuccino -> tipo/sabor e quantidade; fatia/torta -> sabor e quantidade. "
+        f"Mensagem atual do cliente: '{user_text}'. "
+        "Nao faca upsell, nao diga 'vou anotar', 'otima escolha' ou 'confirmar pedido' antes dessa especificacao."
+    )
+
+
 def response_conflicts_with_cutoff(reply: str | None, *, user_text: str, now: datetime | None = None) -> bool:
-    if not reply or is_after_delivery_cutoff(now) or not mentions_same_day(user_text, now):
+    if not reply or is_after_same_day_cake_order_cutoff(now) or not mentions_same_day(user_text, now):
         return False
 
     normalized = reply.casefold()
-    if re.search(r"(j[aá]\s+)?passou\s+das?\s+17[:h]30", normalized):
+    if re.search(r"(j[aá]\s+)?passou\s+das?\s+11[:h]00", normalized):
         return True
     if re.search(r"encomendas?\s+para\s+hoje\s+se\s+encerraram", normalized):
         return True
@@ -139,8 +297,8 @@ def build_time_conflict_retry_instruction(now: datetime | None = None) -> str:
     current_time = normalize_reference_time(now)
     return (
         "CORRECAO DE SISTEMA: use exclusivamente o horario oficial de Brasilia. "
-        f"Agora sao {current_time.strftime('%H:%M')} em Brasilia e ainda NAO passou das 17:30. "
-        "Reescreva a resposta sem afirmar que o horario limite de hoje foi ultrapassado."
+        f"Agora sao {current_time.strftime('%H:%M')} em Brasilia e ainda NAO passou das 11:00 para encomendas de bolo no mesmo dia. "
+        "Reescreva a resposta sem afirmar que o horario limite das encomendas para hoje foi ultrapassado."
     )
 
 
@@ -149,7 +307,7 @@ def should_force_same_day_cafeteria_handoff(
     user_text: str,
     now: datetime | None = None,
 ) -> bool:
-    if not is_after_delivery_cutoff(now) or not mentions_same_day(user_text, now):
+    if not is_after_same_day_cake_order_cutoff(now) or not mentions_same_day(user_text, now):
         return False
 
     current_agent = session.get("current_agent")
@@ -162,9 +320,13 @@ def should_force_same_day_cafeteria_handoff(
 
 def build_system_time_context(now: datetime | None = None) -> str:
     current_time = normalize_reference_time(now)
-    cutoff_status = "depois do limite" if is_after_delivery_cutoff(current_time) else "antes do limite"
+    same_day_cutoff_status = (
+        "depois do limite" if is_after_same_day_cake_order_cutoff(current_time) else "antes do limite"
+    )
+    delivery_cutoff_status = "depois do limite" if is_after_delivery_cutoff(current_time) else "antes do limite"
     return (
         current_time.strftime("Hoje é %d/%m/%Y, e agora são %H:%M.")
         + " Horario oficial de Brasilia (America/Sao_Paulo)."
-        + f" Status do corte das 17:30: {cutoff_status}."
+        + f" Status do corte das encomendas para hoje às 11:00: {same_day_cutoff_status}."
+        + f" Status do corte das entregas às 17:30: {delivery_cutoff_status}."
     )

@@ -115,6 +115,7 @@ _PROCESS_TYPE_META = {
     "cesta_box_order": "Cesta box",
     "ai_cake_order": "Bolo IA aguardando confirmacao",
     "ai_sweet_order": "Doces IA aguardando confirmacao",
+    "ai_cafeteria_order": "Cafeteria IA aguardando confirmacao",
 }
 
 _PROCESS_ORIGIN_META = {
@@ -516,7 +517,7 @@ def _process_missing_items(process_type: str, stage: str, payload: dict) -> list
     if not payment_method or payment_method.casefold() == "pendente":
         missing.append("Pagamento")
 
-    if process_type in {"delivery_order", "cesta_box_order", "ai_cake_order", "ai_sweet_order"} and (
+    if process_type in {"delivery_order", "cesta_box_order", "ai_cake_order", "ai_sweet_order", "ai_cafeteria_order"} and (
         (payload.get("modo_recebimento") or "entrega").strip().casefold() == "entrega"
         and not (payload.get("endereco") or "").strip()
     ):
@@ -663,6 +664,8 @@ def _process_source_key(process) -> str | None:
         return "CakeOrderAgent"
     if process.process_type == "ai_sweet_order":
         return "SweetOrderAgent"
+    if process.process_type == "ai_cafeteria_order":
+        return "CafeteriaAgent"
     return "estados_encomenda"
 
 

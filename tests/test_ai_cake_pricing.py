@@ -45,6 +45,13 @@ class AICakePricingTests(unittest.TestCase):
         self.assertIn("gourmet ingles", result.casefold())
         self.assertIn("redondo P6".casefold(), result.casefold())
 
+    def test_get_cake_pricing_supports_caseirinho_alias_with_flavor_and_coverage(self):
+        result = get_cake_pricing(category="caseirinho", produto="cenoura", cobertura="vulcao")
+
+        self.assertIn("Bolo simples de cenoura com cobertura Vulcão", result)
+        self.assertIn("Valor unitario: R$35,00", result)
+        self.assertIn("Serve aproximadamente: 8 pessoas", result)
+
 
 if __name__ == "__main__":
     unittest.main()

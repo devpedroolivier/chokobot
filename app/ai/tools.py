@@ -1,4 +1,7 @@
+import json
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
@@ -11,6 +14,7 @@ from app.application.service_registry import (
     get_order_gateway,
 )
 from app.db.database import get_connection
+from app.infrastructure.gateways.local_catalog_gateway import _normalize_text
 from app.security import ai_learning_enabled, security_audit
 from app.services.encomendas_utils import (
     GOURMET_ALIASES,
@@ -102,7 +106,50 @@ LINHAS_VALIDAS = {"tradicional", "gourmet", "mesversario", "babycake", "torta", 
 
 CATEGORIAS_VALIDAS = {"tradicional", "ingles", "redondo", "torta", "mesversario", "simples", "babycake"}
 
+LINE_SIMPLE_FLAVORS = ("Chocolate", "Cenoura")
+LINE_SIMPLE_COVERAGES = ("Vulcão", "Simples")
+
 TAXA_ENTREGA_PADRAO = 10.0
+CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
+CAFETERIA_VARIANT_REQUIRED_HINTS = {
+    "Croissant": "Informe o sabor do croissant e a quantidade.",
+    "Agua": "Informe se deseja agua com gas ou sem gas, e a quantidade.",
+}
+CAFETERIA_NAME_ALIASES = {
+    "croissant": "Croissant",
+    "croassant": "Croissant",
+    "croasant": "Croissant",
+    "vulcaozinho": "Vulcaozinho de Cenoura com Calda de Chocolate",
+    "petit": "Vulcaozinho de Cenoura com Calda de Chocolate",
+    "bolo petit": "Vulcaozinho de Cenoura com Calda de Chocolate",
+    "coca cola ks": "Coca Cola KS",
+    "coca ks": "Coca Cola KS",
+    "coca": "Coca Cola KS",
+    "coca cola": "Coca Cola KS",
+    "refrigerante lata": "Refrigerante Lata",
+    "refrigerante": "Refrigerante Lata",
+    "agua": "Agua",
+    "cafe curto": "Cafe Curto",
+    "cafe longo": "Cafe Longo",
+    "cafe com leite": "Cafe com Leite",
+    "mocaccino": "Mocaccino",
+    "achocolatado": "Achocolatado",
+    "chokobenta": "ChokoBenta",
+}
+CAFETERIA_ITEM_KEYWORDS = {
+    "Croissant": ("croissant", "croassant", "croasant"),
+    "Agua": ("agua",),
+    "Coca Cola KS": ("coca", "cola", "ks"),
+    "Refrigerante Lata": ("refrigerante", "lata"),
+    "Cafe Curto": ("cafe", "curto"),
+    "Cafe Longo": ("cafe", "longo"),
+    "Cafe com Leite": ("cafe", "leite"),
+    "Mocaccino": ("mocaccino",),
+    "Cappuccino com Canela": ("cappuccino", "canela"),
+    "Cappuccino Italiano": ("cappuccino", "italiano"),
+    "Cappuccino Lotus": ("cappuccino", "lotus"),
+    "Cappuccino Pistache": ("cappuccino", "pistache"),
+}
 
 
 # ============================================================
@@ -191,6 +238,257 @@ def _format_currency_brl(value: float | int) -> str:
     return f"R${float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _parse_order_date_label(raw_value: str | None) -> str:
+    value = (raw_value or "").strip()
+    if not value:
+        return ""
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            parsed = datetime.strptime(value, fmt)
+            weekday_labels = {
+                0: "Segunda",
+                1: "Terca",
+                2: "Quarta",
+                3: "Quinta",
+                4: "Sexta",
+                5: "Sabado",
+                6: "Domingo",
+            }
+            return f"{parsed.day}/{parsed.month} {weekday_labels[parsed.weekday()]}"
+        except ValueError:
+            continue
+    return value
+
+
+def _format_compact_hour(raw_value: str | None) -> str:
+    value = (raw_value or "").strip()
+    if not value:
+        return ""
+    try:
+        parsed = datetime.strptime(value, "%H:%M")
+        if parsed.minute == 0:
+            return f"{parsed.hour}h"
+        return value
+    except ValueError:
+        return value
+
+
+@lru_cache(maxsize=1)
+def _load_cafeteria_catalog_items() -> tuple[dict, ...]:
+    payload = json.loads(CAFETERIA_CATALOG_PATH.read_text(encoding="utf-8"))
+    return tuple(item for item in payload.get("items", []) if item.get("catalog") == "cafeteria")
+
+
+def _cafeteria_search_blob(item: dict) -> str:
+    parts = [
+        item.get("name", ""),
+        item.get("variant", ""),
+        item.get("description", ""),
+        item.get("section", ""),
+        item.get("size", ""),
+        item.get("weight_approx", ""),
+        " ".join(item.get("options") or []),
+        " ".join(item.get("aliases") or []),
+    ]
+    return _normalize_text(" ".join(part for part in parts if part))
+
+
+def _candidate_cafeteria_items(raw_name: str, raw_variant: str | None = None) -> list[dict]:
+    normalized_name = _normalize_text(raw_name)
+    normalized_variant = _normalize_text(raw_variant or "")
+    combined = " ".join(part for part in (normalized_name, normalized_variant) if part).strip()
+    candidates: list[tuple[float, dict]] = []
+
+    for item in _load_cafeteria_catalog_items():
+        name = item.get("name", "")
+        name_normalized = _normalize_text(name)
+        blob = _cafeteria_search_blob(item)
+        score = 0.0
+
+        if combined and combined in blob:
+            score += 8.0
+        if normalized_name and normalized_name == name_normalized:
+            score += 10.0
+
+        alias_target = CAFETERIA_NAME_ALIASES.get(normalized_name)
+        if alias_target and alias_target == name:
+            score += 9.0
+
+        keywords = CAFETERIA_ITEM_KEYWORDS.get(name, ())
+        if keywords and any(keyword in combined for keyword in keywords):
+            score += 6.0
+
+        if normalized_variant and item.get("variant") and normalized_variant in _normalize_text(item.get("variant")):
+            score += 5.0
+
+        for option in item.get("options") or []:
+            if normalized_variant and normalized_variant in _normalize_text(option):
+                score += 5.0
+            if normalized_name and normalized_name in _normalize_text(option):
+                score += 2.5
+
+        if score > 0:
+            candidates.append((score, item))
+
+    candidates.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _score, item in candidates]
+
+
+def _resolve_cafeteria_item(
+    raw_name: str,
+    raw_variant: str | None = None,
+) -> tuple[dict | None, str | None, str | None]:
+    candidates = _candidate_cafeteria_items(raw_name, raw_variant)
+    if not candidates:
+        return None, None, f"Nao encontrei '{raw_name}' no catalogo oficial da cafeteria."
+
+    candidate = candidates[0]
+    name = candidate.get("name", "")
+    normalized_name = _normalize_text(raw_name)
+    normalized_variant = _normalize_text(raw_variant or "")
+    combined = " ".join(part for part in (normalized_name, normalized_variant) if part).strip()
+
+    if name == "Coca Cola KS" and not (
+        "ks" in combined or "coca" in normalized_name or "coca cola" in normalized_name
+    ):
+        return None, None, "Para bebida, informe se deseja Coca Cola KS ou Refrigerante Lata."
+
+    if name == "Refrigerante Lata" and not ("lata" in combined or "refrigerante" in normalized_name):
+        return None, None, "Para bebida, informe se deseja Coca Cola KS ou Refrigerante Lata."
+
+    options = candidate.get("options") or []
+    if options:
+        matched_option = _match_catalog_value(
+            raw_variant or raw_name,
+            tuple(options),
+            aliases={
+                _normalize_text(option): option for option in options
+            },
+        )
+        if not matched_option:
+            return None, None, CAFETERIA_VARIANT_REQUIRED_HINTS.get(
+                name,
+                f"Informe uma opcao valida para {name}: " + ", ".join(options) + ".",
+            )
+        return candidate, matched_option, None
+
+    same_name_variants = [item for item in _load_cafeteria_catalog_items() if item.get("name") == name and item.get("variant")]
+    if same_name_variants:
+        matched_variant = None
+        for item in same_name_variants:
+            variant = item.get("variant", "")
+            if normalized_variant and normalized_variant in _normalize_text(variant):
+                matched_variant = item
+                break
+            if not normalized_variant and normalized_name in _normalize_text(variant):
+                matched_variant = item
+                break
+        if matched_variant is None:
+            variant_labels = [str(item.get("variant")) for item in same_name_variants if item.get("variant")]
+            return None, None, CAFETERIA_VARIANT_REQUIRED_HINTS.get(
+                name,
+                f"Informe uma variacao valida para {name}: " + ", ".join(variant_labels) + ".",
+            )
+        return matched_variant, str(matched_variant.get("variant") or ""), None
+
+    return candidate, raw_variant or None, None
+
+
+def _format_cafeteria_item_label(item: dict, selected_variant: str | None = None) -> str:
+    base_name = str(item.get("name") or "Item")
+    variant = (selected_variant or item.get("variant") or "").strip()
+    if variant:
+        return f"{base_name} ({variant})"
+    return base_name
+
+
+def _build_cafeteria_process_payload(
+    *,
+    itens: list[dict],
+    data_entrega: str | None,
+    horario_retirada: str | None,
+    modo_recebimento: str,
+    endereco: str | None,
+    pagamento: dict,
+    valor_total: float,
+    taxa_entrega: float,
+) -> dict:
+    return {
+        "categoria": "cafeteria",
+        "descricao": ", ".join(item["descricao"] for item in itens),
+        "itens": itens,
+        "data_entrega": data_entrega,
+        "horario_retirada": horario_retirada,
+        "modo_recebimento": modo_recebimento,
+        "endereco": endereco,
+        "pagamento": pagamento,
+        "valor_total": valor_total,
+        "taxa_entrega": taxa_entrega,
+    }
+
+
+def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tuple[dict | None, str | None]:
+    dados = order_details.model_dump()
+    dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+
+    schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
+    if schedule_error:
+        return None, schedule_error
+
+    if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
+        return None, (
+            f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. "
+            "Ajuste o horario ou altere para retirada."
+        )
+
+    if dados["modo_recebimento"] == "entrega" and not (dados.get("endereco") or "").strip():
+        return None, "Informe o endereco completo para entrega."
+
+    validated_items: list[dict] = []
+    subtotal = 0.0
+    for raw_item in dados.get("itens") or []:
+        if int(raw_item["quantidade"]) <= 0:
+            return None, f"A quantidade de '{raw_item['nome']}' deve ser maior que zero."
+        item, selected_variant, error = _resolve_cafeteria_item(raw_item["nome"], raw_item.get("variante"))
+        if error:
+            return None, error
+        assert item is not None
+        unit_price = float(item.get("price_brl") or 0)
+        quantity = int(raw_item["quantidade"])
+        line_total = unit_price * quantity
+        subtotal += line_total
+        label = _format_cafeteria_item_label(item, selected_variant)
+        if raw_item.get("observacao"):
+            label = f"{label} [{raw_item['observacao'].strip()}]"
+        validated_items.append(
+            {
+                "nome": str(item.get("name") or ""),
+                "variante": selected_variant,
+                "quantidade": quantity,
+                "preco_unitario": unit_price,
+                "preco_total": line_total,
+                "descricao": f"{quantity}x {label}",
+            }
+        )
+
+    taxa_entrega = float(dados.get("taxa_entrega") or 0)
+    if dados["modo_recebimento"] == "entrega" and taxa_entrega <= 0:
+        taxa_entrega = TAXA_ENTREGA_PADRAO
+    valor_total = subtotal + taxa_entrega
+
+    return {
+        "itens": validated_items,
+        "data_entrega": dados.get("data_entrega"),
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados["modo_recebimento"],
+        "endereco": dados.get("endereco"),
+        "pagamento": dados.get("pagamento", {}),
+        "subtotal": subtotal,
+        "taxa_entrega": taxa_entrega,
+        "valor_total": valor_total,
+    }, None
+
+
 def _match_catalog_value(
     raw_value: str | None,
     valid_values: tuple[str, ...] | list[str],
@@ -234,8 +532,54 @@ def _normalize_cake_pricing_category(category: str) -> str:
         "torta": "torta",
         "simples": "simples",
         "linha simples": "simples",
+        "bolo simples": "simples",
+        "caseiro": "simples",
+        "bolo caseiro": "simples",
+        "caseirinho": "simples",
+        "bolo caseirinho": "simples",
     }
     return aliases.get(normalized, normalized)
+
+
+def _normalize_simple_cake_flavor(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = _norm(value)
+    aliases = {
+        "chocolate": "Chocolate",
+        "bolo de chocolate": "Chocolate",
+        "cenoura": "Cenoura",
+        "bolo de cenoura": "Cenoura",
+    }
+    canonical = aliases.get(normalized)
+    if canonical:
+        return canonical
+    return _match_catalog_value(value, LINE_SIMPLE_FLAVORS)
+
+
+def _normalize_simple_cake_coverage(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = _norm(value)
+    aliases = {
+        "vulcao": "Vulcão",
+        "vulcão": "Vulcão",
+        "bolo vulcao": "Vulcão",
+        "bolo vulcão": "Vulcão",
+        "simples": "Simples",
+        "tradicional": "Simples",
+    }
+    canonical = aliases.get(normalized)
+    if canonical:
+        return canonical
+    return _match_catalog_value(value, LINE_SIMPLE_COVERAGES)
+
+
+def _extract_simple_cake_details(*values: str | None) -> tuple[str | None, str | None]:
+    joined = " ".join((value or "") for value in values if value)
+    flavor = _normalize_simple_cake_flavor(joined)
+    coverage = _normalize_simple_cake_coverage(joined)
+    return flavor, coverage
 
 
 def _build_cake_pricing_payload(
@@ -296,10 +640,12 @@ def _build_cake_pricing_payload(
         return payload, None
 
     if category == "simples":
-        normalized_cover = _match_catalog_value(cobertura, tuple(LINHA_SIMPLES["coberturas"].keys()))
+        flavor, inferred_cover = _extract_simple_cake_details(produto, cobertura)
+        normalized_cover = _normalize_simple_cake_coverage(cobertura) or inferred_cover
         if not normalized_cover:
             return None, "Informe uma cobertura valida da linha simples: Vulcao ou Simples."
         payload["cobertura"] = normalized_cover
+        payload["sabor"] = flavor or "Chocolate"
         return payload, None
 
     return None, "Categoria de bolo invalida para consulta de preco."
@@ -422,7 +768,8 @@ def _calcular_preco_pedido(dados: dict) -> Tuple[float, int]:
     elif categoria == "mesversario":
         payload["tamanho"] = _normaliza_tamanho(dados.get("tamanho") or "")
     elif categoria == "simples":
-        payload["cobertura"] = dados.get("produto") or "Simples"
+        payload["cobertura"] = dados.get("cobertura") or _normalize_simple_cake_coverage(dados.get("produto")) or "Simples"
+        payload["sabor"] = dados.get("produto")
 
     return calcular_total(payload)
 
@@ -432,6 +779,12 @@ def _build_cake_process_payload(dados: dict) -> dict:
         "categoria": dados.get("categoria"),
         "linha": dados.get("linha"),
         "produto": dados.get("produto"),
+        "cobertura": dados.get("cobertura"),
+        "tamanho": dados.get("tamanho"),
+        "massa": dados.get("massa"),
+        "recheio": dados.get("recheio"),
+        "mousse": dados.get("mousse"),
+        "adicional": dados.get("adicional"),
         "descricao": dados.get("descricao"),
         "data_entrega": dados.get("data_entrega"),
         "horario_retirada": dados.get("horario_retirada"),
@@ -464,6 +817,82 @@ def _build_sweet_process_payload(
         "pagamento": pagamento,
         "valor_total": valor_total,
     }
+
+
+def _build_cake_confirmation_title(dados: dict) -> str:
+    categoria = (dados.get("categoria") or "").strip().lower()
+    tamanho = (dados.get("tamanho") or "").strip()
+    massa = (dados.get("massa") or "").strip()
+    produto = (dados.get("produto") or "").strip()
+    descricao = (dados.get("descricao") or "").strip()
+
+    if categoria == "tradicional" and tamanho and massa:
+        return f"Bolo {tamanho} de {massa.lower()}"
+    if categoria == "mesversario" and tamanho:
+        return f"Bolo mesversario {tamanho}"
+    if categoria == "ingles" and produto:
+        return f"Bolo gourmet ingles {produto}"
+    if categoria == "redondo" and produto:
+        return f"Bolo gourmet redondo {produto}"
+    if categoria == "torta" and produto:
+        return f"Torta {produto}"
+    if categoria == "simples" and produto:
+        coverage = (dados.get("cobertura") or "").strip()
+        if coverage:
+            return f"Bolo simples de {produto.lower()} ({coverage.lower()})"
+        return f"Bolo simples de {produto.lower()}"
+    return descricao or "Pedido"
+
+
+def _build_cake_flavor_line(dados: dict) -> str:
+    recheio = (dados.get("recheio") or "").strip()
+    mousse = (dados.get("mousse") or "").strip()
+    adicional = (dados.get("adicional") or "").strip()
+
+    if not recheio and not mousse and not adicional:
+        return ""
+
+    base = recheio
+    if mousse and recheio.casefold() != "casadinho":
+        base = f"{recheio} com {mousse}" if recheio else mousse
+
+    if adicional:
+        if base:
+            return f"Recheio: {base} e adicional de {adicional.lower()}"
+        return f"Adicional: {adicional}"
+
+    if base:
+        return f"Recheio: {base}"
+    return ""
+
+
+def _build_service_line(dados: dict) -> str:
+    mode_label = "Retirada" if (dados.get("modo_recebimento") or "").strip().lower() == "retirada" else "Entrega"
+    date_label = _parse_order_date_label(dados.get("data_entrega"))
+    hour_label = _format_compact_hour(dados.get("horario_retirada"))
+    parts = [mode_label]
+    if date_label:
+        parts.append(date_label)
+    if hour_label:
+        parts.append(hour_label)
+    return " ".join(parts)
+
+
+def _build_draft_confirmation_message(*, title: str, flavor_line: str, service_line: str, total_value: float) -> str:
+    lines = [
+        "Resumo final do pedido",
+        "",
+        title,
+    ]
+    if flavor_line:
+        lines.append(flavor_line)
+    if service_line:
+        lines.append(service_line)
+    lines.append(f"Valor: {_format_currency_brl(total_value)}")
+    lines.append("")
+    lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
+    lines.append("Se estiver tudo certo, me envie uma confirmacao final explicita para concluir.")
+    return "\n".join(lines)
 
 
 def _sync_ai_process(
@@ -515,6 +944,17 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
         )
         if normalizado:
             dados["produto"] = normalizado
+
+    if categoria == "simples":
+        inferred_flavor, inferred_coverage = _extract_simple_cake_details(
+            dados.get("produto"),
+            dados.get("cobertura"),
+            dados.get("descricao"),
+        )
+        if inferred_flavor:
+            dados["produto"] = inferred_flavor
+        if inferred_coverage:
+            dados["cobertura"] = inferred_coverage
 
     if dados["modo_recebimento"] == "entrega" and not _horario_entrega_permitido(dados.get("horario_retirada")):
         return None, (
@@ -634,7 +1074,8 @@ class PagamentoSchema(BaseModel):
 class CakeOrderSchema(BaseModel):
     linha: str = Field(..., description="Linha do bolo. Ex: tradicional, gourmet, mesversario, babycake, torta, simples")
     categoria: str = Field(..., description="Categoria derivada da linha. Ex: tradicional, ingles, redondo, torta, mesversario, simples")
-    produto: Optional[str] = Field(None, description="Nome do produto/sabor (obrigatorio para gourmet, torta, simples)")
+    produto: Optional[str] = Field(None, description="Nome do produto ou sabor. Na linha simples, use o sabor: Chocolate ou Cenoura")
+    cobertura: Optional[str] = Field(None, description="Cobertura da linha simples: Vulcao ou Simples")
     tamanho: Optional[str] = Field(None, description="Tamanho: B3, B4, B6, B7, P4 ou P6")
     massa: Optional[str] = Field(None, description="Massa: Branca, Chocolate ou Mesclada (so para tradicional)")
     recheio: Optional[str] = Field(None, description="Recheio principal (so para tradicional/mesversario)")
@@ -662,6 +1103,23 @@ class SweetOrderSchema(BaseModel):
     horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
     modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
     endereco: Optional[str] = Field(None, description="Endereco completo (obrigatorio se entrega)")
+    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
+
+
+class CafeteriaOrderItemSchema(BaseModel):
+    nome: str = Field(..., description="Nome base do item da cafeteria. Ex: Croissant, Coca Cola KS, Agua")
+    variante: Optional[str] = Field(None, description="Sabor, versao ou opcao quando existir. Ex: Frango com requeijao, com gas")
+    quantidade: int = Field(..., description="Quantidade do item")
+    observacao: Optional[str] = Field(None, description="Observacao opcional do item")
+
+
+class CafeteriaOrderSchema(BaseModel):
+    itens: List[CafeteriaOrderItemSchema] = Field(..., description="Lista de itens da cafeteria com quantidade e variacoes")
+    data_entrega: Optional[str] = Field(None, description="Data do atendimento no formato DD/MM/AAAA quando o cliente informar")
+    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
+    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
+    endereco: Optional[str] = Field(None, description="Endereco completo se for entrega")
+    taxa_entrega: float = Field(0.0, description="Taxa de entrega, se aplicavel")
     pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
 
 
@@ -738,7 +1196,8 @@ def get_cake_pricing(
     elif normalized_category == "torta":
         description = f"Torta {payload['produto']}"
     elif normalized_category == "simples":
-        description = f"Linha simples com cobertura {payload['cobertura']}"
+        flavor_label = payload.get("sabor") or "Chocolate"
+        description = f"Bolo simples de {str(flavor_label).lower()} com cobertura {payload['cobertura']}"
 
     lines = [
         "Preco canonico consultado no sistema:",
@@ -948,6 +1407,51 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
     )
 
 
+def create_cafeteria_order(
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    order_details: CafeteriaOrderSchema,
+) -> str:
+    """Valida itens da cafeteria e salva o pedido apenas apos confirmacao final explicita."""
+    order_gateway = get_order_gateway()
+    prepared, error = _prepare_cafeteria_order_data(order_details)
+    if error:
+        return error
+    assert prepared is not None
+
+    item_lines = [item["descricao"] for item in prepared["itens"]]
+    order_gateway.save_cafeteria_order(
+        phone=telefone,
+        itens=item_lines,
+        nome_cliente=nome_cliente,
+    )
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="ai_cafeteria_order",
+        stage="pedido_confirmado",
+        status="converted",
+        source="ai_cafeteria_order",
+        draft_payload=_build_cafeteria_process_payload(
+            itens=prepared["itens"],
+            data_entrega=prepared.get("data_entrega"),
+            horario_retirada=prepared.get("horario_retirada"),
+            modo_recebimento=prepared["modo_recebimento"],
+            endereco=prepared.get("endereco"),
+            pagamento=prepared.get("pagamento", {}),
+            valor_total=float(prepared["valor_total"]),
+            taxa_entrega=float(prepared.get("taxa_entrega") or 0),
+        ),
+    )
+    return (
+        "Pedido cafeteria salvo com sucesso!\n"
+        + "Itens: "
+        + ", ".join(item_lines)
+        + f"\nTotal final: {_format_currency_brl(float(prepared['valor_total']))}"
+    )
+
+
 def save_cake_order_draft_process(
     telefone: str,
     nome_cliente: str,
@@ -967,12 +1471,11 @@ def save_cake_order_draft_process(
         source="ai_cake_order",
         draft_payload=_build_cake_process_payload(dados),
     )
-    preco_txt = f" Valor oficial calculado: {_format_currency_brl(dados['valor_total'])}." if dados.get("valor_total") else ""
-    modo_txt = f" {dados['modo_recebimento'].capitalize()}." if dados.get("modo_recebimento") else ""
-    return (
-        "Pedido em rascunho salvo no atendimento."
-        f"{preco_txt}{modo_txt} Ainda nao foi salvo como pedido confirmado no sistema. "
-        "Peca uma confirmacao final explicita do cliente antes de concluir."
+    return _build_draft_confirmation_message(
+        title=_build_cake_confirmation_title(dados),
+        flavor_line=_build_cake_flavor_line(dados),
+        service_line=_build_service_line(dados),
+        total_value=float(dados.get("valor_total") or 0),
     )
 
 
@@ -1004,9 +1507,57 @@ def save_sweet_order_draft_process(
             valor_total=prepared["valor_final"],
         ),
     )
-    return (
-        "Pedido de doces em rascunho salvo no atendimento. "
-        f"Valor oficial calculado: {_format_currency_brl(prepared['valor_final'])}. "
-        "Ainda nao foi salvo como pedido confirmado no sistema. "
-        "Peca uma confirmacao final explicita do cliente antes de concluir."
+    return _build_draft_confirmation_message(
+        title="Doces avulsos",
+        flavor_line="Itens: " + ", ".join(f"{item['nome']} x{item['qtd']}" for item in prepared["itens_validados"]),
+        service_line=_build_service_line(
+            {
+                "modo_recebimento": dados["modo_recebimento"],
+                "data_entrega": prepared["data_iso"],
+                "horario_retirada": dados.get("horario_retirada"),
+            }
+        ),
+        total_value=float(prepared["valor_final"]),
+    )
+
+
+def save_cafeteria_order_draft_process(
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    order_details: CafeteriaOrderSchema,
+) -> str:
+    prepared, error = _prepare_cafeteria_order_data(order_details)
+    if error:
+        return error
+    assert prepared is not None
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="ai_cafeteria_order",
+        stage="aguardando_confirmacao",
+        status="active",
+        source="ai_cafeteria_order",
+        draft_payload=_build_cafeteria_process_payload(
+            itens=prepared["itens"],
+            data_entrega=prepared.get("data_entrega"),
+            horario_retirada=prepared.get("horario_retirada"),
+            modo_recebimento=prepared["modo_recebimento"],
+            endereco=prepared.get("endereco"),
+            pagamento=prepared.get("pagamento", {}),
+            valor_total=float(prepared["valor_total"]),
+            taxa_entrega=float(prepared.get("taxa_entrega") or 0),
+        ),
+    )
+    return _build_draft_confirmation_message(
+        title="Pedido cafeteria",
+        flavor_line="Itens: " + ", ".join(item["descricao"] for item in prepared["itens"]),
+        service_line=_build_service_line(
+            {
+                "modo_recebimento": prepared["modo_recebimento"],
+                "data_entrega": prepared.get("data_entrega"),
+                "horario_retirada": prepared.get("horario_retirada"),
+            }
+        ),
+        total_value=float(prepared["valor_total"]),
     )

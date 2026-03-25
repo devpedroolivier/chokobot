@@ -18,7 +18,8 @@
 ### 2. Kit Festou
 - **Kit Festou**: **25 brigadeiros + 1 balao personalizado**
 - Valor adicional cadastrado: **+R$35**
-- Se o cliente falar de pronta entrega sem detalhar, confirme se ele quer apenas o Kit Festou ou bolo com Kit Festou.
+- So mencionar ou oferecer Kit Festou quando o contexto for **bolo** (encomenda de bolo ou bolo pronta entrega).
+- Se houver bolo, confirme se o cliente quer bolo com Kit Festou.
 
 ### 3. Ovos Pronta Entrega
 - Existe categoria de **ovos pronta entrega**
@@ -102,6 +103,7 @@
 - Limao: R$150
 
 ### 6. Linha Simples (serve 8 fatias)
+- **Linha simples**, **bolo simples**, **bolo caseiro** e **caseirinho** referem-se a mesma familia de encomenda
 - **Sabores:** Chocolate, Cenoura
 - **Coberturas:** Vulcao (R$35), Simples (R$25)
 
@@ -112,17 +114,17 @@
 ## Pascoa Inesquecivel
 - **Catalogo oficial:** https://pascoachoko.goomer.app
 - Destaques extraidos do catalogo:
-  - Ovo Supremo: R$179,90
+  - Ovo Supremo 630g: R$179,90
   - Ovo Intenso 65%: R$149,90
   - Ovo Cravejado Lotus: R$139,90
-  - Ovo Cookie Nutella: R$119,90
+  - Ovo Cookie Nutella 580g: R$119,90
   - Ovo Pudim dos Sonhos: R$119,90
   - Ovo Linha Presente: R$89,90
   - Ovos Trufados: 400g R$109,90 | 550g R$139,90 | 1 kilo R$229,90
   - Ovos Crocantes: 400g R$109,90 | 550g R$139,90 | 1 kilo R$229,90
   - Ovo de Colher Brownie: R$129,90
   - Ovo de Colher Kinder: R$129,90
-  - Ovo Vertical Pistache: R$159,90
+  - Ovo Vertical Pistache 350g: R$159,90
   - Ovo Vertical Drage: R$109,90
   - Trio de Colher 1: R$109,90
   - Trio de Colher 2: R$109,90

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from app.ai.agents import AGENTS_MAP
 from app.ai.tools import (
+    CafeteriaOrderSchema,
     CakeOrderSchema,
     SweetOrderSchema,
+    save_cafeteria_order_draft_process,
     save_cake_order_draft_process,
     save_sweet_order_draft_process,
 )
@@ -64,8 +66,10 @@ def _has_explicit_confirmation(session: dict) -> bool:
 
 
 def _is_saved_order_result(tool_result: str) -> bool:
-    return tool_result.startswith("Pedido salvo com sucesso!") or tool_result.startswith(
-        "Pedido de doces salvo com sucesso!"
+    return (
+        tool_result.startswith("Pedido salvo com sucesso!")
+        or tool_result.startswith("Pedido de doces salvo com sucesso!")
+        or tool_result.startswith("Pedido cafeteria salvo com sucesso!")
     )
 
 
@@ -188,6 +192,34 @@ def handle_tool_call(
                     _reset_session(session)
                     save_session_fn(telefone, session)
                     return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+        except Exception as exc:
+            tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
+    elif function_name == "create_cafeteria_order":
+        try:
+            order = CafeteriaOrderSchema(**arguments)
+            if not _has_explicit_confirmation(session):
+                increment_counter(
+                    "ai_order_confirmation_blocks_total",
+                    tool_name=function_name,
+                    agent=session.get("current_agent", "unknown"),
+                )
+                log_event(
+                    "ai_order_confirmation_blocked",
+                    tool_name=function_name,
+                    agent=session.get("current_agent"),
+                    phone_hash=telefone[-4:] if telefone else "anon",
+                )
+                tool_result = save_cafeteria_order_draft_process(telefone, nome_cliente, cliente_id, order)
+            else:
+                cafeteria_fn = getattr(runtime, "create_cafeteria_order", None)
+                if cafeteria_fn is None:
+                    tool_result = "Fluxo estruturado de cafeteria indisponivel neste runtime."
+                else:
+                    tool_result = cafeteria_fn(telefone, nome_cliente, cliente_id, order)
+                    if _is_saved_order_result(str(tool_result)):
+                        _reset_session(session)
+                        save_session_fn(telefone, session)
+                        return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
         except Exception as exc:
             tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
 

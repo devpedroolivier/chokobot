@@ -87,9 +87,12 @@ class AIToolExecutionTests(unittest.TestCase):
         with patch(
             "app.ai.tool_execution.save_cake_order_draft_process",
             return_value=(
-                "Pedido em rascunho salvo no atendimento. Valor oficial calculado: R$135,00. "
-                "Ainda nao foi salvo como pedido confirmado no sistema. "
-                "Peca uma confirmacao final explicita do cliente antes de concluir."
+                "Resumo final do pedido\n\n"
+                "Bolo B3 de chocolate\n"
+                "Retirada 10/10 Quinta 15h\n"
+                "Valor: R$135,00\n\n"
+                "Ainda nao foi salvo como pedido confirmado no sistema.\n"
+                "Se estiver tudo certo, me envie uma confirmacao final explicita para concluir."
             ),
         ) as mocked_draft:
             should_return, tool_result = handle_tool_call(
@@ -115,7 +118,8 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertEqual(persisted_calls, [])
         mocked_draft.assert_called_once()
         self.assertEqual(session["messages"][0]["content"], "Quero esse bolo para sexta às 15:00")
-        self.assertIn("rascunho", tool_result)
+        self.assertIn("Resumo final do pedido", tool_result)
+        self.assertIn("Valor: R$135,00", tool_result)
         self.assertIn("Ainda nao foi salvo como pedido confirmado no sistema", tool_result)
         counters, _ = snapshot_metrics()
         blocked_total = sum(
@@ -149,6 +153,96 @@ class AIToolExecutionTests(unittest.TestCase):
                 "itens": [{"nome": "Brigadeiro Escama", "quantidade": 10}],
                 "data_entrega": "10/10/2030",
                 "horario_retirada": "15:00",
+                "modo_recebimento": "retirada",
+                "pagamento": {"forma": "PIX"},
+            },
+            telefone="5511999999999",
+            nome_cliente="Cliente",
+            cliente_id=1,
+            session=session,
+            save_session_fn=lambda telefone, state: saved.append((telefone, dict(state))),
+        )
+
+        self.assertTrue(should_return)
+        self.assertEqual(len(persisted_calls), 1)
+        self.assertEqual(session["messages"], [])
+        self.assertEqual(saved[0][0], "5511999999999")
+        self.assertIn("pedido foi finalizado", tool_result)
+
+    def test_create_cafeteria_order_without_explicit_confirmation_only_saves_draft_process(self):
+        session = {
+            "messages": [{"role": "user", "content": "Quero 1 croissant de frango"}],
+            "current_agent": "CafeteriaAgent",
+        }
+        persisted_calls = []
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+            create_cafeteria_order=lambda telefone, nome_cliente, cliente_id, order: persisted_calls.append(order) or "cafeteria",
+        )
+
+        with patch(
+            "app.ai.tool_execution.save_cafeteria_order_draft_process",
+            return_value=(
+                "Resumo final do pedido\n\n"
+                "Pedido cafeteria\n"
+                "Itens: 1x Croissant (Frango com requeijao)\n"
+                "Retirada 17h\n"
+                "Valor: R$14,50\n\n"
+                "Ainda nao foi salvo como pedido confirmado no sistema.\n"
+                "Se estiver tudo certo, me envie uma confirmacao final explicita para concluir."
+            ),
+        ) as mocked_draft:
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name="create_cafeteria_order",
+                arguments={
+                    "itens": [{"nome": "Croissant", "variante": "Frango com requeijao", "quantidade": 1}],
+                    "horario_retirada": "17:00",
+                    "modo_recebimento": "retirada",
+                    "pagamento": {"forma": "PIX"},
+                },
+                telefone="5511999999999",
+                nome_cliente="Cliente",
+                cliente_id=1,
+                session=session,
+                save_session_fn=lambda telefone, state: None,
+            )
+
+        self.assertFalse(should_return)
+        self.assertEqual(persisted_calls, [])
+        mocked_draft.assert_called_once()
+        self.assertIn("Resumo final do pedido", tool_result)
+        self.assertIn("Pedido cafeteria", tool_result)
+
+    def test_create_cafeteria_order_with_explicit_confirmation_persists_and_clears_session(self):
+        session = {
+            "messages": [{"role": "user", "content": "Confirmo"}],
+            "current_agent": "CafeteriaAgent",
+        }
+        saved = []
+        persisted_calls = []
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+            create_cafeteria_order=lambda telefone, nome_cliente, cliente_id, order: persisted_calls.append(order) or "Pedido cafeteria salvo com sucesso!\nItens: 1x Croissant (Chocolate)\nTotal final: R$14,50",
+        )
+
+        should_return, tool_result = handle_tool_call(
+            runtime=runtime,
+            function_name="create_cafeteria_order",
+            arguments={
+                "itens": [{"nome": "Croissant", "variante": "Chocolate", "quantidade": 1}],
                 "modo_recebimento": "retirada",
                 "pagamento": {"forma": "PIX"},
             },

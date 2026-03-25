@@ -1,6 +1,11 @@
 import unittest
 
-from app.ai.policies import requests_easter_catalog
+from app.ai.policies import (
+    build_cafeteria_specificity_retry_instruction,
+    cafeteria_order_needs_specificity,
+    requests_easter_catalog,
+    response_conflicts_with_cafeteria_specificity,
+)
 
 
 class AIPoliciesTests(unittest.TestCase):
@@ -21,6 +26,35 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertFalse(requests_easter_catalog("Tem ovo de paçoca?"))
         self.assertFalse(requests_easter_catalog("Quais sabores do ovo trufado 400g?"))
         self.assertFalse(requests_easter_catalog("Tem trio 2?"))
+
+    def test_cafeteria_order_specificity_detects_generic_ordering(self):
+        self.assertTrue(cafeteria_order_needs_specificity("Queria croissant"))
+        self.assertTrue(cafeteria_order_needs_specificity("Quero coca tbm"))
+        self.assertTrue(cafeteria_order_needs_specificity("Me vê uma fatia"))
+
+    def test_cafeteria_order_specificity_ignores_specific_or_information_requests(self):
+        self.assertFalse(cafeteria_order_needs_specificity("Qual valor do croissant de chocolate?"))
+        self.assertFalse(cafeteria_order_needs_specificity("1 croissant frango 1 croissant chocolate 2 coca lata"))
+
+    def test_cafeteria_specificity_conflict_blocks_premature_reply(self):
+        self.assertTrue(
+            response_conflicts_with_cafeteria_specificity(
+                "Temos croissants na cafeteria. Você gostaria de pedir um croissant agora?",
+                user_text="Queria croissant",
+                current_agent="CafeteriaAgent",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_cafeteria_specificity(
+                "Temos croissant por R$14,50. Qual sabor você quer e quantos croissants deseja?",
+                user_text="Queria croissant",
+                current_agent="CafeteriaAgent",
+            )
+        )
+        self.assertIn(
+            "cliente ainda nao especificou o suficiente",
+            build_cafeteria_specificity_retry_instruction("Queria croissant"),
+        )
 
 
 if __name__ == "__main__":

@@ -54,7 +54,8 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
             context,
             "Hoje é 07/03/2026, e agora são 15:30. "
             "Horario oficial de Brasilia (America/Sao_Paulo). "
-            "Status do corte das 17:30: antes do limite.",
+            "Status do corte das encomendas para hoje às 11:00: depois do limite. "
+            "Status do corte das entregas às 17:30: antes do limite.",
         )
 
     async def test_process_message_injects_time_context_into_system_prompt(self):
@@ -76,7 +77,8 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Resposta final")
         messages = create_mock.await_args.kwargs["messages"]
         self.assertIn("Hoje é 07/03/2026, e agora são 15:30.", messages[0]["content"])
-        self.assertIn("Status do corte das 17:30: antes do limite.", messages[0]["content"])
+        self.assertIn("Status do corte das encomendas para hoje às 11:00: depois do limite.", messages[0]["content"])
+        self.assertIn("Status do corte das entregas às 17:30: antes do limite.", messages[0]["content"])
 
     async def test_process_message_updates_agent_after_handoff(self):
         now = datetime(2026, 3, 7, 15, 30, tzinfo=ZoneInfo("America/Sao_Paulo"))
@@ -113,12 +115,12 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(tool_messages)
         self.assertIn("Transferencia interna concluida para CafeteriaAgent", tool_messages[-1]["content"])
 
-    async def test_process_message_retries_when_model_hallucinates_cutoff_before_1730(self):
-        now = datetime(2026, 3, 18, 13, 22, tzinfo=ZoneInfo("America/Sao_Paulo"))
+    async def test_process_message_retries_when_model_hallucinates_cutoff_before_1100(self):
+        now = datetime(2026, 3, 18, 10, 22, tzinfo=ZoneInfo("America/Sao_Paulo"))
         create_mock = AsyncMock(
             side_effect=[
-                _response(_message("Hoje já passou das 17:30, então não conseguimos fazer a entrega.")),
-                _response(_message("Ainda estamos antes das 17:30 em Brasília. Posso seguir com seu pedido para hoje.")),
+                _response(_message("Hoje já passou das 11:00, então não conseguimos pegar encomendas para hoje.")),
+                _response(_message("Ainda estamos antes das 11:00 em Brasília. Posso seguir com sua encomenda para hoje.")),
             ]
         )
         fake_client = SimpleNamespace(
@@ -134,18 +136,18 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
                 now=now,
             )
 
-        self.assertEqual(reply, "Ainda estamos antes das 17:30 em Brasília. Posso seguir com seu pedido para hoje.")
+        self.assertEqual(reply, "Ainda estamos antes das 11:00 em Brasília. Posso seguir com sua encomenda para hoje.")
         self.assertEqual(create_mock.await_count, 2)
         retry_messages = create_mock.await_args_list[1].kwargs["messages"]
         self.assertEqual(retry_messages[-1]["role"], "system")
-        self.assertIn("ainda NAO passou das 17:30", retry_messages[-1]["content"])
+        self.assertIn("ainda NAO passou das 11:00", retry_messages[-1]["content"])
         session_messages = runner.CONVERSATIONS["5516991426835"]["messages"]
         self.assertFalse(
-            any("já passou das 17:30" in (message.get("content") or "") for message in session_messages)
+            any("já passou das 11:00" in (message.get("content") or "") for message in session_messages)
         )
 
     async def test_process_message_forces_cafeteria_handoff_after_cutoff_for_same_day_order(self):
-        now = datetime(2026, 3, 18, 18, 5, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        now = datetime(2026, 3, 18, 11, 5, tzinfo=ZoneInfo("America/Sao_Paulo"))
         create_mock = AsyncMock(return_value=_response(_message("Posso te mostrar a pronta entrega disponível para hoje.")))
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
@@ -164,7 +166,41 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runner.CONVERSATIONS["5516991111111"]["current_agent"], "CafeteriaAgent")
         first_messages = create_mock.await_args.kwargs["messages"]
         self.assertIn("Especialista de Cafeteria", first_messages[0]["content"])
-        self.assertIn("Status do corte das 17:30: depois do limite.", first_messages[0]["content"])
+        self.assertIn("Status do corte das encomendas para hoje às 11:00: depois do limite.", first_messages[0]["content"])
+
+    async def test_process_message_retries_when_cafeteria_reply_skips_required_specificity(self):
+        telefone = "5516991426835"
+        runner.CONVERSATIONS[telefone] = {"messages": [], "current_agent": "CafeteriaAgent"}
+        create_mock = AsyncMock(
+            side_effect=[
+                _response(_message("Temos croissants na nossa cafeteria! O tempo de preparo é de 20 minutos. Você gostaria de pedir um croissant agora?")),
+                _response(_message("Temos croissant por R$14,50 e o preparo leva 20 minutos. Qual sabor você quer e quantos croissants deseja?")),
+            ]
+        )
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "Queria croissant",
+                "Vania",
+                99,
+            )
+
+        self.assertEqual(
+            reply,
+            "Temos croissant por R$14,50 e o preparo leva 20 minutos. Qual sabor você quer e quantos croissants deseja?",
+        )
+        self.assertEqual(create_mock.await_count, 2)
+        retry_messages = create_mock.await_args_list[1].kwargs["messages"]
+        self.assertEqual(retry_messages[-1]["role"], "system")
+        self.assertIn("cliente ainda nao especificou o suficiente para fechar um pedido da cafeteria", retry_messages[-1]["content"])
+        session_messages = runner.CONVERSATIONS[telefone]["messages"]
+        self.assertFalse(
+            any("Você gostaria de pedir um croissant agora?" in (message.get("content") or "") for message in session_messages)
+        )
 
     async def test_process_message_clears_session_when_escalated(self):
         create_mock = AsyncMock(
@@ -245,9 +281,13 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         )
 
         draft_result = (
-            "Pedido em rascunho salvo no atendimento. Valor oficial calculado: R$135,00. "
-            "Ainda nao foi salvo como pedido confirmado no sistema. "
-            "Peca uma confirmacao final explicita do cliente antes de concluir."
+            "Resumo final do pedido\n\n"
+            "Bolo B3 de mesclada\n"
+            "Recheio: Brigadeiro de Nutella com Ninho e adicional de cereja\n"
+            "Retirada 25/3 Quarta 17:30\n"
+            "Valor: R$135,00\n\n"
+            "Ainda nao foi salvo como pedido confirmado no sistema.\n"
+            "Se estiver tudo certo, me envie uma confirmacao final explicita para concluir."
         )
 
         with patch.object(runner, "client", fake_client):
@@ -269,9 +309,13 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
     async def test_process_message_blocks_hallucinated_saved_reply_when_last_truth_is_draft(self):
         phone = "5516992821034"
         draft_result = (
-            "Pedido em rascunho salvo no atendimento. Valor oficial calculado: R$135,00. "
-            "Ainda nao foi salvo como pedido confirmado no sistema. "
-            "Peca uma confirmacao final explicita do cliente antes de concluir."
+            "Resumo final do pedido\n\n"
+            "Bolo B3 de mesclada\n"
+            "Recheio: Brigadeiro de Nutella com Ninho e adicional de cereja\n"
+            "Retirada 25/3 Quarta 17:30\n"
+            "Valor: R$135,00\n\n"
+            "Ainda nao foi salvo como pedido confirmado no sistema.\n"
+            "Se estiver tudo certo, me envie uma confirmacao final explicita para concluir."
         )
         runner.CONVERSATIONS[phone] = {
             "current_agent": "CakeOrderAgent",

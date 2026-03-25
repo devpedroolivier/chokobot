@@ -206,6 +206,12 @@
       "catalog": "cafeteria",
       "section": "sobremesas",
       "name": "Vulcaozinho de Cenoura com Calda de Chocolate",
+      "aliases": [
+        "Petit",
+        "Bolo Petit",
+        "Petit de Cenoura",
+        "Bolo Petit Cenoura"
+      ],
       "price_brl": 16.5,
       "source_pdf": "Cafeteria_20mb.pdf"
     },
@@ -549,7 +555,7 @@
       "section": "lancamentos_premium",
       "name": "Ovo Supremo",
       "price_brl": 179.9,
-      "weight_approx": "530g",
+      "weight_approx": "630g",
       "notes": "Colecao premium lancamentos.",
       "source_pdf": "Pascoa_20mb.pdf"
     },
@@ -559,7 +565,7 @@
       "name": "Ovo Supremo",
       "variant": "sabores destacados",
       "price_brl": 179.9,
-      "weight_approx": "530g",
+      "weight_approx": "630g",
       "options": [
         "Chocolate Branco com Frutas de Avela e Gianduia",
         "Chocolate Branco com Negresco e Nutella"
@@ -592,7 +598,7 @@
       "section": "ovos_especiais",
       "name": "Ovo Cookie Nutella",
       "price_brl": 119.9,
-      "weight_approx": "380g",
+      "weight_approx": "580g",
       "description": "Casca de cookie recheada com Nutella, brigadeiro branco com negresco e mousse de chocolate.",
       "notes": "Colecao premium lancamentos.",
       "source_pdf": "Pascoa_20mb.pdf"
@@ -714,7 +720,7 @@
       "section": "ovos_verticais",
       "name": "Ovo Vertical Pistache",
       "price_brl": 159.9,
-      "weight_approx": "330g",
+      "weight_approx": "350g",
       "description": "Chocolate ao leite cravejado com pistache, recheado com creme intenso de pistache.",
       "source_pdf": "Pascoa_20mb.pdf"
     },

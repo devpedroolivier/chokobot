@@ -2,7 +2,7 @@ WELCOME_MESSAGE = (
     "Olá! Que bom ter você aqui na *Choko*! 🍫\n"
     "Sou a *Trufinha*, sua atendente virtual.\n\n"
     "Hoje posso te ajudar com:\n"
-    "🎂🍫 Pronta entrega para hoje (bolos, Kit Festou e ovos)\n"
+    "🎂🍫 Pronta entrega para hoje (bolos e ovos)\n"
     "🍰🍬 Encomendas de bolos e docinhos\n"
     "☕🥐 Itens da cafeteria (croissant, cappuccino, salgados e bolos de fatia)\n"
     "🎁 Presentes especiais (cestas box, caixinha de chocolate e flores)\n"

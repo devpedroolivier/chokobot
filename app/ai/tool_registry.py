@@ -222,6 +222,10 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                                 "description": "tradicional, ingles, redondo, torta",
                             },
                             "produto": {"type": "string"},
+                            "cobertura": {
+                                "type": "string",
+                                "description": "Cobertura da linha simples: Vulcao ou Simples",
+                            },
                             "tamanho": {"type": "string"},
                             "massa": {"type": "string"},
                             "recheio": {"type": "string"},
@@ -302,6 +306,56 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                             },
                         },
                         "required": ["itens", "data_entrega", "modo_recebimento", "pagamento"],
+                    },
+                },
+            }
+        )
+
+    if runtime.create_cafeteria_order in agent.tools:
+        openai_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_cafeteria_order",
+                    "description": (
+                        "Monta e salva o pedido estruturado da cafeteria com itens validados no catalogo oficial. "
+                        "Use para gerar o resumo final do pedido depois de coletar item, variacao, quantidade, "
+                        "modo de recebimento e pagamento. So conclua o salvamento real apos confirmacao explicita do cliente."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "itens": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "nome": {"type": "string"},
+                                        "variante": {"type": "string"},
+                                        "quantidade": {"type": "integer"},
+                                        "observacao": {"type": "string"},
+                                    },
+                                    "required": ["nome", "quantidade"],
+                                },
+                            },
+                            "data_entrega": {"type": "string", "description": "DD/MM/AAAA quando o cliente informar"},
+                            "horario_retirada": {"type": "string", "description": "HH:MM"},
+                            "modo_recebimento": {"type": "string", "enum": ["retirada", "entrega"]},
+                            "endereco": {"type": "string"},
+                            "taxa_entrega": {"type": "number"},
+                            "pagamento": {
+                                "type": "object",
+                                "properties": {
+                                    "forma": {
+                                        "type": "string",
+                                        "enum": ["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"],
+                                    },
+                                    "troco_para": {"type": "number"},
+                                },
+                                "required": ["forma"],
+                            },
+                        },
+                        "required": ["itens", "modo_recebimento", "pagamento"],
                     },
                 },
             }
