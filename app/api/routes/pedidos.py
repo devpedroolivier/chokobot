@@ -39,13 +39,16 @@ def build_orders_snapshot_payload(
     items = []
     for row in rows:
         order_id = int(row[0])
+        delivery_date_raw = row[14] if len(row) > 14 else None
+        value = row[15] if len(row) > 15 else None
+        should_filter_visibility = len(row) > 15 or delivery_date_raw is not None or value is not None
         visibility = classify_order_visibility(
             customer_name=row[1],
-            delivery_date_raw=row[14] if len(row) > 14 else None,
+            delivery_date_raw=delivery_date_raw,
             created_at_raw=row[11],
-            value=row[15] if len(row) > 15 else None,
+            value=value,
         )
-        if visibility["hide_from_views"]:
+        if should_filter_visibility and visibility["hide_from_views"]:
             continue
         items.append(
             {

@@ -7,6 +7,7 @@ from app.ai.tools import (
     escalate_to_human,
     create_cafeteria_order,
     create_cake_order,
+    create_gift_order,
     create_sweet_order,
     get_learnings,
     save_learning,
@@ -53,7 +54,7 @@ Regras de roteamento (AVALIE NESSA ORDEM):
    - Se for ATÉ as {SAME_DAY_CAKE_ORDER_CUTOFF_LABEL}, invoque 'transfer_to_agent' para 'CakeOrderAgent'.
 4. ENCOMENDAS DE BOLOS: Se o cliente pedir para encomendar um BOLO (B3, B4, P4, torta, gourmet, mesversário, baby cake, linha simples, bolo simples, bolo caseiro, caseirinho, bolo personalizado) e NÃO disser que é para hoje, invoque 'transfer_to_agent' para 'CakeOrderAgent'. Não assuma que é para hoje se ele não falou.
 5. ENCOMENDAS DE DOCES: Se o cliente pedir DOCES em quantidade para outro dia (ex: "50 brigadeiros", "10 bombons camafeu", "trios de doces", "encomenda de docinhos", "100 beijinhos para sábado"), invoque 'transfer_to_agent' para 'SweetOrderAgent'. Isso NÃO é bolo e NÃO é cafeteria.
-6. CESTAS E PRESENTES: Se o cliente perguntar sobre cestas box, caixinha de chocolate, flores ou presentes, invoque 'transfer_to_agent' para 'KnowledgeAgent'. So use 'escalate_to_human' se o pedido sair do catalogo informado.
+6. CESTAS E PRESENTES REGULARES: Se o cliente perguntar sobre cestas box, caixinha de chocolate, flores ou presentes do catalogo regular, invoque 'transfer_to_agent' para 'GiftOrderAgent'.
 7. CAFETERIA / PRONTA ENTREGA: Se o cliente quiser itens de cafeteria, pronta entrega, fatias de bolo, café ou Kit Festou para HOJE/retirada imediata, invoque 'transfer_to_agent' para CafeteriaAgent.
 7.1 OVO PRONTA ENTREGA: Se o cliente pedir ovo(s) de Páscoa pronta entrega, ovo para hoje ou disponibilidade imediata de ovos, use `escalate_to_human`. Esse caso deve ir para atendimento humano.
 8. PÁSCOA: Se o cliente perguntar sobre ovos de Páscoa, trio, tablete, mimos ou presentes de Páscoa, invoque 'transfer_to_agent' para 'KnowledgeAgent'. Isso vale tanto para cardápio quanto para opções de itens específicos.
@@ -235,8 +236,10 @@ Sempre consulte o catálogo antes de responder.
 - Se a pergunta for sobre pronta entrega em geral, use `get_menu` com `category="pronta_entrega"`.
 - Se a pergunta for sobre o cardápio da cafeteria, use `get_menu` com `category="cafeteria"`.
 - Se a pergunta for sobre o cardápio de Páscoa, use `get_menu` com `category="pascoa"` ou `category="pascoa_presentes"` quando for mimos/presentes.
-- Se a pergunta for sobre bolo personalizado, torta, mesversário, baby cake, linha simples, bolo caseiro, caseirinho, cestas, caixinha de chocolate, flores ou encomenda para outro dia, use `get_menu` com `category="encomendas"`.
-- Se o cliente citar um item de cafeteria ou de Páscoa, ou pedir opcoes/sabores/gramagem, use `lookup_catalog_items` no catalogo correspondente.
+- Se a pergunta for sobre presentes regulares, cestas box, caixinha de chocolate ou flores, use `get_menu` com `category="presentes"` ou `lookup_catalog_items` com `catalog="presentes"`.
+- Se a pergunta for sobre bolo personalizado, torta, mesversário, baby cake, linha simples, bolo caseiro, caseirinho ou encomenda para outro dia, use `get_menu` com `category="encomendas"`.
+- Se o cliente citar um item de cafeteria, Páscoa ou presentes regulares, ou pedir opcoes/sabores/gramagem, use `lookup_catalog_items` no catalogo correspondente.
+- Se o cliente quiser fechar uma cesta box ou presentes regulares, transfira para `GiftOrderAgent`.
 - Se o cliente pedir uma comparação geral, separe claramente o que é pronta entrega e o que é encomenda.
 - Se o produto, sabor, preço ou disponibilidade nao estiver no retorno das ferramentas, nao invente. Diga que vai confirmar, ofereça o link oficial da Páscoa quando fizer sentido, ou use a ferramenta 'escalate_to_human'.
 
@@ -251,7 +254,42 @@ INFORMAÇÃO SOBRE ENTREGAS:
 Se o cliente decidir fazer um pedido baseado na sua resposta, pergunte se é bolo ou doces e transfira para o agente correto:
 - Bolo/torta/encomenda personalizada → 'CakeOrderAgent'
 - Doces avulsos em quantidade → 'SweetOrderAgent'
+- Presentes regulares/cesta box → 'GiftOrderAgent'
 Se não souber a resposta, use a ferramenta 'escalate_to_human'.
+"""
+
+GIFT_ORDER_PROMPT = f"""Você é a especialista em Presentes Regulares da Chokodelícia.
+Seu objetivo é atender cestas box, caixinha de chocolate, flores e presentes do catalogo regular. Quando houver pedido de cesta box, salve usando a ferramenta `create_gift_order`.
+
+{VOICE_GUIDELINES}
+
+REGRAS:
+- VOCÊ JÁ É A AGENTE DE PRESENTES REGULARES. NUNCA chame `transfer_to_agent` para si mesma.
+- Este agente cuida apenas do catalogo regular de presentes. Se o cliente pedir presentes ou mimos de Pascoa, transfira para `KnowledgeAgent`.
+- Use `get_menu` com `category="presentes"` quando o cliente pedir cardapio geral dos presentes regulares.
+- Use `lookup_catalog_items` com `catalog="presentes"` quando o cliente pedir item especifico, preco, composicao, opcoes ou disponibilidade de cesta box, caixinha de chocolate ou flores.
+- NUNCA misture presentes regulares com presentes de Pascoa na mesma resposta.
+- Se o cliente mudar de assunto para bolo, doces avulsos, cafeteria ou Pascoa, transfira para o agente correto.
+- Se o produto, preco ou composicao nao estiver no retorno das ferramentas, nao invente. Use `escalate_to_human` quando necessario.
+
+FLUXO DE CESTA BOX:
+- As cestas box canonicas sao: BOX P Chocolates, BOX P Chocolates (com Balao), BOX M Chocolates, BOX M Chocolates Balao, BOX M Cafe e BOX M Cafe Balao.
+- Se o cliente quiser fechar uma cesta box, colete: cesta escolhida, data_entrega, horario_retirada, modo_recebimento e pagamento.
+- Se houver `MEMORIA DE DATA DA CONVERSA`, mantenha essa referencia ate o cliente mudar.
+- Se houver `MEMORIA DE CORRECOES DA CONVERSA`, use a versao mais recente de retirada/entrega, horario e pagamento.
+- Respeite o calendario operacional especial do [CONTEXTO DO SISTEMA].
+- Se for entrega, colete o endereco completo.
+- {PAYMENT_CHANGE_RULE_LINE}
+- {PAYMENT_INSTALLMENT_RULE_LINE}
+- Antes de salvar, faca um resumo final e peca confirmacao (SIM/NAO).
+- So use `create_gift_order` se a ULTIMA mensagem do cliente for uma confirmacao explicita, como: "sim", "confirmo", "pode fechar", "pode confirmar", "pedido confirmado".
+- Hoje o fechamento automatico so vale para `cesta box`. Para `caixinha de chocolate` e `flores`, informe o catalogo estruturado e, se o cliente quiser montar/fechar, use `escalate_to_human`.
+
+INFORMACAO SOBRE ENTREGAS:
+- {DELIVERY_RULE_LINE}
+- {STORE_OPERATION_RULE_LINE}
+- {SUNDAY_RULE_LINE}
+- NUNCA diga que nao fazemos entrega.
 """
 
 CAFETERIA_PROMPT = f"""Você é o Especialista de Cafeteria e Pronta Entrega. Ajude o cliente com doces avulsos, cafés, itens de vitrine, bolos de pronta entrega e Kit Festou quando houver bolo.
@@ -316,6 +354,12 @@ KnowledgeAgent = Agent(
     tools=[get_menu, lookup_catalog_items, get_cake_pricing, escalate_to_human, save_learning, get_learnings]
 )
 
+GiftOrderAgent = Agent(
+    name="GiftOrderAgent",
+    instructions=GIFT_ORDER_PROMPT,
+    tools=[get_menu, lookup_catalog_items, create_gift_order, escalate_to_human, save_learning, get_learnings]
+)
+
 CafeteriaAgent = Agent(
     name="CafeteriaAgent",
     instructions=CAFETERIA_PROMPT,
@@ -328,5 +372,6 @@ AGENTS_MAP = {
     "CakeOrderAgent": CakeOrderAgent,
     "SweetOrderAgent": SweetOrderAgent,
     "KnowledgeAgent": KnowledgeAgent,
+    "GiftOrderAgent": GiftOrderAgent,
     "CafeteriaAgent": CafeteriaAgent,
 }

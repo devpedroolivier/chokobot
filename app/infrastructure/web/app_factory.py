@@ -89,8 +89,12 @@ def create_http_app(
     app.exception_handler(Exception)(unhandled_exception_handler)
 
     if mount_static:
-        base_dir = Path(__file__).resolve().parents[2]
-        static_dir = base_dir / "static"
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+        project_root = Path(__file__).resolve().parents[3]
+        candidate_dirs = (
+            project_root / "static",
+            project_root / "app" / "static",
+        )
+        static_dir = next((path for path in candidate_dirs if path.exists()), candidate_dirs[0])
+        app.mount("/static", StaticFiles(directory=str(static_dir), check_dir=False), name="static")
 
     return app, request_context_middleware

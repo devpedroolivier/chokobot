@@ -1,6 +1,13 @@
 import unittest
 
-from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, KNOWLEDGE_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
+from app.ai.agents import (
+    CAFETERIA_PROMPT,
+    CAKE_ORDER_PROMPT,
+    GIFT_ORDER_PROMPT,
+    KNOWLEDGE_PROMPT,
+    SWEET_ORDER_PROMPT,
+    TRIAGE_PROMPT,
+)
 
 
 class AIAgentPromptsTests(unittest.TestCase):
@@ -22,7 +29,7 @@ class AIAgentPromptsTests(unittest.TestCase):
 
     def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
-        self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
+        self.assertIn("GiftOrderAgent", TRIAGE_PROMPT)
         self.assertIn("bolo pronta entrega ou cafeteria", CAFETERIA_PROMPT)
         self.assertIn("Se o cliente pedir ovos de Pascoa pronta entrega", CAFETERIA_PROMPT)
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", CAFETERIA_PROMPT)
@@ -31,6 +38,7 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Se o cliente pedir CARDAPIO", KNOWLEDGE_PROMPT)
         self.assertIn("use `lookup_catalog_items`", KNOWLEDGE_PROMPT)
         self.assertIn("use `get_cake_pricing`", KNOWLEDGE_PROMPT)
+        self.assertIn("category=\"presentes\"", KNOWLEDGE_PROMPT)
         self.assertIn("Se o cliente perguntar por um item especifico", CAFETERIA_PROMPT)
         self.assertIn("use `lookup_catalog_items`", CAFETERIA_PROMPT)
 
@@ -73,6 +81,14 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("use `create_cafeteria_order`", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE DATA DA CONVERSA", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAFETERIA_PROMPT)
+
+    def test_gift_prompt_separates_regular_gifts_from_easter_and_uses_structured_tool(self):
+        self.assertIn("presentes do catalogo regular", TRIAGE_PROMPT)
+        self.assertIn("presentes ou mimos de Pascoa", GIFT_ORDER_PROMPT)
+        self.assertIn("get_menu` com `category=\"presentes\"", GIFT_ORDER_PROMPT)
+        self.assertIn("lookup_catalog_items` com `catalog=\"presentes\"", GIFT_ORDER_PROMPT)
+        self.assertIn("create_gift_order", GIFT_ORDER_PROMPT)
+        self.assertIn("caixinha de chocolate", GIFT_ORDER_PROMPT)
 
 
 

@@ -157,6 +157,43 @@ def requests_easter_ready_delivery_handoff(text: str) -> bool:
     return has_egg and has_ready
 
 
+def requests_regular_gift_topic(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if "pascoa" in normalized:
+        return False
+    patterns = (
+        r"\bcesta(s)?\b",
+        r"\bcesta(s)?\s+box\b",
+        r"\bbox\b.*\b(cafe|chocolate)\b",
+        r"\bcaixinha\b.*\bchocolate\b",
+        r"\bcaixa\b.*\bchocolate\b",
+        r"\bflores\b",
+        r"\bbuque\b",
+        r"\bbuque\b",
+        r"\bpresente(s)?\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_easter_gift_topic(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized or "pascoa" not in normalized:
+        return False
+    patterns = (
+        r"\bmimos?\b",
+        r"\bpresente(s)?\b",
+        r"\bbox\b",
+        r"\bpelucia\b",
+        r"\bcookie na caixinha\b",
+        r"\bcaneca\b",
+        r"\btablete\b",
+        r"\bmini ovos?\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
 def _mentions_cafeteria_order_intent(normalized: str) -> bool:
     patterns = (
         r"\b(quero|queria|vou querer|pedir|pedido|me ve|separa|separe|adiciona|adicionar|inclui|incluir|manda|manda um|manda uma)\b",
@@ -344,6 +381,20 @@ def should_force_same_day_cafeteria_handoff(
     if current_agent == "TriageAgent" and mentions_order_intent(user_text):
         return True
     return False
+
+
+def should_force_gift_context_handoff(session: dict, user_text: str) -> str | None:
+    current_agent = session.get("current_agent")
+    if current_agent not in {"CakeOrderAgent", "SweetOrderAgent", "CafeteriaAgent", "GiftOrderAgent", "KnowledgeAgent"}:
+        return None
+
+    if requests_easter_gift_topic(user_text):
+        return "KnowledgeAgent"
+
+    if requests_regular_gift_topic(user_text):
+        return "GiftOrderAgent"
+
+    return None
 
 
 def build_system_time_context(now: datetime | None = None) -> str:

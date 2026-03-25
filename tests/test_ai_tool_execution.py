@@ -288,6 +288,47 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertEqual(order.pagamento.forma, "Cartão (débito/crédito)")
         self.assertEqual(order.pagamento.parcelas, 2)
 
+    def test_create_gift_order_without_explicit_confirmation_only_saves_draft_process(self):
+        session = {
+            "messages": [{"role": "user", "content": "Quero essa cesta box para sábado às 15:00"}],
+            "current_agent": "GiftOrderAgent",
+        }
+        persisted_calls = []
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+            create_gift_order=lambda telefone, nome_cliente, cliente_id, order: persisted_calls.append(order) or "presente",
+        )
+
+        with patch("app.ai.tool_execution.save_gift_order_draft_process", return_value="Resumo final do pedido (rascunho)") as mocked_draft:
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name="create_gift_order",
+                arguments={
+                    "categoria": "cesta_box",
+                    "produto": "BOX M CAFE",
+                    "data_entrega": "10/10/2030",
+                    "horario_retirada": "15:00",
+                    "modo_recebimento": "retirada",
+                    "pagamento": {"forma": "PIX"},
+                },
+                telefone="5511999999999",
+                nome_cliente="Cliente",
+                cliente_id=1,
+                session=session,
+                save_session_fn=lambda telefone, state: None,
+            )
+
+        self.assertFalse(should_return)
+        self.assertEqual(persisted_calls, [])
+        mocked_draft.assert_called_once()
+        self.assertIn("rascunho", tool_result.casefold())
+
     def test_create_sweet_order_with_explicit_confirmation_persists_and_clears_session(self):
         session = {
             "messages": [{"role": "user", "content": "Sim, pode fechar."}],

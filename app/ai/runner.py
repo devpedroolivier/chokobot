@@ -23,6 +23,7 @@ from app.ai.policies import (
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
     requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
+    should_force_gift_context_handoff as _should_force_gift_context_handoff,
     requests_human_handoff as _requests_human_handoff,
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
@@ -34,6 +35,7 @@ from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
 from app.ai.tools import (
     create_cafeteria_order,
     create_cake_order,
+    create_gift_order,
     create_sweet_order,
     escalate_to_human,
     get_cake_options,
@@ -72,6 +74,7 @@ class AIRuntime:
     create_cake_order: Any
     create_sweet_order: Any
     create_cafeteria_order: Any | None = None
+    create_gift_order: Any | None = None
     lookup_catalog_items: Any | None = None
     get_cake_pricing: Any | None = None
 
@@ -88,6 +91,7 @@ def get_default_ai_runtime() -> AIRuntime:
         create_cake_order=create_cake_order,
         create_sweet_order=create_sweet_order,
         create_cafeteria_order=create_cafeteria_order,
+        create_gift_order=create_gift_order,
     )
 
 
@@ -498,6 +502,21 @@ async def process_message_with_ai(
             to_agent="CafeteriaAgent",
             phone_hash=telefone[-4:] if telefone else "anon",
             current_time=_normalize_reference_time(now).strftime("%Y-%m-%d %H:%M:%S %z"),
+        )
+
+    forced_gift_agent = _should_force_gift_context_handoff(session, text)
+    if forced_gift_agent:
+        previous_agent = session["current_agent"]
+        session["current_agent"] = forced_gift_agent
+        refresh_system_prompt(session, AGENTS_MAP[forced_gift_agent], now, runtime)
+        save_session(telefone, session)
+        increment_counter("ai_context_switch_handoffs_total", from_agent=previous_agent, to_agent=forced_gift_agent)
+        log_event(
+            "ai_context_switch_handoff",
+            from_agent=previous_agent,
+            to_agent=forced_gift_agent,
+            phone_hash=telefone[-4:] if telefone else "anon",
+            topic="gifts",
         )
     
     log_event("ai_run_started", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])

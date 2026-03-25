@@ -13,6 +13,7 @@ from app.application.service_registry import (
     get_delivery_gateway,
     get_order_gateway,
 )
+from app.application.use_cases.process_cesta_box_flow import CESTAS_BOX_CATALOGO
 from app.db.database import get_connection
 from app.infrastructure.gateways.local_catalog_gateway import _normalize_text
 from app.security import ai_learning_enabled, security_audit
@@ -120,6 +121,15 @@ CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
 CAFETERIA_VARIANT_REQUIRED_HINTS = {
     "Croissant": "Informe o sabor do croissant e a quantidade.",
     "Agua": "Informe se deseja agua com gas ou sem gas, e a quantidade.",
+}
+GIFT_CATEGORY_ALIASES = {
+    "cesta box": "cesta_box",
+    "cestas box": "cesta_box",
+    "cesta": "cesta_box",
+    "cestas": "cesta_box",
+    "caixinha de chocolate": "caixinha_chocolate",
+    "caixa de chocolate": "caixinha_chocolate",
+    "flores": "flores",
 }
 CAFETERIA_NAME_ALIASES = {
     "croissant": "Croissant",
@@ -269,6 +279,45 @@ def _apply_card_installment_rule(pagamento: dict | None, total_value: float) -> 
 
     payload["parcelas"] = min(parcelas_int, CARD_INSTALLMENT_MAX)
     return payload
+
+
+def _normalize_gift_category(category: str | None) -> str:
+    normalized = _normalize_text(category or "cesta_box")
+    return GIFT_CATEGORY_ALIASES.get(normalized, normalized.replace(" ", "_"))
+
+
+def _canonical_cesta_box(raw_value: str | None) -> tuple[str | None, dict | None]:
+    normalized = _normalize_text(raw_value)
+    if not normalized:
+        return None, None
+
+    for code, item in CESTAS_BOX_CATALOGO.items():
+        if normalized == code:
+            return code, item
+
+    aliases = {
+        _normalize_text(item["nome"]): code
+        for code, item in CESTAS_BOX_CATALOGO.items()
+    }
+    aliases.update(
+        {
+            "box p chocolates": "1",
+            "box p chocolates com balao": "2",
+            "box m chocolates": "3",
+            "box m chocolates balao": "4",
+            "box m cafe": "5",
+            "box m cafe balao": "6",
+            "cesta cafe": "5",
+            "cesta de cafe": "5",
+            "cesta chocolate": "3",
+            "cesta box cafe": "5",
+            "cesta box chocolate": "3",
+        }
+    )
+    code = aliases.get(normalized)
+    if not code:
+        return None, None
+    return code, CESTAS_BOX_CATALOGO.get(code)
 
 
 def _format_currency_brl(value: float | int) -> str:
@@ -595,6 +644,79 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
         "taxa_entrega": taxa_entrega,
         "valor_total": valor_total,
     }, None
+
+
+def _build_gift_process_payload(dados: dict) -> dict:
+    return {
+        "categoria": dados.get("categoria"),
+        "cesta_nome": dados.get("produto") if dados.get("categoria") == "cesta_box" else None,
+        "descricao": dados.get("descricao") or dados.get("produto") or "Presente especial",
+        "data_entrega": dados.get("data_entrega"),
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados.get("modo_recebimento"),
+        "endereco": dados.get("endereco"),
+        "pagamento": dados.get("pagamento", {}),
+        "valor_total": dados.get("valor_total"),
+        "taxa_entrega": dados.get("taxa_entrega", 0.0),
+    }
+
+
+def _build_gift_detail_line(dados: dict) -> str:
+    description = (dados.get("descricao") or "").strip()
+    if not description:
+        return ""
+    return f"Detalhes: {description}"
+
+
+def _prepare_gift_order_data(order_details: "GiftOrderSchema") -> tuple[dict | None, str | None]:
+    dados = order_details.model_dump()
+    dados["categoria"] = _normalize_gift_category(dados.get("categoria"))
+    dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+
+    schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
+    if schedule_error:
+        return None, schedule_error
+
+    if dados["categoria"] != "cesta_box":
+        return None, (
+            "Caixinha de chocolate e flores estao no catalogo regular, mas a montagem final ainda exige confirmacao humana. "
+            "Use o catalogo estruturado para informar opcoes e, se o cliente quiser fechar, encaminhe para atendimento humano."
+        )
+
+    code, cesta_info = _canonical_cesta_box(dados.get("produto") or dados.get("descricao"))
+    if not code or not cesta_info:
+        return None, (
+            "Nao encontrei essa cesta box no catalogo regular. "
+            "Opcoes canonicas: BOX P Chocolates, BOX P Chocolates (com Balao), BOX M Chocolates, "
+            "BOX M Chocolates Balao, BOX M Cafe e BOX M Cafe Balao."
+        )
+
+    dados["codigo"] = code
+    dados["produto"] = str(cesta_info["nome"])
+    dados["descricao"] = str(cesta_info.get("descricao") or dados.get("descricao") or cesta_info["nome"])
+    dados["serve"] = int(cesta_info.get("serve") or 0)
+    dados["valor_base"] = float(cesta_info.get("preco") or 0)
+
+    if dados["modo_recebimento"] == "entrega":
+        if not (dados.get("endereco") or "").strip():
+            return None, "Informe o endereco completo para entrega."
+        if not (dados.get("horario_retirada") or "").strip():
+            return None, "Informe o horario da entrega."
+        if not _horario_entrega_permitido(dados.get("horario_retirada")):
+            return None, (
+                f"Entregas sao realizadas ate as {LIMITE_HORARIO_ENTREGA}. "
+                "Ajuste o horario ou altere para retirada."
+            )
+        if float(dados.get("taxa_entrega") or 0) <= 0:
+            dados["taxa_entrega"] = TAXA_ENTREGA_PADRAO
+    else:
+        dados["endereco"] = None
+        dados["taxa_entrega"] = 0.0
+
+    dados["valor_total"] = round(float(dados["valor_base"]) + float(dados.get("taxa_entrega") or 0), 2)
+    dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), float(dados["valor_total"]))
+    dados["data_entrega"] = _normalizar_data_iso(dados["data_entrega"])
+    return dados, None
 
 
 def _match_catalog_value(
@@ -1241,17 +1363,32 @@ class CafeteriaOrderSchema(BaseModel):
     pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
 
 
+class GiftOrderSchema(BaseModel):
+    categoria: Literal["cesta_box", "caixinha_chocolate", "flores"] = Field(
+        ...,
+        description="Categoria do presente regular. O fluxo automatico hoje so fecha cesta_box.",
+    )
+    produto: str = Field(..., description="Nome do presente ou da cesta box")
+    descricao: Optional[str] = Field(None, description="Descricao opcional do item")
+    data_entrega: str = Field(..., description="Data de entrega no formato DD/MM/AAAA")
+    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
+    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
+    endereco: Optional[str] = Field(None, description="Endereco completo se for entrega")
+    taxa_entrega: float = Field(0.0, description="Taxa de entrega")
+    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
+
+
 # ============================================================
 #  Tools
 # ============================================================
 
 def get_menu(category: str = "todas") -> str:
-    """Retorna o cardapio completo ou filtrado entre pronta entrega e encomendas."""
+    """Retorna o cardapio completo ou filtrado entre pronta entrega, encomendas, Pascoa e presentes regulares."""
     return get_catalog_gateway().get_menu(category)
 
 
 def lookup_catalog_items(query: str, catalog: str = "auto") -> str:
-    """Busca itens exatos ou aproximados no catalogo estruturado de cafeteria e Pascoa."""
+    """Busca itens exatos ou aproximados no catalogo estruturado de cafeteria, Pascoa e presentes regulares."""
     return get_catalog_gateway().lookup_catalog_items(query, catalog)
 
 
@@ -1573,6 +1710,74 @@ def create_cafeteria_order(
     return "\n".join(response_lines)
 
 
+def create_gift_order(
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    order_details: GiftOrderSchema,
+) -> str:
+    """Valida presentes regulares. Hoje o fechamento automatico e permitido apenas para cesta box."""
+    order_gateway = get_order_gateway()
+    delivery_gateway = get_delivery_gateway()
+    dados, error = _prepare_gift_order_data(order_details)
+    if error:
+        return error
+    assert dados is not None
+
+    order_data = {
+        "categoria": "cesta_box",
+        "cesta_nome": dados["produto"],
+        "cesta_preco": dados["valor_base"],
+        "cesta_descricao": dados["descricao"],
+        "data_entrega": dados["data_entrega"],
+        "horario_retirada": dados.get("horario_retirada"),
+        "modo_recebimento": dados["modo_recebimento"],
+        "endereco": dados.get("endereco", ""),
+        "valor_total": dados["valor_total"],
+        "pagamento": dados.get("pagamento", {}),
+        "taxa_entrega": dados.get("taxa_entrega", 0.0),
+    }
+
+    encomenda_id = order_gateway.create_order(
+        phone=telefone,
+        dados=order_data,
+        nome_cliente=nome_cliente,
+        cliente_id=cliente_id,
+    )
+
+    if dados["modo_recebimento"] == "entrega":
+        delivery_gateway.create_delivery(
+            encomenda_id=encomenda_id,
+            tipo="cesta_box",
+            endereco=dados.get("endereco"),
+            data_agendada=dados["data_entrega"],
+            status="agendada",
+        )
+    else:
+        delivery_gateway.create_delivery(
+            encomenda_id=encomenda_id,
+            tipo="retirada",
+            data_agendada=dados["data_entrega"],
+            status="Retirar na loja",
+        )
+
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="cesta_box_order",
+        stage="pedido_confirmado",
+        status="converted",
+        source="ai_gift_order",
+        draft_payload=_build_gift_process_payload(dados),
+        order_id=encomenda_id,
+    )
+    return (
+        f"Pedido presente salvo com sucesso! ID: {encomenda_id}\n"
+        f"Item: {dados['produto']}\n"
+        f"Total final: {_format_currency_brl(float(dados['valor_total']))}"
+    )
+
+
 def save_cake_order_draft_process(
     telefone: str,
     nome_cliente: str,
@@ -1671,3 +1876,30 @@ def save_cafeteria_order_draft_process(
         ),
     )
     return _build_cafeteria_confirmation_message(prepared)
+
+
+def save_gift_order_draft_process(
+    telefone: str,
+    nome_cliente: str,
+    cliente_id: int,
+    order_details: GiftOrderSchema,
+) -> str:
+    dados, error = _prepare_gift_order_data(order_details)
+    if error:
+        return error
+    assert dados is not None
+    _sync_ai_process(
+        phone=telefone,
+        customer_id=cliente_id,
+        process_type="cesta_box_order",
+        stage="aguardando_confirmacao",
+        status="active",
+        source="ai_gift_order",
+        draft_payload=_build_gift_process_payload(dados),
+    )
+    return _build_draft_confirmation_message(
+        title=dados["produto"],
+        flavor_line=_build_gift_detail_line(dados),
+        service_line=_build_service_line(dados),
+        total_value=float(dados["valor_total"]),
+    )

@@ -4,8 +4,11 @@ from app.ai.policies import (
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
     requests_easter_catalog,
+    requests_easter_gift_topic,
     requests_easter_ready_delivery_handoff,
+    requests_regular_gift_topic,
     response_conflicts_with_cafeteria_specificity,
+    should_force_gift_context_handoff,
 )
 
 
@@ -59,6 +62,23 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertIn(
             "cliente ainda nao especificou o suficiente",
             build_cafeteria_specificity_retry_instruction("Queria croissant"),
+        )
+
+    def test_gift_topic_detection_separates_regular_catalog_from_easter(self):
+        self.assertTrue(requests_regular_gift_topic("Vocês têm cesta box e flores?"))
+        self.assertTrue(requests_regular_gift_topic("Quero ver presentes"))
+        self.assertFalse(requests_regular_gift_topic("Quero ver presentes de Páscoa"))
+        self.assertTrue(requests_easter_gift_topic("Quero ver mimos de Páscoa"))
+        self.assertFalse(requests_easter_gift_topic("Quero ver flores"))
+
+    def test_gift_context_handoff_switches_agent_when_customer_changes_topic(self):
+        self.assertEqual(
+            should_force_gift_context_handoff({"current_agent": "CakeOrderAgent"}, "Vocês têm presentes?"),
+            "GiftOrderAgent",
+        )
+        self.assertEqual(
+            should_force_gift_context_handoff({"current_agent": "GiftOrderAgent"}, "Quero ver presentes de Páscoa"),
+            "KnowledgeAgent",
         )
 
 

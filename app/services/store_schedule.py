@@ -14,7 +14,7 @@ from app.settings import get_settings
 from app.utils.datetime_utils import now_in_bot_timezone
 
 READY_DELIVERY_SUMMARY = "bolo pronta entrega, cafeteria ou ovos pronta entrega"
-GIFT_CATALOG_SUMMARY = "cestas (Box Cafe ou Chocolate), caixinha de chocolate e flores"
+GIFT_CATALOG_SUMMARY = "presentes regulares: cestas box, caixinha de chocolate e flores"
 
 _DAY_LABELS = {
     0: "segunda-feira",

@@ -2,7 +2,9 @@
 
 ## Regra Comercial Principal
 - Quando o cliente perguntar por **pronta entrega**, mostre somente itens de vitrine, cafeteria, doces avulsos e bolo pronta entrega do dia.
-- Quando o cliente perguntar por **encomenda**, mostre bolos personalizados, linhas gourmet, mesversario, baby cake, tortas, linha simples e presentes.
+- Quando o cliente perguntar por **encomenda**, mostre bolos personalizados, linhas gourmet, mesversario, baby cake, tortas e linha simples.
+- Quando o cliente perguntar por **presentes regulares**, mostre somente cestas box, caixinha de chocolate e flores do catalogo regular.
+- Quando o cliente perguntar por **mimos ou presentes de Pascoa**, mostre somente a linha de Pascoa.
 - Nao misture pronta entrega com encomenda na mesma resposta, a menos que o cliente pergunte explicitamente pelos dois.
 - Regra anti-alucinacao: responda somente com categorias, regras, links e produtos cadastrados neste arquivo. Se um sabor, preco ou disponibilidade nao estiver aqui, diga que vai confirmar e nao invente.
 
@@ -107,9 +109,11 @@
 - **Sabores:** Chocolate, Cenoura
 - **Coberturas:** Vulcao (R$35), Simples (R$25)
 
-### 7. Cestas e Presentes
-- Oferecemos **cestas (Box Cafe ou Chocolate), caixinha de chocolate e flores**
-- **Catalogo de presentes:** https://bit.ly/presenteschoko
+### 7. Presentes Regulares
+- Oferecemos **cestas box**, **caixinha de chocolate** e **flores**
+- **Cestas box canonicas:** BOX P Chocolates (R$99,90), BOX P Chocolates com Balao (R$119,90), BOX M Chocolates (R$149,90), BOX M Chocolates Balao (R$189,90), BOX M Cafe (R$179,90), BOX M Cafe Balao (R$219,90)
+- **Caixinha de chocolate e flores:** consultar modelos, montagem e valor final no catalogo regular
+- **Catalogo de presentes regulares:** https://bit.ly/presenteschoko
 
 ## Pascoa Inesquecivel
 - **Catalogo oficial:** https://pascoachoko.goomer.app

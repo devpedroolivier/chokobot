@@ -33,6 +33,22 @@ class CatalogGatewayLookupTests(unittest.TestCase):
         self.assertIn("Vulcaozinho de Cenoura com Calda de Chocolate", result)
         self.assertIn("R$16,50", result)
 
+    def test_lookup_catalog_items_separates_regular_gifts_from_easter(self):
+        result = self.gateway.lookup_catalog_items("box m cafe", "presentes")
+
+        self.assertIn("BOX M CAFÉ", result)
+        self.assertIn("Presentes Especiais", result)
+        self.assertIn("R$179,90", result)
+
+    def test_lookup_catalog_items_structures_caixinha_and_flores_in_regular_catalog(self):
+        caixinha = self.gateway.lookup_catalog_items("caixinha de chocolate", "presentes")
+        flores = self.gateway.lookup_catalog_items("flores", "presentes")
+
+        self.assertIn("Caixinha de Chocolate", caixinha)
+        self.assertIn("bit.ly/presenteschoko", caixinha)
+        self.assertIn("Flores", flores)
+        self.assertIn("modelos e montagem", flores.casefold())
+
     def test_lookup_catalog_items_returns_not_found_for_uncatalogued_item(self):
         result = self.gateway.lookup_catalog_items("saquinho pequeno", "cafeteria")
 

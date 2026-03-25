@@ -18,14 +18,15 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                         '`category="cafeteria"` para o cardapio detalhado da cafeteria, '
                         '`category="pascoa"` para o cardapio de Pascoa, '
                         '`category="pascoa_presentes"` para mimos e presentes de Pascoa e '
-                        '`category="encomendas"` para bolos personalizados, tortas e presentes.'
+                        '`category="presentes"` para cestas box, caixinha de chocolate e flores do catalogo regular, '
+                        'e `category="encomendas"` para bolos personalizados e tortas.'
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "category": {
                                 "type": "string",
-                                "description": "Categoria do menu: pronta_entrega, cafeteria, pascoa, pascoa_presentes, encomendas ou todas",
+                                "description": "Categoria do menu: pronta_entrega, cafeteria, pascoa, pascoa_presentes, presentes, encomendas ou todas",
                             }
                         },
                         "required": [],
@@ -41,7 +42,7 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                 "function": {
                     "name": "lookup_catalog_items",
                     "description": (
-                        "Busca itens especificos no catalogo estruturado da cafeteria e da Pascoa. "
+                        "Busca itens especificos no catalogo estruturado da cafeteria, da Pascoa e dos presentes regulares. "
                         "Use quando o cliente perguntar se tem um item, quais opcoes/sabores ele possui, "
                         "qual o preco, peso ou composicao. Nao use para cardapio geral."
                     ),
@@ -54,7 +55,7 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                             },
                             "catalog": {
                                 "type": "string",
-                                "enum": ["auto", "pronta_entrega", "cafeteria", "pascoa", "pascoa_presentes"],
+                                "enum": ["auto", "pronta_entrega", "cafeteria", "pascoa", "pascoa_presentes", "presentes"],
                                 "description": "Escopo do catalogo a consultar",
                             },
                         },
@@ -364,6 +365,50 @@ def build_openai_tools(agent, runtime) -> list[dict]:
             }
         )
 
+    if runtime.create_gift_order in agent.tools:
+        openai_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_gift_order",
+                    "description": (
+                        "Monta e salva o pedido estruturado de presentes regulares. "
+                        "Hoje o fechamento automatico e permitido apenas para cesta box, "
+                        "sempre apos confirmacao final explicita do cliente."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "categoria": {
+                                "type": "string",
+                                "enum": ["cesta_box", "caixinha_chocolate", "flores"],
+                            },
+                            "produto": {"type": "string"},
+                            "descricao": {"type": "string"},
+                            "data_entrega": {"type": "string", "description": "DD/MM/AAAA"},
+                            "horario_retirada": {"type": "string", "description": "HH:MM"},
+                            "modo_recebimento": {"type": "string", "enum": ["retirada", "entrega"]},
+                            "endereco": {"type": "string"},
+                            "taxa_entrega": {"type": "number"},
+                            "pagamento": {
+                                "type": "object",
+                                "properties": {
+                                    "forma": {
+                                        "type": "string",
+                                        "enum": ["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"],
+                                    },
+                                    "troco_para": {"type": "number"},
+                                    "parcelas": {"type": "integer"},
+                                },
+                                "required": ["forma"],
+                            },
+                        },
+                        "required": ["categoria", "produto", "data_entrega", "modo_recebimento", "pagamento"],
+                    },
+                },
+            }
+        )
+
     openai_tools.append(
         {
             "type": "function",
@@ -380,6 +425,7 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                                 "CakeOrderAgent",
                                 "SweetOrderAgent",
                                 "KnowledgeAgent",
+                                "GiftOrderAgent",
                                 "CafeteriaAgent",
                             ],
                         }

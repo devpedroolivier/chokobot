@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "currency": "BRL",
+    "generated_from": [
+      "Catalogo de presentes regular",
+      "Fluxo legado de cestas box"
+    ],
+    "notes": [
+      "Base canônica estruturada para presentes regulares fora da Páscoa.",
+      "Cestas box possuem preço fechado e podem seguir no fluxo automatizado.",
+      "Caixinha de chocolate e flores possuem consulta estruturada, mas podem exigir confirmação humana para composição final."
+    ]
+  },
+  "items": [
+    {
+      "catalog": "presentes",
+      "section": "cestas_box",
+      "name": "BOX P CHOCOLATES",
+      "price_brl": 99.9,
+      "description": "2 trufas, 1 chokobom, 1 cake, 6 bombons, 1 tablete de chocolate",
+      "aliases": ["box p chocolates", "box p", "cesta box pequena", "cesta de chocolate pequena"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "cestas_box",
+      "name": "BOX P CHOCOLATES (com Balão)",
+      "price_brl": 119.9,
+      "description": "2 trufas, 1 chokobom, 1 cake, 6 bombons, 1 tablete de chocolate, balão personalizado",
+      "aliases": ["box p chocolates balao", "box p com balao", "cesta box pequena com balao"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "cestas_box",
+      "name": "BOX M CHOCOLATES",
+      "price_brl": 149.9,
+      "description": "3 trufas, 2 chokobons, 2 cakes, 6 bombons, 1 tablete de chocolate",
+      "aliases": ["box m chocolates", "box m", "cesta box media chocolate"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "cestas_box",
+      "name": "BOX M CHOCOLATES BALÃO",
+      "price_brl": 189.9,
+      "description": "3 trufas, 2 chokobons, 2 cakes, 6 bombons, 1 tablete de chocolate, balão personalizado",
+      "aliases": ["box m chocolates balao", "box m com balao", "cesta box media chocolate com balao"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "cestas_box",
+      "name": "BOX M CAFÉ",
+      "price_brl": 179.9,
+      "description": "5 bombons, 1 tablete de chocolate, 1 pote cheesecake, 1 pão de queijo, 1 croissant, 1 suco natural, bolachinhas, 1 cappuccino em pó",
+      "aliases": ["box m cafe", "cesta cafe", "cesta de cafe", "cesta box cafe"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "cestas_box",
+      "name": "BOX M CAFÉ BALÃO",
+      "price_brl": 219.9,
+      "description": "5 bombons, 1 tablete de chocolate, 1 pote cheesecake, 1 pão de queijo, 1 croissant, 1 suco natural, bolachinhas, 1 cappuccino em pó, balão personalizado",
+      "aliases": ["box m cafe balao", "box m cafe com balao", "cesta cafe com balao"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "caixinhas",
+      "name": "Caixinha de Chocolate",
+      "availability_note": "Consulte modelos, composição e valor final no catálogo regular de presentes: https://bit.ly/presenteschoko",
+      "aliases": ["caixinha de chocolate", "caixa de chocolate", "caixinha", "caixa de doces"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "flores",
+      "name": "Flores",
+      "availability_note": "Consulte modelos e montagem no catálogo regular de presentes: https://bit.ly/presenteschoko",
+      "aliases": ["flores", "buque", "buquê", "ramalhete"]
+    }
+  ]
+}

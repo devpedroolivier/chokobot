@@ -22,6 +22,7 @@ from app.settings import get_settings
 CATALOG_LABELS = {
     "cafeteria": "Cafeteria",
     "encomendas": "Encomendas",
+    "presentes": "Presentes Especiais",
     "pascoa": "Páscoa",
     "pascoa_presentes": "Mimos e Presentes de Páscoa",
 }
@@ -46,6 +47,9 @@ SECTION_LABELS = {
     "presentes": "Presentes",
     "pelucias": "Pelúcias",
     "linha_simples": "Linha Simples",
+    "cestas_box": "Cestas Box",
+    "caixinhas": "Caixinhas",
+    "flores": "Flores",
 }
 
 CATALOG_ITEM_RUNTIME_NOTES = {
@@ -149,8 +153,15 @@ def _fuzzy_token_match(token: str, candidates: set[str], *, threshold: float = 0
 
 @lru_cache(maxsize=1)
 def _load_structured_catalog_items() -> tuple[dict, ...]:
-    payload = json.loads(Path("app/ai/knowledge/catalogo_produtos.json").read_text(encoding="utf-8"))
-    return tuple(payload.get("items", []))
+    catalog_paths = (
+        Path("app/ai/knowledge/catalogo_produtos.json"),
+        Path("app/ai/knowledge/catalogo_presentes_regulares.json"),
+    )
+    items: list[dict] = []
+    for catalog_path in catalog_paths:
+        payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+        items.extend(payload.get("items", []))
+    return tuple(items)
 
 
 class LocalCatalogGateway:
@@ -187,6 +198,11 @@ class LocalCatalogGateway:
             "pascoa_presentes": "pascoa_presentes",
             "mimos pascoa": "pascoa_presentes",
             "presentes pascoa": "pascoa_presentes",
+            "presente pascoa": "pascoa_presentes",
+            "mimos": "pascoa_presentes",
+            "presente de pascoa": "pascoa_presentes",
+            "presentes de pascoa": "pascoa_presentes",
+            "presentes especiais": "presentes",
             "encomenda": "encomendas",
             "encomendas": "encomendas",
             "personalizado": "encomendas",
@@ -194,9 +210,12 @@ class LocalCatalogGateway:
             "bolo personalizado": "encomendas",
             "bolos": "encomendas",
             "tortas": "encomendas",
-            "cestas": "encomendas",
-            "presentes": "encomendas",
-            "flores": "encomendas",
+            "cestas": "presentes",
+            "presentes": "presentes",
+            "flores": "presentes",
+            "cestas box": "presentes",
+            "cesta box": "presentes",
+            "caixinha de chocolate": "presentes",
         }
         return aliases.get(raw, "todas")
 
@@ -213,8 +232,8 @@ class LocalCatalogGateway:
         normalized = _normalize_text(catalog or "auto")
         aliases = {
             "auto": ("cafeteria", "pascoa", "pascoa_presentes"),
-            "todos": ("cafeteria", "pascoa", "pascoa_presentes"),
-            "todas": ("cafeteria", "pascoa", "pascoa_presentes"),
+            "todos": ("cafeteria", "pascoa", "pascoa_presentes", "presentes"),
+            "todas": ("cafeteria", "pascoa", "pascoa_presentes", "presentes"),
             "pronta_entrega": ("cafeteria", "pascoa"),
             "pronta entrega": ("cafeteria", "pascoa"),
             "cafeteria": ("cafeteria",),
@@ -222,9 +241,10 @@ class LocalCatalogGateway:
             "pascoa_presentes": ("pascoa_presentes",),
             "mimos pascoa": ("pascoa_presentes",),
             "presentes pascoa": ("pascoa_presentes",),
+            "presentes": ("presentes",),
             "encomendas": ("encomendas",),
         }
-        return aliases.get(normalized, ("cafeteria", "pascoa", "pascoa_presentes"))
+        return aliases.get(normalized, ("cafeteria", "pascoa", "pascoa_presentes", "presentes"))
 
     def _looks_like_simple_cake_lookup(self, query: str) -> bool:
         normalized = _normalize_text(query)
@@ -396,6 +416,17 @@ class LocalCatalogGateway:
                         "Use este retorno quando o cliente pedir presentes ou mimos de Páscoa. "
                         "Para composicao detalhada de um item especifico, consulte lookup_catalog_items. "
                         "Link oficial: https://pascoachoko.goomer.app"
+                    ),
+                )
+
+            if normalized == "presentes":
+                return self._build_structured_menu(
+                    catalogs=("presentes",),
+                    title="🎁 Presentes Especiais",
+                    intro=(
+                        "Use este retorno quando o cliente pedir cestas box, caixinha de chocolate, flores ou presentes do catalogo regular. "
+                        "Para composicao detalhada ou busca de item especifico, consulte lookup_catalog_items em `catalog=\"presentes\"`. "
+                        "Catalogo regular: https://bit.ly/presenteschoko"
                     ),
                 )
 

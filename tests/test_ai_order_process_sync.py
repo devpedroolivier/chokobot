@@ -7,8 +7,10 @@ os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
 from app.ai.tools import (
     CakeOrderSchema,
+    GiftOrderSchema,
     SweetOrderSchema,
     create_cake_order,
+    save_gift_order_draft_process,
     save_sweet_order_draft_process,
 )
 
@@ -88,6 +90,33 @@ class AIOrderProcessSyncTests(unittest.TestCase):
         self.assertEqual(process_calls[-1]["stage"], "aguardando_confirmacao")
         self.assertEqual(process_calls[-1]["status"], "active")
         self.assertEqual(process_calls[-1]["draft_payload"]["itens"], ["Brigadeiro Escama x10"])
+
+    def test_save_gift_order_draft_process_marks_cesta_process_as_active(self):
+        process_calls = []
+
+        class _ProcessRepository:
+            def upsert_process(self, **kwargs):
+                process_calls.append(kwargs)
+                return 12
+
+        order = GiftOrderSchema(
+            categoria="cesta_box",
+            produto="BOX M CAFE",
+            data_entrega="10/10/2030",
+            horario_retirada="15:00",
+            modo_recebimento="retirada",
+            pagamento={"forma": "PIX"},
+        )
+
+        with patch("app.ai.tools.get_customer_process_repository", return_value=_ProcessRepository()):
+            result = save_gift_order_draft_process("5511999999999", "Cliente", 7, order)
+
+        self.assertIn("rascunho", result.casefold())
+        self.assertEqual(process_calls[-1]["process_type"], "cesta_box_order")
+        self.assertEqual(process_calls[-1]["stage"], "aguardando_confirmacao")
+        self.assertEqual(process_calls[-1]["status"], "active")
+        self.assertEqual(process_calls[-1]["source"], "ai_gift_order")
+        self.assertEqual(process_calls[-1]["draft_payload"]["cesta_nome"], "BOX M CAFÉ")
 
 
 if __name__ == "__main__":
