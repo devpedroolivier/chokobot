@@ -168,3 +168,21 @@
 - **Formas de pagamento:** PIX, Cartao (debito/credito), Dinheiro
 - **Troco:** somente para pagamento em Dinheiro. PIX e Cartao nao usam troco
 - **Parcelamento:** somente no Cartao, acima de R$100,00, em ate 2x
+
+## Pós Compra
+
+### Status do Pedido
+- Os pedidos seguem o fluxo operacional do painel administrativo. Para saber onde ele está, informe o número de telefone/cpf usado e a data desejada; o time confere o status no painel e responde com caso ainda estiver agendado, em preparo ou pronto para retirada.
+- Evite inventar datas: confirme sempre o que aparece nos resumos do painel e repasse ao cliente usando termos como *pendente*, *em preparo*, *pronto para retirada* ou *entregue*.
+
+### Confirmação de PIX
+- Quando o cliente perguntar se o PIX foi recebido, peça o comprovante e os dados do pedido (nome/telefone/data) e informe que o financeiro confirma na sequência. O sistema registra o pagamento depois de validar o valor e a chave, portanto o bot deve reforçar que a confirmação oficial sai em até 15 minutos úteis.
+- Se houver divergência no valor ou a chave estiver incorreta, solicite o novo comprovante em imagem e indique o que será feito (corrigir valor, cadastrar recibo ou encaminhar para humano).
+
+### Cancelamento
+- O cancelamento depende da etapa do pedido. Peça o número do pedido, o motivo e a data desejada; caso o pedido ainda esteja em *aguardando confirmação* ou *em preparo*, ele pode ser cancelado internamente. Avise que pedidos já convertidos ou entregues precisam de revisão manual e uma equipe revisará o caso.
+- Evite dizer *simplesmente cancelo* sem conferir o estágio: consulte o painel e informe o prazo ou encaminhe para o atendimento humano se houver dúvidas operacionais.
+
+### Nota Fiscal
+- A nota fiscal é emitida após a confirmação do pedido e do pagamento. Para pedir a nota, confirme o CPF ou CNPJ, o número do pedido e o e-mail certo e informe que ela será enviada por e-mail em até um dia útil.
+- Quando o cliente quiser reemitir ou ajustar a nota, anote os dados completos e solicite um retorno humano; a IA só registra o pedido e repassa as instruções, sem gerar documentos fiscais.

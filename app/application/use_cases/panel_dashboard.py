@@ -11,7 +11,7 @@ from app.domain.repositories.customer_process_repository import (
 )
 from app.domain.repositories.customer_repository import CustomerRecord, CustomerRepository
 from app.domain.repositories.order_repository import OrderPanelItem
-from app.observability import snapshot_metrics
+from app.observability import should_track_phone, snapshot_metrics
 from app.services.estados import (
     ai_sessions,
     estados_atendimento,
@@ -565,6 +565,8 @@ def build_process_cards(
     cards: list[dict] = []
 
     for process in processes:
+        if not should_track_phone(process.phone):
+            continue
         customer = loaded_customers.get(process.phone)
         customer_name = customer.nome if customer else process.phone
         if looks_like_test_customer(customer_name):
@@ -711,6 +713,8 @@ def build_whatsapp_cards(
     cards: list[dict] = []
 
     for phone in phones:
+        if not should_track_phone(phone):
+            continue
         process = active_processes.get(phone)
         session = ai_sessions.get(phone)
         recent = recent_messages.get(phone) if phone in recent_messages else None
@@ -1127,13 +1131,120 @@ def build_dashboard_context(items: list[OrderPanelItem], *, today: date | None =
     }
 
 
-def _counter_total(name: str) -> int:
-    counters, _ = snapshot_metrics()
+def _counter_total(name: str, counters: dict | None = None) -> int:
+    if counters is None:
+        counters, _ = snapshot_metrics()
     total = 0.0
     for (metric_name, _labels), value in counters.items():
         if metric_name == name:
             total += value
     return int(total)
+
+
+def _format_reason_label(label: str | None) -> str:
+    cleaned = (label or "").strip()
+    if not cleaned:
+        return "Unknown"
+    return cleaned.replace("_", " ").title()
+
+
+def _breakdown_by_label(counters: dict, metric_name: str, label_key: str, total: int | None = None) -> list[dict]:
+    if not counters:
+        return []
+    totals: dict[str, int] = {}
+    for (name, labels), value in counters.items():
+        if name != metric_name:
+            continue
+        labels_map = dict(labels)
+        key = labels_map.get(label_key) or "unknown"
+        totals[key] = totals.get(key, 0) + int(value)
+    if not totals:
+        return []
+    sorted_items = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+    lines: list[dict] = []
+    for key, count in sorted_items:
+        if total:
+            percent = count / total if total else 0
+            formatted = f"{count} ({percent:.0%})"
+        else:
+            formatted = str(count)
+        lines.append({"label": _format_reason_label(key), "value": formatted})
+    return lines
+
+
+def _sum_counters(counters: dict, metric_name: str, **label_filters: str) -> int:
+    total = 0
+    for (name, labels), value in counters.items():
+        if name != metric_name:
+            continue
+        labels_map = dict(labels)
+        if all(labels_map.get(key) == val for key, val in label_filters.items()):
+            total += int(value)
+    return total
+
+
+def _build_handoff_reason_breakdown(counters: dict) -> list[dict]:
+    total = _sum_counters(counters, "ai_human_guard_handoffs_total")
+    return _breakdown_by_label(counters, "ai_human_guard_handoffs_total", "reason", total=total)
+
+
+def _build_post_purchase_failure_breakdown(counters: dict) -> list[dict]:
+    total = _sum_counters(counters, "ai_post_purchase_fallback_total")
+    return _breakdown_by_label(counters, "ai_post_purchase_fallback_total", "failure_reason", total=total)
+
+
+def _format_percentage(rate: float | None) -> str:
+    if rate is None:
+        return "—"
+    return f"{rate:.0%}"
+
+
+def _build_operational_metrics(counters: dict) -> list[dict]:
+    fallback_total = _sum_counters(counters, "ai_post_purchase_fallback_total")
+    fallback_failure = _sum_counters(counters, "ai_post_purchase_fallback_total", outcome="failure")
+    fallback_success = _sum_counters(counters, "ai_post_purchase_fallback_total", outcome="success")
+    runs_started = _sum_counters(counters, "ai_runs_total", stage="started")
+    human_handoffs = _sum_counters(counters, "ai_human_guard_handoffs_total")
+
+    failure_rate = None
+    success_rate = None
+    if fallback_total:
+        failure_rate = fallback_failure / fallback_total
+        success_rate = fallback_success / fallback_total
+
+    resolution_without_human_rate = None
+    if runs_started:
+        resolution_without_human_rate = max(0.0, 1 - min(human_handoffs, runs_started) / runs_started)
+
+    metrics: list[dict] = []
+    metrics.append(
+        {
+            "label": "Taxa de falha no fallback transacional",
+            "value": _format_percentage(failure_rate),
+            "hint": fallback_total
+                and f"{fallback_failure}/{fallback_total} falha{'' if fallback_failure == 1 else 's'}"
+                or "Sem dados",
+        }
+    )
+    metrics.append(
+        {
+            "label": "Taxa de resolução de pós-compra",
+            "value": _format_percentage(success_rate),
+            "hint": fallback_total
+                and f"{fallback_success}/{fallback_total} atendido(s) automaticamente"
+                or "Sem dados",
+        }
+    )
+    metrics.append(
+        {
+            "label": "Taxa de resolução sem humano",
+            "value": _format_percentage(resolution_without_human_rate),
+            "hint": runs_started
+                and f"{max(runs_started - human_handoffs, 0)}/{runs_started} sem handoff humano"
+                or "Sem dados",
+        }
+    )
+    return metrics
 
 
 def build_sync_overview(
@@ -1149,7 +1260,8 @@ def build_sync_overview(
         if card.get("stage_slug") in {"aguardando_confirmacao", "pagamento_pendente"}
     ]
     handoff_cards = [card for card in whatsapp_cards if card.get("is_human_handoff")]
-    blocked_attempts = _counter_total("ai_order_confirmation_blocks_total")
+    counters, _ = snapshot_metrics()
+    blocked_attempts = _counter_total("ai_order_confirmation_blocks_total", counters)
 
     alerts: list[dict] = []
     if blocked_attempts:
@@ -1185,6 +1297,12 @@ def build_sync_overview(
             }
         )
 
+    telemetry = {
+        "handoffs_by_reason": _build_handoff_reason_breakdown(counters),
+        "post_purchase_fallbacks": _build_post_purchase_failure_breakdown(counters),
+        "operational_metrics": _build_operational_metrics(counters),
+    }
+
     return {
         "metrics": [
             {
@@ -1213,6 +1331,7 @@ def build_sync_overview(
             },
         ],
         "alerts": alerts,
+        "telemetry": telemetry,
     }
 
 

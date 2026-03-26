@@ -46,6 +46,40 @@ class PanelSyncOverviewTests(unittest.TestCase):
         self.assertEqual(metrics["Handoff humano"], "1")
         self.assertEqual(len(overview["alerts"]), 3)
         self.assertIn("bloqueadas", overview["alerts"][0]["description"])
+        telemetry = overview["telemetry"]
+        self.assertIsInstance(telemetry, dict)
+        self.assertEqual(telemetry["handoffs_by_reason"], [])
+        self.assertEqual(telemetry["post_purchase_fallbacks"], [])
+        self.assertEqual(len(telemetry["operational_metrics"]), 3)
+        self.assertTrue(all((metric["value"] == "—" for metric in telemetry["operational_metrics"])))
+
+    def test_build_sync_overview_reports_telemetry_percentages(self):
+        increment_counter("ai_human_guard_handoffs_total", reason="customer_request", agent="CakeOrderAgent")
+        increment_counter("ai_runs_total", stage="started", agent="TriageAgent")
+        increment_counter("ai_runs_total", stage="started", agent="TriageAgent")
+        increment_counter("ai_post_purchase_fallback_total", outcome="success", topic="status", failure_reason="success")
+        increment_counter("ai_post_purchase_fallback_total", outcome="failure", topic="status", failure_reason="order_not_found")
+
+        process_cards = []
+        whatsapp_cards = []
+
+        overview = build_sync_overview(
+            process_cards,
+            whatsapp_cards,
+            confirmed_orders_count=0,
+        )
+
+        metrics = overview["telemetry"]["operational_metrics"]
+        failure_metric = next((metric for metric in metrics if metric["label"].startswith("Taxa de falha")), None)
+        resolution_metric = next((metric for metric in metrics if metric["label"].startswith("Taxa de resolução de pós-compra")), None)
+        human_metric = next((metric for metric in metrics if metric["label"].startswith("Taxa de resolução sem humano")), None)
+
+        self.assertIsNotNone(failure_metric)
+        self.assertEqual(failure_metric["value"], "50%")
+        self.assertIsNotNone(resolution_metric)
+        self.assertEqual(resolution_metric["value"], "50%")
+        self.assertIsNotNone(human_metric)
+        self.assertEqual(human_metric["value"], "50%")
 
 
 if __name__ == "__main__":

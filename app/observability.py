@@ -17,6 +17,27 @@ _histogram_metrics: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, floa
     lambda: {"count": 0.0, "sum": 0.0}
 )
 
+_TEST_PHONE_VARIANTS = frozenset({"5511888888888", "11888888888"})
+
+
+def normalize_tracking_phone(phone: str | None) -> str:
+    raw_value = str(phone or "").strip()
+    if not raw_value:
+        return ""
+    return "".join(char for char in raw_value if char.isdigit())
+
+
+def should_track_phone(phone: str | None) -> bool:
+    normalized = normalize_tracking_phone(phone)
+    return not normalized or normalized not in _TEST_PHONE_VARIANTS
+
+
+def normalize_reason_label(value: str | None, default: str = "unknown") -> str:
+    normalized = (value or "").strip()
+    if normalized:
+        return normalized
+    return default
+
 
 def set_request_id(request_id: str | None = None) -> str:
     value = request_id or uuid.uuid4().hex[:12]

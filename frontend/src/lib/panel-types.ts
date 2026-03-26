@@ -11,6 +11,12 @@ export type Alert = {
   description: string;
 };
 
+export type TelemetrySnapshot = {
+  handoffs_by_reason: Metric[];
+  post_purchase_fallbacks: Metric[];
+  operational_metrics: Metric[];
+};
+
 export type ConversationMessage = {
   role: "cliente" | "ia" | "contexto" | string;
   actor_label: string;
@@ -121,6 +127,7 @@ export type PanelSnapshot = {
   sync_overview: {
     metrics: Metric[];
     alerts: Alert[];
+    telemetry?: TelemetrySnapshot;
   };
 };
 

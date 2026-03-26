@@ -46,7 +46,15 @@ class PanelSnapshotPayloadTests(unittest.TestCase):
                     "owner_label": "Ação do bot",
                 }
             ],
-            sync_overview={"metrics": [], "alerts": []},
+            sync_overview={
+                "metrics": [],
+                "alerts": [],
+                "telemetry": {
+                    "handoffs_by_reason": [],
+                    "post_purchase_fallbacks": [],
+                    "operational_metrics": [],
+                },
+            },
         )
 
         self.assertIn("dashboard", payload)

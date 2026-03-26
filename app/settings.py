@@ -81,6 +81,8 @@ class AppSettings:
     http_timeout_read: int
     http_max_retries: int
     http_backoff_factor: float
+    order_support_db_path: str
+    order_support_invoice_email: str
 
     @property
     def zapi_endpoint_text(self) -> str:
@@ -136,5 +138,7 @@ def get_settings() -> AppSettings:
         http_timeout_connect=max(1, _env_int("HTTP_TIMEOUT_CONNECT", 5)),
         http_timeout_read=max(1, _env_int("HTTP_TIMEOUT_READ", 20)),
         http_max_retries=max(1, _env_int("HTTP_MAX_RETRIES", 3)),
-        http_backoff_factor=max(0.0, _env_float("HTTP_BACKOFF_FACTOR", 1.0)),
+    http_backoff_factor=max(0.0, _env_float("HTTP_BACKOFF_FACTOR", 1.0)),
+        order_support_db_path=_env_str("ORDER_SUPPORT_DB_PATH", db_path),
+        order_support_invoice_email=_env_str("ORDER_SUPPORT_INVOICE_EMAIL", "financeiro@chokodelicia.com"),
     )

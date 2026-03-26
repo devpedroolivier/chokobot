@@ -22,7 +22,12 @@ const EMPTY_SNAPSHOT: PanelSnapshot = {
   whatsapp_cards: [],
   sync_overview: {
     metrics: [],
-    alerts: []
+    alerts: [],
+    telemetry: {
+      handoffs_by_reason: [],
+      post_purchase_fallbacks: [],
+      operational_metrics: [],
+    },
   }
 };
 

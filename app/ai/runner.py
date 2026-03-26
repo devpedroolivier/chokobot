@@ -23,15 +23,17 @@ from app.ai.policies import (
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
     requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
-    should_force_gift_context_handoff as _should_force_gift_context_handoff,
+    requests_post_purchase_topic as _requests_post_purchase_topic,
+    should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
+    requests_opt_out as _requests_opt_out,
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
 )
 from app.services.store_schedule import resolve_service_date_context
 from app.ai.tool_execution import handle_tool_call
 from app.ai.tool_registry import build_openai_tools
-from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE
+from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE, OPT_OUT_MESSAGE
 from app.ai.tools import (
     create_cafeteria_order,
     create_cake_order,
@@ -45,7 +47,8 @@ from app.ai.tools import (
     lookup_catalog_items,
     save_learning,
 )
-from app.observability import increment_counter, log_event, observe_duration
+from app.ai.order_support import DEFAULT_ORDER_SUPPORT, OrderSupportService
+from app.observability import increment_counter, log_event, normalize_reason_label, observe_duration, should_track_phone
 from app.services.estados import ai_sessions
 from app.settings import get_settings
 
@@ -62,6 +65,90 @@ _PAYMENT_FORMS = {
     "dinheiro": "Dinheiro",
 }
 _REMOVABLE_ADDITIONALS = ("morango", "ameixa", "nozes", "cereja", "abacaxi")
+
+POST_PURCHASE_MESSAGES = {
+    "status": (
+        "Para acompanhar o status do seu pedido, informe o telefone ou o nome usado e a data desejada. "
+        "O painel operacional acompanha as etapas pendente, em preparo, pronto para retirada e entregue, "
+        "então a resposta oficial vem da equipe humana em poucos minutos."
+    ),
+    "pix": (
+        "Se quiser confirmar o PIX, envie o comprovante em imagem com o valor e a chave usada. "
+        "O financeiro valida o pagamento e informa assim que o valor for reconhecido no sistema."
+    ),
+    "cancel": (
+        "Para cancelar, nos diga o número do pedido, o motivo e a data desejada. "
+        "Se o pedido ainda estiver em coleta, conseguimos cancelar no painel; caso contrário, a equipe humana revisará."
+    ),
+    "invoice": (
+        "Para pedir a nota fiscal, confirme CPF ou CNPJ e o número do pedido. "
+        "A nota é emitida após a confirmação do pagamento e enviada por e-mail em até um dia útil."
+    ),
+}
+
+
+def _should_record_for_phone(telefone: str | None) -> bool:
+    return should_track_phone(telefone)
+
+
+def _maybe_increment_counter(telefone: str | None, name: str, **labels) -> None:
+    if not _should_record_for_phone(telefone):
+        return
+    increment_counter(name, **labels)
+
+
+def _maybe_log_event(telefone: str | None, event: str, **fields) -> None:
+    if not _should_record_for_phone(telefone):
+        return
+    log_event(event, **fields)
+
+
+def _phone_hash(telefone: str | None) -> str:
+    return telefone[-4:] if telefone else "anon"
+
+
+def _record_human_handoff_metrics(
+    telefone: str | None,
+    agent: str,
+    reason_label: str,
+    event_name: str,
+) -> None:
+    normalized_reason = normalize_reason_label(reason_label)
+    _maybe_increment_counter(
+        telefone,
+        "ai_human_guard_handoffs_total",
+        agent=agent,
+        reason=normalized_reason,
+    )
+    _maybe_log_event(
+        telefone,
+        event_name,
+        agent=agent,
+        handoff_reason=normalized_reason,
+        phone_hash=_phone_hash(telefone),
+    )
+
+
+def _respond_with_order_support(topic: str, telefone: str | None, service: OrderSupportService) -> str:
+    handled, message, failure_reason = service.handle(topic, telefone)
+    outcome = "success" if handled else "failure"
+    failure_label = "success" if handled else normalize_reason_label(failure_reason)
+    _maybe_increment_counter(
+        telefone,
+        "ai_post_purchase_fallback_total",
+        topic=topic,
+        outcome=outcome,
+        failure_reason=failure_label,
+    )
+    _maybe_log_event(
+        telefone,
+        "ai_post_purchase_flow_result",
+        topic=topic,
+        outcome=outcome,
+        failure_reason=failure_label,
+        phone_hash=_phone_hash(telefone),
+    )
+    return message or POST_PURCHASE_MESSAGES.get(topic, "")
 
 
 @dataclass(frozen=True)
@@ -405,11 +492,26 @@ async def request_ai_completion(ai_client, *, messages: list[dict], tools_config
     )
 
 
-def _finalize_ai_run(*, start_time: float, session: dict, iteration_count: int, prompt_tokens: int, completion_tokens: int) -> None:
+def _finalize_ai_run(
+    *,
+    start_time: float,
+    session: dict,
+    iteration_count: int,
+    prompt_tokens: int,
+    completion_tokens: int,
+    telefone: str | None,
+) -> None:
     end_time = time.time()
-    observe_duration("ai_run_duration_seconds", end_time - start_time, agent=session["current_agent"])
-    increment_counter("ai_runs_total", stage="completed", agent=session["current_agent"])
-    log_event(
+    if _should_record_for_phone(telefone):
+        observe_duration("ai_run_duration_seconds", end_time - start_time, agent=session["current_agent"])
+    _maybe_increment_counter(
+        telefone,
+        "ai_runs_total",
+        stage="completed",
+        agent=session["current_agent"],
+    )
+    _maybe_log_event(
+        telefone,
         "ai_run_completed",
         agent=session["current_agent"],
         iterations=iteration_count,
@@ -426,18 +528,22 @@ async def process_message_with_ai(
     now: datetime | None = None,
     ai_client=None,
     runtime: AIRuntime | None = None,
+    order_support_service: OrderSupportService | None = None,
 ) -> str:
-    """Função principal que o handler vai chamar para processar a mensagem pela IA."""
+    """Função principal que o handler vai chamar para processar a mensagem pela IA.
+    A camada de suporte transacional pode ser substituída via `order_support_service` para testes ou adapters."""
     start_time = time.time()
     session = get_or_create_session(telefone)
     runtime = runtime or get_default_ai_runtime()
     active_client = ai_client or get_ai_client()
+    support_service = order_support_service or DEFAULT_ORDER_SUPPORT
 
     sanitized_messages, dropped_messages = _sanitize_session_messages(list(session.get("messages", [])))
     if dropped_messages:
         session["messages"] = sanitized_messages
         save_session(telefone, session)
-        log_event(
+        _maybe_log_event(
+            telefone,
             "ai_session_history_repaired",
             phone_hash=telefone[-4:] if telefone else "anon",
             agent=session.get("current_agent", "unknown"),
@@ -454,49 +560,103 @@ async def process_message_with_ai(
     _update_conversation_correction_context(session, text)
     save_session(telefone, session)
 
+    if _requests_opt_out(text):
+        previous_agent = session.get("current_agent", "TriageAgent")
+        session["current_agent"] = "TriageAgent"
+        session["messages"] = []
+        session.pop("seasonal_context", None)
+        session.pop("service_date_context", None)
+        session.pop("conversation_correction_context", None)
+        save_session(telefone, session)
+        _maybe_increment_counter(telefone, "ai_opt_out_requests_total", agent=previous_agent)
+        _maybe_log_event(
+            telefone,
+            "ai_opt_out_requested",
+            previous_agent=previous_agent,
+            phone_hash=telefone[-4:] if telefone else "anon",
+        )
+        return OPT_OUT_MESSAGE
+
+    post_purchase_topic = _requests_post_purchase_topic(text)
+    if post_purchase_topic:
+        _maybe_increment_counter(
+            telefone,
+            "ai_post_purchase_flows_total",
+            topic=post_purchase_topic,
+        )
+        _maybe_log_event(
+            telefone,
+            "ai_post_purchase_flow",
+            topic=post_purchase_topic,
+            phone_hash=_phone_hash(telefone),
+        )
+        return _respond_with_order_support(post_purchase_topic, telefone, support_service)
+
     if _requests_human_handoff(text):
+        previous_agent = session.get("current_agent", "TriageAgent")
         runtime.escalate_to_human(telefone, "Cliente pediu humano")
         session["messages"] = []
         session.pop("seasonal_context", None)
         session.pop("service_date_context", None)
         session.pop("conversation_correction_context", None)
         save_session(telefone, session)
-        increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
-        log_event("ai_human_guard_handoff", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
+        _record_human_handoff_metrics(
+            telefone,
+            previous_agent,
+            "customer_request",
+            "ai_human_guard_handoff",
+        )
         return HUMAN_HANDOFF_MESSAGE
 
     if _requests_easter_ready_delivery_handoff(text):
+        previous_agent = session.get("current_agent", "TriageAgent")
         runtime.escalate_to_human(telefone, "Ovos pronta entrega exigem atendimento humano")
         session["messages"] = []
         session.pop("seasonal_context", None)
         session.pop("service_date_context", None)
         session.pop("conversation_correction_context", None)
         save_session(telefone, session)
-        increment_counter("ai_human_guard_handoffs_total", agent=session["current_agent"])
-        log_event(
+        _record_human_handoff_metrics(
+            telefone,
+            previous_agent,
+            "easter_ready_delivery",
             "ai_easter_ready_delivery_handoff",
-            phone_hash=telefone[-4:] if telefone else "anon",
-            agent=session["current_agent"],
         )
         return HUMAN_HANDOFF_MESSAGE
 
     if _requests_easter_catalog(text):
         session["seasonal_context"] = "easter"
         save_session(telefone, session)
-        log_event("ai_easter_catalog_link_sent", phone_hash=telefone[-4:] if telefone else "anon")
+        _maybe_log_event(
+            telefone,
+            "ai_easter_catalog_link_sent",
+            phone_hash=telefone[-4:] if telefone else "anon",
+        )
         return EASTER_CATALOG_MESSAGE
 
     if _should_repeat_easter_catalog_link(session, text):
-        log_event("ai_easter_catalog_context_followup", phone_hash=telefone[-4:] if telefone else "anon")
+        _maybe_log_event(
+            telefone,
+            "ai_easter_catalog_context_followup",
+            phone_hash=telefone[-4:] if telefone else "anon",
+        )
         return EASTER_CATALOG_MESSAGE
 
+    forced_same_day_cafeteria = False
     if _should_force_same_day_cafeteria_handoff(session, text, now):
         previous_agent = session["current_agent"]
         session["current_agent"] = "CafeteriaAgent"
         refresh_system_prompt(session, AGENTS_MAP["CafeteriaAgent"], now, runtime)
         save_session(telefone, session)
-        increment_counter("ai_time_guard_handoffs_total", from_agent=previous_agent, to_agent="CafeteriaAgent")
-        log_event(
+        forced_same_day_cafeteria = True
+        _maybe_increment_counter(
+            telefone,
+            "ai_time_guard_handoffs_total",
+            from_agent=previous_agent,
+            to_agent="CafeteriaAgent",
+        )
+        _maybe_log_event(
+            telefone,
             "ai_time_guard_handoff",
             from_agent=previous_agent,
             to_agent="CafeteriaAgent",
@@ -504,23 +664,34 @@ async def process_message_with_ai(
             current_time=_normalize_reference_time(now).strftime("%Y-%m-%d %H:%M:%S %z"),
         )
 
-    forced_gift_agent = _should_force_gift_context_handoff(session, text)
-    if forced_gift_agent:
+    forced_agent = None if forced_same_day_cafeteria else _should_force_basic_context_switch(session, text)
+    if forced_agent:
         previous_agent = session["current_agent"]
-        session["current_agent"] = forced_gift_agent
-        refresh_system_prompt(session, AGENTS_MAP[forced_gift_agent], now, runtime)
+        session["current_agent"] = forced_agent
+        refresh_system_prompt(session, AGENTS_MAP[forced_agent], now, runtime)
         save_session(telefone, session)
-        increment_counter("ai_context_switch_handoffs_total", from_agent=previous_agent, to_agent=forced_gift_agent)
-        log_event(
+        _maybe_increment_counter(
+            telefone,
+            "ai_context_switch_handoffs_total",
+            from_agent=previous_agent,
+            to_agent=forced_agent,
+        )
+        _maybe_log_event(
+            telefone,
             "ai_context_switch_handoff",
             from_agent=previous_agent,
-            to_agent=forced_gift_agent,
+            to_agent=forced_agent,
             phone_hash=telefone[-4:] if telefone else "anon",
-            topic="gifts",
+            topic=forced_agent,
         )
     
-    log_event("ai_run_started", phone_hash=telefone[-4:] if telefone else "anon", agent=session["current_agent"])
-    increment_counter("ai_runs_total", stage="started", agent=session["current_agent"])
+    _maybe_log_event(
+        telefone,
+        "ai_run_started",
+        phone_hash=telefone[-4:] if telefone else "anon",
+        agent=session["current_agent"],
+    )
+    _maybe_increment_counter(telefone, "ai_runs_total", stage="started", agent=session["current_agent"])
     
     total_prompt_tokens = 0
     total_completion_tokens = 0
@@ -570,8 +741,13 @@ async def process_message_with_ai(
         ):
             time_conflict_retry_used = True
             transient_system_note = _build_time_conflict_retry_instruction(now)
-            increment_counter("ai_time_guard_retries_total", agent=session["current_agent"])
-            log_event(
+            _maybe_increment_counter(
+                telefone,
+                "ai_time_guard_retries_total",
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
                 "ai_time_guard_retry",
                 agent=session["current_agent"],
                 phone_hash=telefone[-4:] if telefone else "anon",
@@ -590,8 +766,13 @@ async def process_message_with_ai(
         ):
             cafeteria_specificity_retry_used = True
             transient_system_note = _build_cafeteria_specificity_retry_instruction(text)
-            increment_counter("ai_cafeteria_specificity_retries_total", agent=session["current_agent"])
-            log_event(
+            _maybe_increment_counter(
+                telefone,
+                "ai_cafeteria_specificity_retries_total",
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
                 "ai_cafeteria_specificity_retry",
                 agent=session["current_agent"],
                 phone_hash=telefone[-4:] if telefone else "anon",
@@ -606,13 +787,15 @@ async def process_message_with_ai(
             if _response_claims_order_saved(msg.content):
                 draft_tool_result = _latest_draft_tool_result(session)
                 if draft_tool_result:
-                    log_event(
+                    _maybe_log_event(
+                        telefone,
                         "ai_persistence_claim_blocked",
                         agent=session["current_agent"],
                         phone_hash=telefone[-4:] if telefone else "anon",
                         reason="draft_process_only",
                     )
-                    increment_counter(
+                    _maybe_increment_counter(
+                        telefone,
                         "ai_persistence_claim_blocks_total",
                         agent=session["current_agent"],
                         reason="draft_process_only",
@@ -623,6 +806,7 @@ async def process_message_with_ai(
                         iteration_count=iteration_count,
                         prompt_tokens=total_prompt_tokens,
                         completion_tokens=total_completion_tokens,
+                        telefone=telefone,
                     )
                     return draft_tool_result
             _finalize_ai_run(
@@ -631,6 +815,7 @@ async def process_message_with_ai(
                 iteration_count=iteration_count,
                 prompt_tokens=total_prompt_tokens,
                 completion_tokens=total_completion_tokens,
+                telefone=telefone,
             )
             return msg.content
             
@@ -639,8 +824,19 @@ async def process_message_with_ai(
             function_name = tool_call.function.name
             arguments = json.loads(tool_call.function.arguments)
             
-            increment_counter("ai_tool_calls_total", tool_name=function_name, agent=session["current_agent"])
-            log_event("ai_tool_called", tool_name=function_name, agent=session["current_agent"])
+            _maybe_increment_counter(
+                telefone,
+                "ai_tool_calls_total",
+                tool_name=function_name,
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
+                "ai_tool_called",
+                tool_name=function_name,
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
             should_return, tool_result = handle_tool_call(
                 runtime=runtime,
                 function_name=function_name,
@@ -654,11 +850,21 @@ async def process_message_with_ai(
             )
             if should_return:
                 if function_name == "transfer_to_agent":
-                    log_event("ai_handoff", to_agent=session["current_agent"])
+                    _maybe_log_event(
+                        telefone,
+                        "ai_handoff",
+                        to_agent=session["current_agent"],
+                        phone_hash=telefone[-4:] if telefone else "anon",
+                    )
                 return tool_result
 
             if function_name == "transfer_to_agent":
-                log_event("ai_handoff", to_agent=session["current_agent"])
+                _maybe_log_event(
+                    telefone,
+                    "ai_handoff",
+                    to_agent=session["current_agent"],
+                    phone_hash=telefone[-4:] if telefone else "anon",
+                )
 
             # Adiciona o resultado da ferramenta na memória para a IA "ler"
             session["messages"].append({
@@ -670,7 +876,8 @@ async def process_message_with_ai(
             save_session(telefone, session)
 
             if _is_draft_order_result(str(tool_result)):
-                log_event(
+                _maybe_log_event(
+                    telefone,
                     "ai_draft_order_response_short_circuit",
                     agent=session["current_agent"],
                     phone_hash=telefone[-4:] if telefone else "anon",
@@ -682,5 +889,6 @@ async def process_message_with_ai(
                     iteration_count=iteration_count,
                     prompt_tokens=total_prompt_tokens,
                     completion_tokens=total_completion_tokens,
+                    telefone=telefone,
                 )
                 return str(tool_result)

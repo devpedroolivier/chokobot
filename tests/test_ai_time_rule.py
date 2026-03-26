@@ -18,7 +18,10 @@ class _AsyncOpenAIStub:
 sys.modules.setdefault("openai", SimpleNamespace(AsyncOpenAI=_AsyncOpenAIStub))
 
 from app.ai import runner
+from app.ai.order_support import MockOrderSupportAdapter, OrderRecord, OrderSupportService
+from app.ai.runner import POST_PURCHASE_MESSAGES
 from app.observability import clear_metrics
+from app.welcome_message import OPT_OUT_MESSAGE
 
 
 def _tool_call(name: str, arguments: dict, tool_call_id: str = "tool-1"):
@@ -297,6 +300,158 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         mocked_escalate.assert_called_once_with("5516997777777", "Cliente pediu humano")
         fake_client.chat.completions.create.assert_not_awaited()
         self.assertEqual(runner.CONVERSATIONS["5516997777777"]["messages"], [])
+
+    async def test_process_message_short_circuits_opt_out_without_human_handoff(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+        runner.CONVERSATIONS["5516991212121"] = {
+            "current_agent": "CakeOrderAgent",
+            "messages": [{"role": "system", "content": "system"}],
+            "seasonal_context": "easter",
+            "service_date_context": {"date": "2026-03-28"},
+            "conversation_correction_context": {"modo_recebimento": "retirada"},
+        }
+
+        with patch.object(runner, "client", fake_client):
+            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
+                reply = await runner.process_message_with_ai(
+                    "5516991212121",
+                    "quero desativar o bot",
+                    "Teste",
+                    99,
+                )
+
+        self.assertEqual(reply, OPT_OUT_MESSAGE)
+        mocked_escalate.assert_not_called()
+        fake_client.chat.completions.create.assert_not_awaited()
+        self.assertEqual(
+            runner.CONVERSATIONS["5516991212121"],
+            {"current_agent": "TriageAgent", "messages": []},
+        )
+
+    async def test_process_message_switches_from_sweet_to_cake_when_topic_changes(self):
+        telefone = "5516995656565"
+        runner.CONVERSATIONS[telefone] = {"messages": [], "current_agent": "SweetOrderAgent"}
+        create_mock = AsyncMock(return_value=_response(_message("Posso montar seu bolo sob encomenda.")))
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "Quero um bolo B4 para sábado",
+                "Vania",
+                99,
+            )
+
+        self.assertEqual(reply, "Posso montar seu bolo sob encomenda.")
+        self.assertEqual(runner.CONVERSATIONS[telefone]["current_agent"], "CakeOrderAgent")
+        first_messages = create_mock.await_args.kwargs["messages"]
+        self.assertIn("especialista em Bolos Sob Encomenda", first_messages[0]["content"])
+
+    async def test_process_message_switches_from_cake_to_sweet_when_topic_changes(self):
+        telefone = "5516993434343"
+        runner.CONVERSATIONS[telefone] = {"messages": [], "current_agent": "CakeOrderAgent"}
+        create_mock = AsyncMock(return_value=_response(_message("Posso seguir com os docinhos sob encomenda.")))
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "Quero 50 brigadeiros para sábado",
+                "Vania",
+                99,
+            )
+
+        self.assertEqual(reply, "Posso seguir com os docinhos sob encomenda.")
+        self.assertEqual(runner.CONVERSATIONS[telefone]["current_agent"], "SweetOrderAgent")
+        first_messages = create_mock.await_args.kwargs["messages"]
+        self.assertIn("especialista em Doces Sob Encomenda", first_messages[0]["content"])
+
+    async def test_process_message_handles_post_purchase_queries(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+        support_service = OrderSupportService(
+            MockOrderSupportAdapter(
+                [
+                    OrderRecord(phone="5516990000001", order_id="1001", status="pendente", pix_confirmed=False, cancelable=True, invoice_email="cliente@example.com"),
+                    OrderRecord(phone="5516990000002", order_id="1002", status="em_preparo", pix_confirmed=True, cancelable=False, invoice_email="cliente2@example.com"),
+                ]
+            ),
+        )
+        test_cases = [
+            (
+                "5516990000001",
+                "Qual o status do pedido?",
+                "O pedido 1001 está com status *pendente*. O painel pode confirmar se já foi preparado.",
+            ),
+            (
+                "5516990000002",
+                "Confirma o PIX do pedido 123?",
+                "Recebemos e registramos o PIX obrigatório para esse pedido.",
+            ),
+            (
+                "5516990000001",
+                "Preciso cancelar a encomenda do sábado",
+                "Esse pedido ainda pode ser cancelado pelo painel operacional. Informe o motivo para finalizar o cancelamento.",
+            ),
+            (
+                "5516990000002",
+                "Quero a nota fiscal do bolo",
+                "A nota fiscal do pedido 1002 será enviada para cliente2@example.com em até um dia útil.",
+            ),
+        ]
+
+        with patch.object(runner, "client", fake_client):
+            for phone, text, expected in test_cases:
+                runner.CONVERSATIONS[phone] = {"messages": [], "current_agent": "CakeOrderAgent"}
+                reply = await runner.process_message_with_ai(
+                    phone,
+                    text,
+                    "Teste",
+                    99,
+                    order_support_service=support_service,
+                )
+                self.assertEqual(reply, expected)
+
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_logs_post_purchase_failure_when_support_falls_back(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        class FakeSupport:
+            def handle(self, topic, phone, **_kwargs):
+                return False, "", "order_not_found"
+
+        with patch.object(runner, "client", fake_client), patch.object(runner, "increment_counter") as counter_mock:
+            reply = await runner.process_message_with_ai(
+                "5516990000003",
+                "Qual o status do pedido?",
+                "Teste",
+                99,
+                order_support_service=FakeSupport(),
+            )
+
+        self.assertEqual(reply, POST_PURCHASE_MESSAGES["status"])
+        fake_client.chat.completions.create.assert_not_awaited()
+        fallback_calls = [
+            call
+            for call in counter_mock.call_args_list
+            if call.args and call.args[0] == "ai_post_purchase_fallback_total"
+        ]
+        self.assertTrue(fallback_calls)
+        failure_call = next(
+            (call for call in fallback_calls if call.kwargs.get("failure_reason") == "order_not_found"), None
+        )
+        self.assertIsNotNone(failure_call)
+        self.assertEqual(failure_call.kwargs.get("outcome"), "failure")
 
     async def test_process_message_short_circuits_when_order_stays_draft(self):
         create_mock = AsyncMock(

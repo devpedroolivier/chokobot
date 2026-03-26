@@ -1,14 +1,20 @@
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.ai.policies import (
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
+    requests_cake_order_topic,
     requests_easter_catalog,
     requests_easter_gift_topic,
     requests_easter_ready_delivery_handoff,
+    requests_post_purchase_topic,
     requests_regular_gift_topic,
     response_conflicts_with_cafeteria_specificity,
+    should_force_basic_context_switch,
     should_force_gift_context_handoff,
+    should_force_same_day_cafeteria_handoff,
 )
 
 
@@ -79,6 +85,58 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertEqual(
             should_force_gift_context_handoff({"current_agent": "GiftOrderAgent"}, "Quero ver presentes de Páscoa"),
             "KnowledgeAgent",
+        )
+
+    def test_requests_post_purchase_topic_detects_each_flow(self):
+        self.assertEqual(requests_post_purchase_topic("Qual o status do meu pedido?"), "status")
+        self.assertEqual(requests_post_purchase_topic("Confirma o PIX do pedido?"), "pix")
+        self.assertEqual(requests_post_purchase_topic("Quero cancelar a encomenda do sábado"), "cancel")
+        self.assertEqual(requests_post_purchase_topic("Preciso da nota fiscal do bolo"), "invoice")
+
+    def test_basic_context_switch_routes_between_supported_topics(self):
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "CakeOrderAgent"},
+                "Quero 50 brigadeiros para sábado",
+            ),
+            "SweetOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "SweetOrderAgent"},
+                "Quero um bolo B4 para sábado",
+            ),
+            "CakeOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "KnowledgeAgent"},
+                "Vocês têm cestas box?",
+            ),
+            "GiftOrderAgent",
+        )
+
+    def test_requests_cake_order_topic_ignores_cafeteria_and_easter_cases(self):
+        self.assertTrue(requests_cake_order_topic("Quero encomendar um bolo B4 para sábado"))
+        self.assertFalse(requests_cake_order_topic("Quero 50 brigadeiros para sábado"))
+        self.assertFalse(requests_cake_order_topic("Quero um cappuccino"))
+        self.assertFalse(requests_cake_order_topic("Quero ver o cardápio de Páscoa"))
+
+    def test_same_day_cafeteria_handoff_applies_to_supported_agents_after_cutoff(self):
+        now = datetime(2026, 3, 18, 11, 5, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        self.assertTrue(
+            should_force_same_day_cafeteria_handoff(
+                {"current_agent": "SweetOrderAgent"},
+                "Quero um bolo para hoje",
+                now,
+            )
+        )
+        self.assertFalse(
+            should_force_same_day_cafeteria_handoff(
+                {"current_agent": "CafeteriaAgent"},
+                "Quero um bolo para hoje",
+                now,
+            )
         )
 
 

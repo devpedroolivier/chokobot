@@ -17,8 +17,11 @@ from app.observability import (
     clear_request_id,
     get_request_id,
     increment_counter,
+    normalize_reason_label,
+    normalize_tracking_phone,
     observe_duration,
     render_metrics,
+    should_track_phone,
 )
 
 
@@ -78,6 +81,17 @@ class ObservabilityHardeningTests(unittest.TestCase):
         self.assertEqual(get_request_id(), "-")
         rendered = render_metrics()
         self.assertIn('http_requests_total{method="GET",path="/demo",status_code="200"} 1.0', rendered)
+
+    def test_should_track_phone_normalizes_known_test_number_variants(self):
+        self.assertEqual(normalize_tracking_phone("+55 11 88888-8888@c.us"), "5511888888888")
+        self.assertFalse(should_track_phone("+55 11 88888-8888"))
+        self.assertFalse(should_track_phone("11888888888"))
+        self.assertTrue(should_track_phone("5511999999999"))
+
+    def test_normalize_reason_label_formats_unknown_or_blank(self):
+        self.assertEqual(normalize_reason_label("  pix_missing "), "pix_missing")
+        self.assertEqual(normalize_reason_label(None), "unknown")
+        self.assertEqual(normalize_reason_label("", default="fallback"), "fallback")
 
 
 if __name__ == "__main__":

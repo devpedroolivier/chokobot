@@ -100,7 +100,7 @@ class PanelWhatsAppCardsTests(unittest.TestCase):
         self.assertEqual(cards[0]["messages"][0]["role"], "contexto")
 
     def test_build_whatsapp_cards_keeps_active_process_without_runtime_message(self):
-        telefone = "5511888888888"
+        telefone = "5511622222222"
 
         class _ProcessRepository:
             def list_active_processes(self):

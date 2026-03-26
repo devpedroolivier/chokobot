@@ -17,7 +17,7 @@ class PanelProcessCardsTests(unittest.TestCase):
                 return [
                     CustomerProcessRecord(
                         id=11,
-                        phone="5511888888888",
+                        phone="5511666666666",
                         customer_id=8,
                         process_type="delivery_order",
                         stage="coletando_endereco",
@@ -77,7 +77,7 @@ class PanelProcessCardsTests(unittest.TestCase):
 
         class _CustomerRepository:
             def get_customer_by_phone(self, phone: str):
-                if phone == "5511888888888":
+                if phone == "5511666666666":
                     return CustomerRecord(
                         id=8,
                         nome="Bia",
@@ -229,3 +229,44 @@ class PanelProcessCardsTests(unittest.TestCase):
         self.assertEqual(cards[0]["cliente_nome"], "Ana")
         self.assertEqual(customer_repository.bulk_calls, 1)
         self.assertEqual(customer_repository.single_calls, 0)
+
+    def test_build_process_cards_filters_test_phone_processes(self):
+        class _ProcessRepository:
+            def list_active_processes(self):
+                return [
+                    CustomerProcessRecord(
+                        id=99,
+                        phone="5511888888888",
+                        customer_id=99,
+                        process_type="delivery_order",
+                        stage="aguardando_confirmacao",
+                        status="active",
+                        source="legacy_delivery",
+                        draft_payload={
+                            "descricao": "Bolo teste",
+                            "data_entrega": "2026-03-26",
+                            "horario_retirada": "15:00",
+                            "pagamento": {"forma": "PIX"},
+                        },
+                        order_id=999,
+                        created_at="2026-03-23 16:00:00",
+                        updated_at="2026-03-23 16:30:00",
+                    )
+                ]
+
+        class _CustomerRepository:
+            def get_customer_by_phone(self, phone: str):
+                return CustomerRecord(
+                    id=99,
+                    nome="Teste",
+                    telefone=phone,
+                    criado_em="2026-03-20 10:00:00",
+                )
+
+        cards = build_process_cards(
+            _ProcessRepository(),
+            _CustomerRepository(),
+            now=datetime(2026, 3, 23, 17, 0, 0),
+        )
+
+        self.assertEqual(len(cards), 0)

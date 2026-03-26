@@ -302,6 +302,13 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
   const orderItems = columns.flatMap((column) => column.items);
   const activeOrderCount = orderItems.filter((item) => item.status_slug !== "entregue").length;
   const dueToday = orderItems.filter((item) => item.schedule_bucket === "today").length;
+  const telemetry = liveSnapshot.sync_overview.telemetry ?? {
+    handoffs_by_reason: [],
+    post_purchase_fallbacks: [],
+    operational_metrics: [],
+  };
+  const hasBreakdowns = telemetry.handoffs_by_reason.length > 0 || telemetry.post_purchase_fallbacks.length > 0;
+  const hasOperationalMetrics = telemetry.operational_metrics.length > 0;
 
   const visibleConversations = liveSnapshot.whatsapp_cards.filter((card) =>
     isConversationVisible(card, deferredSearch, filters.conversation),
@@ -410,6 +417,49 @@ export function DashboardShell({ snapshot, warning }: DashboardShellProps) {
               <p className="text-sm font-bold">{alert.title}</p>
               <p className="mt-1 text-sm opacity-85">{alert.description}</p>
             </article>
+          ))}
+        </section>
+      ) : null}
+
+      {hasBreakdowns ? (
+        <section className="mt-4 grid gap-4 lg:grid-cols-2">
+          <article className="rounded-[24px] border border-line bg-white px-4 py-4 shadow-panel">
+            <SectionTitle eyebrow="Telemetry" title="Handoff por motivo" tone="muted" />
+            <div className="mt-3 space-y-2">
+              {telemetry.handoffs_by_reason.length ? (
+                telemetry.handoffs_by_reason.map((entry) => (
+                  <div key={entry.label} className="flex justify-between text-sm text-cocoa">
+                    <span>{entry.label}</span>
+                    <span className="font-mono text-ink">{entry.value}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-cocoa/70">Nenhum handoff registrado</p>
+              )}
+            </div>
+          </article>
+          <article className="rounded-[24px] border border-line bg-white px-4 py-4 shadow-panel">
+            <SectionTitle eyebrow="Telemetry" title="Fallback pós-compra" tone="muted" />
+            <div className="mt-3 space-y-2">
+              {telemetry.post_purchase_fallbacks.length ? (
+                telemetry.post_purchase_fallbacks.map((entry) => (
+                  <div key={entry.label} className="flex justify-between text-sm text-cocoa">
+                    <span>{entry.label}</span>
+                    <span className="font-mono text-ink">{entry.value}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-cocoa/70">Nenhuma solicitação de pós-compra detectada</p>
+              )}
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {hasOperationalMetrics ? (
+        <section className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {telemetry.operational_metrics.map((metric) => (
+            <KPI key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone="accent" />
           ))}
         </section>
       ) : null}

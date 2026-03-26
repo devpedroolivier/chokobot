@@ -30,6 +30,10 @@ HUMAN_HANDOFF_MESSAGE = (
     "Um momento! Estou transferindo você para um dos nossos atendentes humanos. 👩‍🍳"
 )
 
+OPT_OUT_MESSAGE = (
+    "Tudo bem! O chat foi pausado. Quando quiser voltar, é só mandar \"voltar\" ou \"menu\" 😊"
+)
+
 BOT_REACTIVATED_MESSAGE = (
     "A Trufinha voltou por aqui 😊\n"
     "Me conta o que você está procurando."

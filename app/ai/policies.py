@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
+from functools import lru_cache
+from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -72,7 +75,6 @@ def requests_human_handoff(text: str) -> bool:
         r"\b(atendente|humano) real\b",
         r"\bme passa para (um )?(humano|atendente)\b",
         r"\btransfer(e|ir) .* (humano|atendente)\b",
-        r"\bdesativar (o )?(chat|bot)\b",
         r"\bquero (um )?humano\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
@@ -81,6 +83,63 @@ def requests_human_handoff(text: str) -> bool:
 def normalize_intent_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKD", text or "")
     return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+
+
+def requests_opt_out(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    patterns = (
+        r"\b(desativar|desligar|parar|pausar)\s+(o\s+)?(chat|bot)s?\b",
+        r"\bquero\s+(desativar|parar)\s+(o\s+)?(chat|bot)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+@lru_cache(maxsize=1)
+def _load_catalog_aliases() -> set[str]:
+    aliases: set[str] = set()
+    catalog_paths = (
+        Path("app/ai/knowledge/catalogo_produtos.json"),
+        Path("app/ai/knowledge/catalogo_presentes_regulares.json"),
+    )
+    for catalog_path in catalog_paths:
+        if not catalog_path.exists():
+            continue
+        payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+        for item in payload.get("items", []):
+            name = item.get("name")
+            if name:
+                aliases.add(normalize_intent_text(name))
+            for alias in item.get("aliases", []):
+                if alias:
+                    aliases.add(normalize_intent_text(alias))
+    return aliases
+
+
+def _mentions_catalog_item(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    aliases = _load_catalog_aliases()
+    return any(alias in normalized for alias in aliases)
+
+
+@lru_cache(maxsize=1)
+def _load_present_aliases() -> set[str]:
+    aliases: set[str] = set()
+    catalog_path = Path("app/ai/knowledge/catalogo_presentes_regulares.json")
+    if not catalog_path.exists():
+        return aliases
+    payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+    for item in payload.get("items", []):
+        name = item.get("name")
+        if name:
+            aliases.add(normalize_intent_text(name))
+        for alias in item.get("aliases", []):
+            if alias:
+                aliases.add(normalize_intent_text(alias))
+    return aliases
 
 
 def _mentions_non_easter_egg_context(normalized: str) -> bool:
@@ -106,6 +165,8 @@ def _mentions_specific_easter_item(normalized: str) -> bool:
 def requests_easter_catalog(text: str) -> bool:
     normalized = normalize_intent_text(text)
     if _mentions_non_easter_egg_context(normalized):
+        return False
+    if _mentions_catalog_item(text) and not re.search(r"\b(ovo|ovos|pascoa)\b", normalized):
         return False
     if re.search(r"\bpronta\s*entrega\b", normalized):
         return False
@@ -163,6 +224,9 @@ def requests_regular_gift_topic(text: str) -> bool:
         return False
     if "pascoa" in normalized:
         return False
+    present_aliases = _load_present_aliases()
+    if any(alias in normalized for alias in present_aliases):
+        return True
     patterns = (
         r"\bcesta(s)?\b",
         r"\bcesta(s)?\s+box\b",
@@ -175,6 +239,38 @@ def requests_regular_gift_topic(text: str) -> bool:
         r"\bpresente(s)?\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_post_purchase_topic(text: str) -> str | None:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return None
+
+    tokens = set(re.findall(r"[a-z0-9]+", normalized))
+    if not tokens:
+        return None
+
+    def _matches_any(*choices: str) -> bool:
+        return any(choice in tokens for choice in choices)
+
+    def _contains_fragment(fragment: str) -> bool:
+        return any(fragment in token for token in tokens)
+
+    if (_matches_any("status", "situacao") and _matches_any("pedido", "encomenda")):
+        return "status"
+    if "pix" in tokens and (
+        _contains_fragment("confirm")
+        or _matches_any("comprovante", "recebido")
+    ):
+        return "pix"
+    if (
+        (_contains_fragment("cancel") or _contains_fragment("desist") or _contains_fragment("devolv"))
+        and _matches_any("pedido", "encomenda")
+    ):
+        return "cancel"
+    if ("nota" in tokens and "fiscal" in tokens) or "nf" in tokens or _contains_fragment("fatura"):
+        return "invoice"
+    return None
 
 
 def requests_easter_gift_topic(text: str) -> bool:
@@ -192,6 +288,34 @@ def requests_easter_gift_topic(text: str) -> bool:
         r"\bmini ovos?\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_sweet_order_topic(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized or "pascoa" in normalized:
+        return False
+    if requests_regular_gift_topic(text) or requests_easter_gift_topic(text):
+        return False
+    if not re.search(r"\b(brigadeir[oa]s?|bombons?|beijinhos?|doces?|camafeus?|trios?)\b", normalized):
+        return False
+    if re.search(r"\b(encomenda|pedido|quantidade|caixa|duzia|doces? avulsos|doces? em quantidade)\b", normalized):
+        return True
+    if re.search(r"\b\d+\b.*\b(brigadeir[oa]s?|bombons?|doces?)\b", normalized):
+        return True
+    return False
+
+
+def requests_cake_order_topic(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if requests_sweet_order_topic(text) or requests_regular_gift_topic(text) or requests_easter_gift_topic(text):
+        return False
+    if requests_easter_catalog(text) or requests_easter_ready_delivery_handoff(text):
+        return False
+    if re.search(r"\b(cafeteria|croissant|capuccino|cappuccino|cafe|cafe com leite|mocaccino)\b", normalized):
+        return False
+    return mentions_order_intent(text)
 
 
 def _mentions_cafeteria_order_intent(normalized: str) -> bool:
@@ -376,16 +500,21 @@ def should_force_same_day_cafeteria_handoff(
         return False
 
     current_agent = session.get("current_agent")
-    if current_agent == "CakeOrderAgent":
-        return True
-    if current_agent == "TriageAgent" and mentions_order_intent(user_text):
-        return True
-    return False
+    if current_agent == "CafeteriaAgent":
+        return False
+    return mentions_order_intent(user_text)
 
 
 def should_force_gift_context_handoff(session: dict, user_text: str) -> str | None:
     current_agent = session.get("current_agent")
-    if current_agent not in {"CakeOrderAgent", "SweetOrderAgent", "CafeteriaAgent", "GiftOrderAgent", "KnowledgeAgent"}:
+    if current_agent not in {
+        "CakeOrderAgent",
+        "SweetOrderAgent",
+        "CafeteriaAgent",
+        "GiftOrderAgent",
+        "KnowledgeAgent",
+        "TriageAgent",
+    }:
         return None
 
     if requests_easter_gift_topic(user_text):
@@ -394,6 +523,40 @@ def should_force_gift_context_handoff(session: dict, user_text: str) -> str | No
     if requests_regular_gift_topic(user_text):
         return "GiftOrderAgent"
 
+    return None
+
+
+def should_force_sweet_context_handoff(session: dict, user_text: str) -> str | None:
+    current_agent = session.get("current_agent")
+    if current_agent == "SweetOrderAgent":
+        return None
+    if requests_sweet_order_topic(user_text):
+        return "SweetOrderAgent"
+    return None
+
+
+def should_force_basic_context_switch(session: dict, user_text: str) -> str | None:
+    forced_gift_agent = should_force_gift_context_handoff(session, user_text)
+    if forced_gift_agent:
+        return forced_gift_agent
+
+    forced_sweet_agent = should_force_sweet_context_handoff(session, user_text)
+    if forced_sweet_agent:
+        return forced_sweet_agent
+
+    current_agent = session.get("current_agent")
+    if current_agent not in {
+        "CakeOrderAgent",
+        "SweetOrderAgent",
+        "CafeteriaAgent",
+        "GiftOrderAgent",
+        "KnowledgeAgent",
+    }:
+        return None
+    if current_agent == "CakeOrderAgent":
+        return None
+    if requests_cake_order_topic(user_text):
+        return "CakeOrderAgent"
     return None
 
 

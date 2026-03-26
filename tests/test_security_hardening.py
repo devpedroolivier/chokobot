@@ -16,6 +16,7 @@ from app.api.routes import clientes as clientes_module
 from app.api.routes import painel as painel_module
 from app.api.routes import pedidos as pedidos_module
 from app.api.routes import webhook as webhook_module
+from app.observability import clear_metrics, snapshot_metrics
 from app.security import clear_replay_cache, require_panel_auth
 from app.utils.payload import is_automated_order_message
 
@@ -32,6 +33,7 @@ class FakeRequest:
 class SecurityHardeningTests(unittest.TestCase):
     def setUp(self):
         clear_replay_cache()
+        clear_metrics()
 
     def test_panel_routes_are_protected_by_auth_dependency(self):
         for router_module in (painel_module, pedidos_module, clientes_module):
@@ -143,6 +145,23 @@ class SecurityHardeningTests(unittest.TestCase):
 
         self.assertEqual(result, {"status": "ok"})
         mocked_process.assert_awaited_once()
+
+    def test_webhook_ignored_test_phone_does_not_increment_metrics(self):
+        request = FakeRequest(
+            {
+                "id": "msg-test-phone-1",
+                "phone": "+55 11 88888-8888",
+                "message": "⭐ GOSTOU DE PEDIR NO NOSSO APP? ⭐\nPedido Goomer Delivery #1",
+            },
+            headers={"X-Webhook-Secret": "super-secret"},
+        )
+
+        with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
+            result = asyncio.run(webhook_module.receber_webhook(request))
+
+        self.assertEqual(result, {"status": "ignored"})
+        counters, _ = snapshot_metrics()
+        self.assertEqual(counters, {})
 
     def test_save_learning_is_blocked_by_default(self):
         with tempfile.TemporaryDirectory() as tmpdir:
