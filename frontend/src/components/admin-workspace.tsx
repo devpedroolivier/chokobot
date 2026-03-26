@@ -17,6 +17,21 @@ export function toneClasses(tone?: string): string {
   }
 }
 
+export function toneTextClasses(tone?: string): string {
+  switch (tone) {
+    case "danger":
+      return "text-[#8d2941]";
+    case "warning":
+      return "text-[#8a5b00]";
+    case "success":
+      return "text-[#166534]";
+    case "accent":
+      return "text-clay";
+    default:
+      return "text-cocoa/65";
+  }
+}
+
 export function stageClasses(stageClass: string): string {
   if (stageClass.includes("cake")) return "bg-[#fde6df] text-[#a63d22]";
   if (stageClass.includes("sweet")) return "bg-[#ffe7ef] text-[#a11d48]";
@@ -90,13 +105,15 @@ export function KPI({
 export function SectionTitle({
   eyebrow,
   title,
+  tone,
 }: {
   eyebrow: string;
   title: string;
+  tone?: string;
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cocoa/65">{eyebrow}</p>
+      <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${toneTextClasses(tone)}`}>{eyebrow}</p>
       <h2 className="mt-1 text-2xl font-bold">{title}</h2>
     </div>
   );
