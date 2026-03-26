@@ -25,7 +25,7 @@ from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timez
 from app.utils.payload import normalize_incoming
 
 
-REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot"]
+REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot", "ativar chat", "ativar bot"]
 
 
 async def generate_ai_reply(telefone: str, texto: str, nome_cliente: str, cliente_id: int) -> str:

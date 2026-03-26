@@ -90,6 +90,7 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("Retirada 28/3 Sabado 17h", result)
         self.assertIn("Valor: R$190,00", result)
         self.assertIn("Ainda nao foi salvo como pedido confirmado no sistema.", result)
+        self.assertIn('ex.: "sim", "ok", "ta bom", "certo" ou "confirmado"', result)
 
     def test_save_cafeteria_order_draft_process_formata_resumo_com_subtotal(self):
         with patch("app.ai.tools.now_in_bot_timezone", return_value=datetime(2026, 3, 25, 14, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))):
@@ -115,6 +116,7 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("Retirada 25/3 Quarta 17h", result)
         self.assertIn("Subtotal: R$34,50", result)
         self.assertIn("Valor: R$34,50", result)
+        self.assertIn('ex.: "sim", "ok", "ta bom", "certo" ou "confirmado"', result)
 
     def test_triage_prompt_reutiliza_mensagem_de_boas_vindas(self):
         self.assertIn(WELCOME_MESSAGE, TRIAGE_PROMPT)

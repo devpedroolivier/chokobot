@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.policies import (
+    caseirinho_clarification_message as _caseirinho_clarification_message,
     build_conversation_correction_instruction,
     build_cafeteria_specificity_retry_instruction as _build_cafeteria_specificity_retry_instruction,
     build_service_date_memory_instruction,
@@ -591,6 +592,26 @@ async def process_message_with_ai(
             phone_hash=_phone_hash(telefone),
         )
         return _respond_with_order_support(post_purchase_topic, telefone, support_service)
+
+    caseirinho_clarification = _caseirinho_clarification_message(text)
+    if caseirinho_clarification:
+        previous_agent = session.get("current_agent", "TriageAgent")
+        if previous_agent != "CakeOrderAgent":
+            session["current_agent"] = "CakeOrderAgent"
+            refresh_system_prompt(session, AGENTS_MAP["CakeOrderAgent"], now, runtime)
+            save_session(telefone, session)
+        _maybe_increment_counter(
+            telefone,
+            "ai_caseirinho_clarifications_total",
+            from_agent=previous_agent,
+        )
+        _maybe_log_event(
+            telefone,
+            "ai_caseirinho_clarification_prompted",
+            from_agent=previous_agent,
+            phone_hash=_phone_hash(telefone),
+        )
+        return caseirinho_clarification
 
     if _requests_human_handoff(text):
         previous_agent = session.get("current_agent", "TriageAgent")

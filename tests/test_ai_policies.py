@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.ai.policies import (
+    caseirinho_clarification_message,
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
     requests_cake_order_topic,
@@ -19,6 +20,21 @@ from app.ai.policies import (
 
 
 class AIPoliciesTests(unittest.TestCase):
+    def test_caseirinho_clarification_message_requests_missing_fields(self):
+        self.assertIn(
+            "sabor",
+            (caseirinho_clarification_message("quero caseirinho") or "").lower(),
+        )
+        self.assertIn(
+            "cobertura",
+            (caseirinho_clarification_message("quero caseirinho de cenoura") or "").lower(),
+        )
+        self.assertIn(
+            "chocolate ou cenoura",
+            (caseirinho_clarification_message("quero caseirinho cobertura vulcao") or "").lower(),
+        )
+        self.assertIsNone(caseirinho_clarification_message("quero caseirinho de cenoura com cobertura vulcao"))
+
     def test_requests_easter_catalog_treats_generic_ovo_as_easter(self):
         self.assertTrue(requests_easter_catalog("Eu gostaria de encomendar um ovo"))
         self.assertTrue(requests_easter_catalog("Quero encomendar ovos de Páscoa"))

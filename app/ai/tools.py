@@ -566,7 +566,10 @@ def _build_cafeteria_confirmation_message(prepared: dict) -> str:
     lines.append(f"Valor: {_format_currency_brl(float(prepared['valor_total']))}")
     lines.append("")
     lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
-    lines.append("Se estiver tudo certo, me envie uma confirmacao final explicita para concluir.")
+    lines.append(
+        'Se estiver tudo certo, me envie uma confirmacao final explicita para concluir '
+        '(ex.: "sim", "ok", "ta bom", "certo" ou "confirmado").'
+    )
     return "\n".join(lines)
 
 
@@ -1121,7 +1124,10 @@ def _build_draft_confirmation_message(*, title: str, flavor_line: str, service_l
     lines.append(f"Valor: {_format_currency_brl(total_value)}")
     lines.append("")
     lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
-    lines.append("Se estiver tudo certo, me envie uma confirmacao final explicita para concluir.")
+    lines.append(
+        'Se estiver tudo certo, me envie uma confirmacao final explicita para concluir '
+        '(ex.: "sim", "ok", "ta bom", "certo" ou "confirmado").'
+    )
     return "\n".join(lines)
 
 

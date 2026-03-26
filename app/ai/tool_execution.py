@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
+import unicodedata
 
 from app.ai.agents import AGENTS_MAP
 from app.ai.tools import (
@@ -19,17 +20,35 @@ from app.services.store_schedule import format_service_date, parse_service_date,
 from app.welcome_message import HUMAN_HANDOFF_MESSAGE
 
 _CONFIRMATION_MARKERS = (
+    "sim",
+    "ok",
+    "ta",
+    "ta bom",
+    "certo",
+    "confirmado",
+    "confirma",
+    "perfeito",
+    "beleza",
+    "isso",
     "confirmo",
-    "pode fechar",
-    "pode confirmar",
-    "sim, confirma",
     "sim confirma",
-    "sim, pode",
     "sim pode",
-    "pedido confirmado",
-    "pode salvar",
     "fechado",
 )
+_CONFIRMATION_PHRASE_MARKERS = (
+    "pode fechar",
+    "pode confirmar",
+    "pedido confirmado",
+    "pode salvar",
+)
+_SIM_POLITE_SUFFIXES = {
+    "obrigada",
+    "obrigado",
+    "obg",
+    "valeu",
+    "brigada",
+    "brigado",
+}
 
 _TRANSFER_MESSAGES = {
     "CakeOrderAgent": (
@@ -67,13 +86,34 @@ def _latest_user_message(session: dict) -> str:
     return ""
 
 
+def _normalize_confirmation_content(content: str) -> str:
+    normalized = unicodedata.normalize("NFKD", content or "")
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+    normalized = re.sub(r"[^\w\s]", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
 def _has_explicit_confirmation(session: dict) -> bool:
-    content = _latest_user_message(session).casefold()
+    content = _normalize_confirmation_content(_latest_user_message(session))
     if not content:
         return False
-    if any(marker in content for marker in _CONFIRMATION_MARKERS):
+
+    if re.search(r"\bnao\b", content):
+        return False
+
+    if content in _CONFIRMATION_MARKERS:
         return True
-    return content.strip(" .!?") == "sim"
+
+    if any(marker in content for marker in _CONFIRMATION_PHRASE_MARKERS):
+        return True
+
+    if content.startswith("sim "):
+        suffix = content[4:].strip()
+        if suffix in _SIM_POLITE_SUFFIXES:
+            return True
+
+    return False
 
 
 def _is_saved_order_result(tool_result: str) -> bool:

@@ -141,6 +141,33 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([message["role"] for message in messages], ["system", "user"])
         self.assertEqual(messages[1]["content"], "oi")
 
+    async def test_process_message_with_ai_prompts_caseirinho_clarification_before_ai(self):
+        telefone = "5511888888888"
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+        )
+
+        with patch.object(runner, "request_ai_completion", AsyncMock()) as mocked_completion:
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "quero caseirinho",
+                "Cliente Teste",
+                1,
+                ai_client=object(),
+                runtime=runtime,
+            )
+
+        self.assertIn("sabor", reply.lower())
+        self.assertIn("cobertura", reply.lower())
+        self.assertEqual(runner.CONVERSATIONS[telefone]["current_agent"], "CakeOrderAgent")
+        mocked_completion.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,6 +96,33 @@ def requests_opt_out(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in patterns)
 
 
+def caseirinho_clarification_message(text: str) -> str | None:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return None
+
+    mentions_caseirinho = any(
+        token in normalized
+        for token in ("caseirinho", "bolo caseiro", "bolo simples", "linha simples")
+    )
+    if not mentions_caseirinho:
+        return None
+
+    has_flavor = bool(re.search(r"\b(chocolate|cenoura)\b", normalized))
+    has_coverage = bool(re.search(r"\b(vulcao|vulcaozinho|simples)\b", normalized))
+
+    if has_flavor and has_coverage:
+        return None
+    if not has_flavor and not has_coverage:
+        return (
+            "Perfeito! No caseirinho, me confirme o sabor (Chocolate ou Cenoura) "
+            "e a cobertura (Vulcao R$35 ou Simples R$25)."
+        )
+    if not has_flavor:
+        return "Perfeito! Qual sabor do caseirinho voce prefere: Chocolate ou Cenoura?"
+    return "Perfeito! Qual cobertura do caseirinho voce prefere: Vulcao (R$35) ou Simples (R$25)?"
+
+
 @lru_cache(maxsize=1)
 def _load_catalog_aliases() -> set[str]:
     aliases: set[str] = set()
@@ -163,6 +190,7 @@ def _mentions_specific_easter_item(normalized: str) -> bool:
 
 
 def requests_easter_catalog(text: str) -> bool:
+    """Retorna True para qualquer mensagem sobre Páscoa — envia o link direto, sem IA."""
     normalized = normalize_intent_text(text)
     if _mentions_non_easter_egg_context(normalized):
         return False
@@ -170,20 +198,16 @@ def requests_easter_catalog(text: str) -> bool:
         return False
     if re.search(r"\bpronta\s*entrega\b", normalized):
         return False
-    if _mentions_specific_easter_item(normalized):
-        return False
 
-    explicit_catalog_patterns = (
-        r"\b(cardapio|catalogo|menu|link)\b.*\bpascoa\b",
-        r"\bpascoa\b.*\b(cardapio|catalogo|menu|link)\b",
-        r"\b(link|cardapio|catalogo|menu)\b.*\bovos?\b",
-        r"\bquero\s+ver\b.*\bpascoa\b",
-        r"\bme\s+manda\b.*\bpascoa\b",
-        r"\bpre[\s-]?pascoa\b",
-    )
-    if any(re.search(pattern, normalized) for pattern in explicit_catalog_patterns):
+    # Qualquer menção a Páscoa → link direto, sem envolver IA
+    if re.search(r"\bpascoa\b", normalized):
         return True
 
+    # Itens específicos de Páscoa citados sem a palavra "páscoa" → link direto
+    if _mentions_specific_easter_item(normalized):
+        return True
+
+    # Padrões genéricos de ovo em contexto de Páscoa
     generic_egg_patterns = (
         r"\b(encomendar|encomenda|comprar|pedido|pedir|quero)\b.*\bovos?\b",
         r"\bovos?\s+de\s+pascoa\b",

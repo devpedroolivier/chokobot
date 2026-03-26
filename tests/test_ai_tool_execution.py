@@ -369,6 +369,121 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertEqual(saved[0][0], "5511999999999")
         self.assertIn("pedido foi finalizado", tool_result)
 
+    def test_create_sweet_order_accepts_whatsapp_confirmation_variants(self):
+        accepted_messages = [
+            "ok",
+            "ok!",
+            "ta",
+            "tá",
+            "ta bom",
+            "tá bom",
+            "certo",
+            "confirmado",
+            "confirma",
+            "perfeito",
+            "beleza",
+            "isso",
+            "sim, obrigada",
+            "sim pode",
+            "pode confirmar",
+        ]
+
+        for message in accepted_messages:
+            with self.subTest(message=message):
+                session = {
+                    "messages": [{"role": "user", "content": message}],
+                    "current_agent": "SweetOrderAgent",
+                }
+                persisted_calls = []
+                runtime = runner.AIRuntime(
+                    get_menu=lambda category="todas": "menu",
+                    get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+                    get_learnings=lambda: "",
+                    save_learning=lambda aprendizado: aprendizado,
+                    escalate_to_human=lambda telefone, motivo: "ok",
+                    create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+                    create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: persisted_calls.append(order)
+                    or "Pedido de doces salvo com sucesso! ID: 88",
+                )
+
+                should_return, tool_result = handle_tool_call(
+                    runtime=runtime,
+                    function_name="create_sweet_order",
+                    arguments={
+                        "itens": [{"nome": "Brigadeiro Escama", "quantidade": 10}],
+                        "data_entrega": "10/10/2030",
+                        "horario_retirada": "15:00",
+                        "modo_recebimento": "retirada",
+                        "pagamento": {"forma": "PIX"},
+                    },
+                    telefone="5511999999999",
+                    nome_cliente="Cliente",
+                    cliente_id=1,
+                    session=session,
+                    save_session_fn=lambda telefone, state: None,
+                )
+
+                self.assertTrue(should_return)
+                self.assertEqual(len(persisted_calls), 1)
+                self.assertIn("pedido foi finalizado", tool_result)
+
+    def test_create_sweet_order_rejects_ambiguous_confirmation_variants(self):
+        rejected_messages = [
+            "pode",
+            "boa",
+            "acho melhor nao",
+            "nao confirmado",
+        ]
+
+        for message in rejected_messages:
+            with self.subTest(message=message):
+                session = {
+                    "messages": [{"role": "user", "content": message}],
+                    "current_agent": "SweetOrderAgent",
+                }
+                persisted_calls = []
+                runtime = runner.AIRuntime(
+                    get_menu=lambda category="todas": "menu",
+                    get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+                    get_learnings=lambda: "",
+                    save_learning=lambda aprendizado: aprendizado,
+                    escalate_to_human=lambda telefone, motivo: "ok",
+                    create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+                    create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: persisted_calls.append(order)
+                    or "Pedido de doces salvo com sucesso! ID: 88",
+                )
+
+                with patch(
+                    "app.ai.tool_execution.save_sweet_order_draft_process",
+                    return_value=(
+                        "Resumo final do pedido (rascunho)\n"
+                        "Ainda nao foi salvo como pedido confirmado no sistema.\n"
+                        'Se estiver tudo certo, me envie uma confirmacao final explicita para concluir '
+                        '(ex.: "sim", "ok", "ta bom", "certo" ou "confirmado").'
+                    ),
+                ) as mocked_draft:
+                    should_return, tool_result = handle_tool_call(
+                        runtime=runtime,
+                        function_name="create_sweet_order",
+                        arguments={
+                            "itens": [{"nome": "Brigadeiro Escama", "quantidade": 10}],
+                            "data_entrega": "10/10/2030",
+                            "horario_retirada": "15:00",
+                            "modo_recebimento": "retirada",
+                            "pagamento": {"forma": "PIX"},
+                        },
+                        telefone="5511999999999",
+                        nome_cliente="Cliente",
+                        cliente_id=1,
+                        session=session,
+                        save_session_fn=lambda telefone, state: None,
+                    )
+
+                self.assertFalse(should_return)
+                self.assertEqual(persisted_calls, [])
+                mocked_draft.assert_called_once()
+                self.assertIn("confirmacao final explicita", tool_result)
+
     def test_create_cafeteria_order_without_explicit_confirmation_only_saves_draft_process(self):
         session = {
             "messages": [{"role": "user", "content": "Quero 1 croissant de frango"}],
