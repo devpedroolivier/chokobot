@@ -73,9 +73,12 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
             create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
         )
 
+        # "Quero o menu" is now intercepted deterministically and returns
+        # the catalog link instead of reaching the LLM.  Use a phrase that
+        # bypasses the catalog detector so we can test the runtime/tool flow.
         reply = await runner.process_message_with_ai(
             "5511999999999",
-            "Quero o menu de pronta entrega",
+            "O que tem de pronta entrega hoje?",
             "Teste",
             1,
             ai_client=fake_client,
@@ -85,7 +88,7 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Resposta final")
         first_messages = create_mock.await_args_list[0].kwargs["messages"]
         self.assertIn("REGRAS APRENDIDAS ANTERIORMENTE:\nregra de teste", first_messages[0]["content"])
-        self.assertEqual(first_messages[1]["content"], "Quero o menu de pronta entrega")
+        self.assertEqual(first_messages[1]["content"], "O que tem de pronta entrega hoje?")
         second_messages = create_mock.await_args_list[1].kwargs["messages"]
         tool_messages = [message for message in second_messages if message["role"] == "tool"]
         self.assertTrue(tool_messages)
@@ -120,9 +123,12 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
             ],
         }
 
+        # "quero cardapio da cafeteria" is now intercepted deterministically
+        # and returns the cafeteria link.  Use a non-catalog phrase to test
+        # that dangling tool_calls are repaired before reaching the LLM.
         reply = await runner.process_message_with_ai(
             "5511999999999",
-            "quero cardapio da cafeteria",
+            "o que tem na cafeteria hoje?",
             "Teste",
             1,
             ai_client=fake_client,
@@ -139,8 +145,16 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(reply, "Olá! Como posso te ajudar?")
         messages = create_mock.await_args.kwargs["messages"]
-        self.assertEqual([message["role"] for message in messages], ["system", "user"])
-        self.assertEqual(messages[1]["content"], "quero cardapio da cafeteria")
+        roles = [message["role"] for message in messages]
+        # Dangling tool_call from history must be gone — no "assistant" or
+        # "tool" roles should remain.  A trailing "system" (operational
+        # context) is acceptable.
+        self.assertNotIn("assistant", roles)
+        self.assertNotIn("tool", roles)
+        self.assertEqual(roles[0], "system")
+        self.assertEqual(roles[1], "user")
+        user_msg = messages[1]["content"]
+        self.assertEqual(user_msg, "o que tem na cafeteria hoje?")
 
     async def test_process_message_with_ai_prompts_caseirinho_clarification_before_ai(self):
         telefone = "5511888888888"
