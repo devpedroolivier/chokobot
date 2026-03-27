@@ -14,13 +14,31 @@ class AppBootstrapTests(unittest.TestCase):
         with patch("app.application.use_cases.bootstrap_runtime.criar_tabelas") as mocked_tables:
             with patch("app.application.use_cases.bootstrap_runtime.validate_runtime_schema") as mocked_validate:
                 with patch("app.application.use_cases.bootstrap_runtime.ensure_views") as mocked_views:
-                    with patch("app.application.use_cases.bootstrap_runtime.log_event") as mocked_log:
-                        bootstrap_runtime("startup_complete")
+                    with patch(
+                        "app.application.use_cases.bootstrap_runtime.get_settings",
+                        return_value=type("Settings", (), {"pix_key": "Pix 16847366000130"})(),
+                    ):
+                        with patch("app.application.use_cases.bootstrap_runtime.log_event") as mocked_log:
+                            bootstrap_runtime("startup_complete")
 
         mocked_tables.assert_called_once_with()
         mocked_validate.assert_called_once_with()
         mocked_views.assert_called_once_with()
         mocked_log.assert_called_once_with("startup_complete")
+
+    def test_bootstrap_runtime_logs_warning_when_pix_key_is_missing(self):
+        with patch("app.application.use_cases.bootstrap_runtime.criar_tabelas"):
+            with patch("app.application.use_cases.bootstrap_runtime.validate_runtime_schema"):
+                with patch("app.application.use_cases.bootstrap_runtime.ensure_views"):
+                    with patch(
+                        "app.application.use_cases.bootstrap_runtime.get_settings",
+                        return_value=type("Settings", (), {"pix_key": ""})(),
+                    ):
+                        with patch("app.application.use_cases.bootstrap_runtime.log_event") as mocked_log:
+                            bootstrap_runtime("startup_complete")
+
+        mocked_log.assert_any_call("startup_warning_missing_pix_key", level="WARNING")
+        mocked_log.assert_any_call("startup_complete")
 
     def test_create_http_app_registers_router_and_static_mount_when_enabled(self):
         router = APIRouter()

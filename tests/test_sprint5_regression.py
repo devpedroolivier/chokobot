@@ -120,7 +120,7 @@ class Sprint5RegressionTests(unittest.IsolatedAsyncioTestCase):
     def test_routing_for_easter_and_gift_topics(self):
         self.assertEqual(
             should_force_basic_context_switch({"current_agent": "TriageAgent"}, "Quero um ovo de páscoa"),
-            "GiftOrderAgent",
+            None,
         )
         self.assertEqual(
             should_force_basic_context_switch({"current_agent": "TriageAgent"}, "Vocês fazem cesta box com flores?"),
@@ -160,7 +160,11 @@ class Sprint5RegressionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_photo_request_returns_catalog_link_without_ai_call(self):
         fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
-        with patch.dict(os.environ, {"CATALOG_LINK": "https://catalogo.exemplo/fotos"}, clear=False):
+        with patch.dict(
+            os.environ,
+            {"CATALOG_LINK": "https://catalogo.exemplo/fotos", "DOCES_URL": "https://catalogo.exemplo/doces"},
+            clear=False,
+        ):
             reply = await runner.process_message_with_ai(
                 "5511777766666",
                 "tem foto dos doces?",
@@ -169,7 +173,7 @@ class Sprint5RegressionTests(unittest.IsolatedAsyncioTestCase):
                 ai_client=fake_client,
             )
 
-        self.assertIn("https://catalogo.exemplo/fotos", reply)
+        self.assertIn("https://catalogo.exemplo/doces", reply)
         fake_client.chat.completions.create.assert_not_awaited()
 
 

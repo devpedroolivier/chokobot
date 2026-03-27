@@ -37,7 +37,7 @@ class AICafeteriaOrderTests(unittest.TestCase):
             order,
         )
 
-        self.assertEqual(message, "No Combo Relampago, escolha a bebida: Suco natural ou Refri 220ml.")
+        self.assertEqual(message, "No Choko Combo (Combo do Dia), escolha a bebida: Suco natural ou Refri 220ml.")
 
     def test_create_cafeteria_order_validates_items_and_computes_total(self):
         order = ai_tools.CafeteriaOrderSchema(
@@ -113,11 +113,11 @@ class AICafeteriaOrderTests(unittest.TestCase):
                 )
 
         self.assertIn("Pedido cafeteria salvo com sucesso!", message)
-        self.assertIn("2x Combo Relampago (Suco natural)", message)
+        self.assertIn("2x Choko Combo (Combo do Dia) (Suco natural)", message)
         self.assertIn("1x Coca Cola KS", message)
         self.assertIn("Subtotal: R$53,48", message)
         self.assertIn("Total final: R$53,48", message)
-        self.assertIn("2x Combo Relampago (Suco natural)", saved_calls[0]["itens"][0])
+        self.assertIn("2x Choko Combo (Combo do Dia) (Suco natural)", saved_calls[0]["itens"][0])
         self.assertEqual(process_calls[-1]["process_type"], "ai_cafeteria_order")
         self.assertEqual(process_calls[-1]["status"], "converted")
 
@@ -142,7 +142,7 @@ class AICafeteriaOrderTests(unittest.TestCase):
 
         self.assertIn("Pedido cafeteria", message)
         self.assertIn("- 3x Croissant (Chocolate): R$43,50", message)
-        self.assertIn("Retirada 25/3 Quarta", message)
+        self.assertIn("🚗 Retirada na loja", message)
         self.assertIn("Subtotal: R$43,50", message)
         self.assertIn("Valor: R$43,50", message)
 
@@ -211,9 +211,9 @@ class AICafeteriaOrderTests(unittest.TestCase):
             with patch("app.ai.tools.get_customer_process_repository", return_value=_ProcessRepository()):
                 message = ai_tools.create_cafeteria_order("5511999999999", "Cliente", 1, order)
 
-        self.assertIn("1x Combo Relampago (Suco natural)", message)
+        self.assertIn("1x Choko Combo (Combo do Dia) (Suco natural)", message)
         self.assertIn("Subtotal: R$23,99", message)
-        self.assertIn("1x Combo Relampago (Suco natural)", saved_calls[0]["itens"][0])
+        self.assertIn("1x Choko Combo (Combo do Dia) (Suco natural)", saved_calls[0]["itens"][0])
 
 
 if __name__ == "__main__":

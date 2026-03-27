@@ -45,7 +45,7 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Item específico, sabor, preço, opções → `lookup_catalog_items`", CAFETERIA_PROMPT)
         self.assertIn("Pedido e reserva podem ser feitos pelo WhatsApp", KNOWLEDGE_PROMPT)
         self.assertIn("Chave PIX oficial:", KNOWLEDGE_PROMPT)
-        self.assertIn("Não faça handoff nesse primeiro passo", KNOWLEDGE_PROMPT)
+        self.assertIn("Responda SOMENTE com o link oficial", KNOWLEDGE_PROMPT)
 
     def test_prompts_cover_cash_change_rule_and_croissant_prep_time(self):
         self.assertIn("Troco: somente para Dinheiro", KNOWLEDGE_PROMPT)
@@ -89,7 +89,7 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("use `create_cafeteria_order`", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE DATA DA CONVERSA", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAFETERIA_PROMPT)
-        self.assertIn("Combo Relampago", CAFETERIA_PROMPT)
+        self.assertIn("Choko Combo (Combo do Dia)", CAFETERIA_PROMPT)
         self.assertIn("R$23,99", CAFETERIA_PROMPT)
         self.assertIn("Suco natural ou Refri 220ml", CAFETERIA_PROMPT)
 
@@ -99,16 +99,15 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Upsell opcional (uma vez por pedido)", SWEET_ORDER_PROMPT)
         self.assertIn("UPSELL CAFETERIA (UMA VEZ)", CAFETERIA_PROMPT)
         self.assertIn("Confirma seu pedido?", CAKE_ORDER_PROMPT)
-        self.assertIn("Forma de pagamento: [PIX/dinheiro/cartao]", SWEET_ORDER_PROMPT)
-        self.assertIn("Forma de pagamento: [PIX/dinheiro/cartao]", GIFT_ORDER_PROMPT)
+        self.assertIn("💳 Pagamento: [PIX/dinheiro/cartao]", SWEET_ORDER_PROMPT)
+        self.assertIn("💳 Pagamento: [PIX/dinheiro/cartao]", GIFT_ORDER_PROMPT)
 
     def test_gift_prompt_separates_regular_gifts_from_easter_and_uses_structured_tool(self):
         self.assertIn("cestas box, caixinha de chocolate", TRIAGE_PROMPT)
-        self.assertIn("Você também atende encomendas de Páscoa", GIFT_ORDER_PROMPT)
         self.assertIn("PÁSCOA (OVOS/TRIOS/TABLETES/MIMOS)", GIFT_ORDER_PROMPT)
         self.assertIn('get_menu` com category="presentes"', GIFT_ORDER_PROMPT)
         self.assertIn('lookup_catalog_items` com catalog="presentes"', GIFT_ORDER_PROMPT)
-        self.assertIn('lookup_catalog_items` com catalog="pascoa"', GIFT_ORDER_PROMPT)
+        self.assertIn("responda SOMENTE com https://pascoachoko.goomer.app", GIFT_ORDER_PROMPT)
         self.assertIn("create_gift_order", GIFT_ORDER_PROMPT)
         self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
 

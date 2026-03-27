@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -58,6 +59,12 @@ from app.services.precos import (
 
 MASSAS_TRADICIONAIS = ("Branca", "Chocolate", "Mesclada")
 MASSAS_VALIDAS = set(MASSAS_TRADICIONAIS)
+MASSA_SINONIMOS = {
+    "preta": "Chocolate",
+    "massa preta": "Chocolate",
+    "escura": "Chocolate",
+    "massa escura": "Chocolate",
+}
 
 RECHEIOS_TRADICIONAIS = (
     "Beijinho",
@@ -122,9 +129,10 @@ LINE_SIMPLE_COVERAGES = ("Vulcão", "Simples")
 TAXA_ENTREGA_PADRAO = DELIVERY_FEE_STANDARD
 TAXA_ENTREGA_CAFETERIA = DELIVERY_FEE_CAFETERIA
 CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
+CHOCO_COMBO_CANONICAL_NAME = "Choko Combo (Combo do Dia)"
 CAFETERIA_VARIANT_REQUIRED_HINTS = {
     "Croissant": "Informe o sabor do croissant e a quantidade.",
-    "Combo Relampago": "No Combo Relampago, escolha a bebida: Suco natural ou Refri 220ml.",
+    "Combo Relampago": "No Choko Combo (Combo do Dia), escolha a bebida: Suco natural ou Refri 220ml.",
     "Agua": "Informe se deseja agua com gas ou sem gas, e a quantidade.",
 }
 GIFT_CATEGORY_ALIASES = {
@@ -163,6 +171,10 @@ CAFETERIA_NAME_ALIASES = {
     "combo suco": "Combo Relampago",
     "combo refri": "Combo Relampago",
     "combo refrigerante": "Combo Relampago",
+    "choko combo": "Combo Relampago",
+    "combo do dia": "Combo Relampago",
+    "promocao de terca": "Combo Relampago",
+    "promocao da terca": "Combo Relampago",
 }
 CAFETERIA_ITEM_KEYWORDS = {
     "Croissant": ("croissant", "croassant", "croasant"),
@@ -218,6 +230,32 @@ def _match_closest(valor: str, validos: set[str]) -> str | None:
         if v.lower() == valid.lower():
             return valid
     return None
+
+
+def _normalizar_massa(massa_raw: str | None) -> str | None:
+    if not massa_raw:
+        return massa_raw
+    key = _norm(str(massa_raw))
+    return MASSA_SINONIMOS.get(key, massa_raw)
+
+
+def _is_missing_field(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, dict):
+        return not bool(value)
+    if isinstance(value, list):
+        return not bool(value)
+    return False
+
+
+def _canonical_cafeteria_name(name: str | None) -> str:
+    raw = (name or "").strip()
+    if raw == "Combo Relampago":
+        return CHOCO_COMBO_CANONICAL_NAME
+    return raw
 
 
 def _join_option_values(values: tuple[str, ...]) -> str:
@@ -560,7 +598,7 @@ def _resolve_cafeteria_item(
 
 
 def _format_cafeteria_item_label(item: dict, selected_variant: str | None = None) -> str:
-    base_name = str(item.get("name") or "Item")
+    base_name = _canonical_cafeteria_name(str(item.get("name") or "Item"))
     variant = (selected_variant or item.get("variant") or "").strip()
     if variant:
         return f"{base_name} ({variant})"
@@ -625,22 +663,17 @@ def _merge_cafeteria_validated_items(items: list[dict]) -> list[dict]:
 
 def _build_cafeteria_confirmation_message(prepared: dict) -> str:
     item_lines = [f"- {item['descricao']}: {_format_currency_brl(float(item['preco_total']))}" for item in prepared["itens"]]
-    service_line = _build_service_line(
-        {
-            "modo_recebimento": prepared["modo_recebimento"],
-            "data_entrega": prepared.get("data_entrega"),
-            "horario_retirada": prepared.get("horario_retirada"),
-        }
-    )
-    date_line = service_line
-    delivery_line = service_line
-    if service_line and " " in service_line:
-        mode_token, remainder = service_line.split(" ", 1)
-        delivery_line = mode_token
-        date_line = remainder
+    mode = str(prepared.get("modo_recebimento") or "").strip().lower()
+    date_label = _parse_order_date_label(prepared.get("data_entrega")) or "A confirmar"
+    hour_label = _format_compact_hour(prepared.get("horario_retirada")) or "A confirmar"
+    delivery_line = "Retirada na loja" if mode == "retirada" else "Entrega"
     endereco = str(prepared.get("endereco") or "").strip()
-    if endereco and delivery_line.casefold() == "entrega":
-        delivery_line = f"{delivery_line} ({endereco})"
+    if endereco and mode == "entrega":
+        delivery_line = f"Entrega: {endereco}"
+
+    total_label = _format_currency_brl(float(prepared["valor_total"]))
+    if float(prepared.get("taxa_entrega") or 0) > 0:
+        total_label += f" (+ {_format_currency_brl(float(prepared['taxa_entrega']))} entrega)"
 
     lines = [
         "Resumo final do pedido (rascunho)",
@@ -649,19 +682,17 @@ def _build_cafeteria_confirmation_message(prepared: dict) -> str:
         "📦 Pedido cafeteria",
         "Itens:",
         *item_lines,
+        f"📅 Data: {date_label} | Horario: {hour_label}",
+        f"🚗 {delivery_line}",
+        f"💰 Total: {total_label}",
+        "💳 " + _build_payment_line(prepared.get("pagamento")).replace("Forma de pagamento: ", "Pagamento: "),
+        "🎁 Kit Festou: Nao incluso",
     ]
-    if date_line:
-        lines.append(f"📅 {date_line}")
-    if delivery_line:
-        lines.append(f"🚗 {delivery_line}")
-    if service_line:
-        lines.append(service_line)
     lines.extend(
         [
-        f"💰 Total: {_format_currency_brl(float(prepared['valor_total']))}",
-        _build_payment_line(prepared.get("pagamento")),
-        f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
-    ])
+            f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
+        ]
+    )
     if float(prepared.get("taxa_entrega") or 0) > 0:
         lines.append(f"Taxa entrega: {_format_currency_brl(float(prepared['taxa_entrega']))}")
     lines.append(f"Valor: {_format_currency_brl(float(prepared['valor_total']))}")
@@ -677,6 +708,9 @@ def _build_cafeteria_confirmation_message(prepared: dict) -> str:
 def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    required_error = _validate_required_payment_data(dados.get("pagamento"))
+    if required_error:
+        return None, required_error
     payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
     if payment_error:
         return None, payment_error
@@ -720,7 +754,7 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
             label = f"{label} [{raw_item['observacao'].strip()}]"
         validated_items.append(
             {
-                "nome": str(item.get("name") or ""),
+                "nome": _canonical_cafeteria_name(str(item.get("name") or "")),
                 "variante": selected_variant,
                 "observacao": (raw_item.get("observacao") or "").strip() or None,
                 "quantidade": quantity,
@@ -741,6 +775,8 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
     if dados["modo_recebimento"] == "entrega" and taxa_entrega <= 0:
         taxa_entrega = TAXA_ENTREGA_CAFETERIA
     valor_total = round(subtotal + taxa_entrega, 2)
+    if valor_total <= 0:
+        return None, "Valor total invalido. Revise os itens para gerar um total maior que R$0,00."
     dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), valor_total)
 
     return {
@@ -782,9 +818,21 @@ def _prepare_gift_order_data(order_details: "GiftOrderSchema") -> tuple[dict | N
     dados = order_details.model_dump()
     dados["categoria"] = _normalize_gift_category(dados.get("categoria"))
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    required_error = _validate_required_payment_data(dados.get("pagamento"))
+    if required_error:
+        return None, required_error
     payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
     if payment_error:
         return None, payment_error
+
+    missing_required: list[str] = []
+    for field_name in ("categoria", "produto", "data_entrega", "modo_recebimento", "pagamento"):
+        if _is_missing_field(dados.get(field_name)):
+            missing_required.append(field_name)
+    if str(dados.get("modo_recebimento") or "").strip().lower() == "entrega" and _is_missing_field(dados.get("endereco")):
+        missing_required.append("endereco")
+    if missing_required:
+        return None, "Campos obrigatorios pendentes: " + ", ".join(sorted(set(missing_required))) + "."
 
     schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
     if schedule_error:
@@ -827,6 +875,8 @@ def _prepare_gift_order_data(order_details: "GiftOrderSchema") -> tuple[dict | N
         dados["taxa_entrega"] = 0.0
 
     dados["valor_total"] = round(float(dados["valor_base"]) + float(dados.get("taxa_entrega") or 0), 2)
+    if float(dados.get("valor_total") or 0) <= 0:
+        return None, "Valor total invalido. Revise os itens para gerar um total maior que R$0,00."
     dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), float(dados["valor_total"]))
     dados["data_entrega"] = _normalizar_data_iso(dados["data_entrega"])
     return dados, None
@@ -1093,6 +1143,43 @@ def _validar_campos_bolo(dados: dict) -> list[str]:
     return erros
 
 
+def _validate_required_payment_data(pagamento: dict | None) -> str | None:
+    payment = dict(pagamento or {})
+    method = str(payment.get("forma") or "").strip()
+    if not method or method == "Pendente":
+        return "Forma de pagamento obrigatoria: PIX, Cartão (débito/crédito) ou Dinheiro."
+    return None
+
+
+def _validate_required_cake_fields(dados: dict) -> list[str]:
+    categoria = (dados.get("categoria") or "").strip().lower()
+    missing: list[str] = []
+
+    by_category = {
+        "tradicional": ("massa", "recheio", "tamanho", "data_entrega", "modo_recebimento", "pagamento"),
+        "ingles": ("produto", "data_entrega", "modo_recebimento", "pagamento"),
+        "redondo": ("produto", "data_entrega", "modo_recebimento", "pagamento"),
+        "torta": ("produto", "data_entrega", "modo_recebimento", "pagamento"),
+        "mesversario": ("tamanho", "data_entrega", "modo_recebimento", "pagamento"),
+        "simples": ("produto", "data_entrega", "modo_recebimento", "pagamento"),
+        "babycake": ("produto", "data_entrega", "modo_recebimento", "pagamento"),
+    }
+    required = by_category.get(categoria, ("data_entrega", "modo_recebimento", "pagamento"))
+    for field_name in required:
+        if _is_missing_field(dados.get(field_name)):
+            missing.append(field_name)
+
+    if categoria == "tradicional":
+        recheio = str(dados.get("recheio") or "").strip().casefold()
+        if recheio != "casadinho" and _is_missing_field(dados.get("mousse")):
+            missing.append("mousse")
+
+    if str(dados.get("modo_recebimento") or "").strip().lower() == "entrega" and _is_missing_field(dados.get("endereco")):
+        missing.append("endereco")
+
+    return sorted(set(missing))
+
+
 def _calcular_preco_pedido(dados: dict) -> Tuple[float, int]:
     """Calcula preço a partir dos dados do CakeOrderSchema mapeados para calcular_total."""
     categoria = (dados.get("categoria") or "").lower()
@@ -1246,34 +1333,44 @@ def _build_draft_confirmation_message(
     payment_line: str,
     endereco: str | None = None,
     delivery_fee: float = 0.0,
+    kit_festou: bool = False,
 ) -> str:
     item_summary = title
     if flavor_line:
         item_summary = f"{title} | {flavor_line}"
 
+    mode_token = "Retirada"
     date_line = service_line
-    delivery_line = service_line
     if service_line and " " in service_line:
-        mode_token, remainder = service_line.split(" ", 1)
-        delivery_line = mode_token
-        date_line = remainder
-    if endereco and (delivery_line or "").strip().casefold() == "entrega":
-        delivery_line = f"{delivery_line} ({endereco})"
+        mode_token, date_line = service_line.split(" ", 1)
+
+    delivery_line = "Retirada na loja" if mode_token.casefold() == "retirada" else "Entrega"
+    if endereco and delivery_line.casefold() == "entrega":
+        delivery_line = f"Entrega: {endereco}"
+
+    date_label = date_line or "A confirmar"
+    hour_label = "A confirmar"
+    if date_line:
+        hour_match = re.search(r"\b(\d{1,2}h(?:\d{2})?|\d{1,2}:\d{2})\b", date_line)
+        if hour_match:
+            hour_label = hour_match.group(1)
+            date_label = date_line.replace(hour_match.group(1), "").strip() or "A confirmar"
+
+    total_label = _format_currency_brl(total_value)
+    if float(delivery_fee or 0) > 0:
+        total_label += f" (+ {_format_currency_brl(float(delivery_fee))} entrega)"
 
     lines = [
         "Resumo final do pedido (rascunho)",
         "",
         "Confirma seu pedido?",
         f"📦 {item_summary}",
+        f"📅 Data: {date_label} | Horario: {hour_label}",
+        f"🚗 {delivery_line}",
+        f"💰 Total: {total_label}",
+        "💳 " + payment_line.replace("Forma de pagamento: ", "Pagamento: "),
+        f"🎁 Kit Festou: {'Sim (+R$35,00)' if kit_festou else 'Nao incluso'}",
     ]
-    if date_line:
-        lines.append(f"📅 {date_line}")
-    if delivery_line:
-        lines.append(f"🚗 {delivery_line}")
-    if service_line:
-        lines.append(service_line)
-    lines.append(f"💰 Total: {_format_currency_brl(total_value)}")
-    lines.append(payment_line)
     if float(delivery_fee or 0) > 0:
         lines.append(f"Taxa entrega: {_format_currency_brl(float(delivery_fee))}")
     lines.append(f"Valor: {_format_currency_brl(total_value)}")
@@ -1327,6 +1424,7 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
         dados["tamanho"] = _normaliza_tamanho(dados["tamanho"])
 
     if dados.get("massa"):
+        dados["massa"] = _normalizar_massa(dados.get("massa"))
         matched = _match_closest(dados["massa"], MASSAS_VALIDAS)
         if matched:
             dados["massa"] = matched
@@ -1360,6 +1458,14 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
     if erros:
         return None, "Erro de validacao:\n- " + "\n- ".join(erros)
 
+    payment_error = _validate_required_payment_data(dados.get("pagamento"))
+    if payment_error:
+        return None, payment_error
+
+    missing_required = _validate_required_cake_fields(dados)
+    if missing_required:
+        return None, "Campos obrigatorios pendentes: " + ", ".join(missing_required) + "."
+
     try:
         valor_total, serve_pessoas = _calcular_preco_pedido(dados)
         if dados["modo_recebimento"] == "entrega":
@@ -1367,8 +1473,10 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
         dados["valor_total"] = valor_total
         dados["serve_pessoas"] = serve_pessoas
     except Exception:
-        dados["valor_total"] = 0
-        dados["serve_pessoas"] = 0
+        return None, "Nao consegui calcular o valor total com os dados informados. Revise os campos do pedido."
+
+    if float(dados.get("valor_total") or 0) <= 0:
+        return None, "Valor total invalido. Revise os itens para gerar um total maior que R$0,00."
 
     dados["pagamento"] = _apply_card_installment_rule(
         dados.get("pagamento"),
@@ -1385,6 +1493,9 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
 def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    required_error = _validate_required_payment_data(dados.get("pagamento"))
+    if required_error:
+        return None, required_error
     payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
     if payment_error:
         return None, payment_error
@@ -1399,6 +1510,9 @@ def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict |
     for item in dados.get("itens", []):
         nome_raw = item.get("nome", "")
         qtd = item.get("quantidade", 1)
+        if int(qtd or 0) <= 0:
+            erros.append(f"Quantidade invalida para '{nome_raw}': informe valor maior que zero.")
+            continue
 
         nome_canonico = _canonical_doce(nome_raw)
         if not nome_canonico:
@@ -1424,6 +1538,15 @@ def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict |
     if not itens_validados:
         return None, "Nenhum doce valido foi informado."
 
+    missing_required: list[str] = []
+    for field_name in ("itens", "data_entrega", "modo_recebimento", "pagamento"):
+        if _is_missing_field(dados.get(field_name)):
+            missing_required.append(field_name)
+    if str(dados.get("modo_recebimento") or "").strip().lower() == "entrega" and _is_missing_field(dados.get("endereco")):
+        missing_required.append("endereco")
+    if missing_required:
+        return None, "Campos obrigatorios pendentes: " + ", ".join(sorted(set(missing_required))) + "."
+
     if dados["modo_recebimento"] == "entrega":
         if not dados.get("endereco"):
             return None, "Endereco e obrigatorio quando o modo de recebimento for entrega."
@@ -1435,6 +1558,8 @@ def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict |
 
     taxa_entrega = TAXA_ENTREGA_PADRAO if dados["modo_recebimento"] == "entrega" else 0.0
     valor_final = round(total_doces + taxa_entrega, 2)
+    if valor_final <= 0:
+        return None, "Valor total invalido. Revise os itens para gerar um total maior que R$0,00."
     dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), valor_final)
     data_iso = _normalizar_data_iso(dados["data_entrega"])
     desc_itens = ", ".join(f"{it['nome']} x{it['qtd']}" for it in itens_validados)
@@ -1692,9 +1817,31 @@ def save_learning(aprendizado: str) -> str:
     return get_catalog_gateway().save_learning(aprendizado)
 
 
+def _sanitize_escalation_reason(motivo: str | None) -> str:
+    raw_reason = " ".join(str(motivo or "").split()).strip()
+    if not raw_reason:
+        return "Cliente solicitou suporte humano; bot sem contexto suficiente para concluir com seguranca."
+
+    normalized = _norm(raw_reason)
+    generic_patterns = (
+        r"\bfora de contexto\b",
+        r"\bnao esta claro\b",
+        r"\bnao entendi\b",
+        r"\bduvida\b",
+        r"\bcliente mencionou algo\b",
+    )
+    if len(raw_reason) < 20 or any(re.search(pattern, normalized) for pattern in generic_patterns):
+        return (
+            "Escalacao para humano com contexto obrigatorio: "
+            f"{raw_reason}. Pedido requer validacao da equipe para concluir corretamente."
+        )
+    return raw_reason
+
+
 def escalate_to_human(telefone: str, motivo: str):
     """Aciona o atendimento humano, pausando o bot para esse telefone."""
-    return get_attention_gateway().activate_human_handoff(telefone=telefone, motivo=motivo)
+    reason = _sanitize_escalation_reason(motivo)
+    return get_attention_gateway().activate_human_handoff(telefone=telefone, motivo=reason)
 
 
 def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_details: CakeOrderSchema) -> str:
@@ -1743,9 +1890,11 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
     )
 
     preco_txt = f" | Valor: R${dados['valor_total']:.2f}" if dados.get("valor_total") else ""
+    kit_flag = "sim" if bool(dados.get("kit_festou")) else "nao"
     return (
         f"Pedido salvo com sucesso! ID da Encomenda: {encomenda_id}{preco_txt}\n"
-        f"Protocolo: CHK-{int(encomenda_id):06d}"
+        f"Protocolo: CHK-{int(encomenda_id):06d}\n"
+        f"Kit Festou incluido: {kit_flag}"
     )
 
 
@@ -1829,7 +1978,8 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
         f"Total doces: R${total_doces:.2f}\n"
         + (f"Taxa entrega: R${taxa_entrega:.2f}\n" if taxa_entrega else "")
         + f"Total final: R${valor_final:.2f}\n"
-        + f"Protocolo: CHK-{int(encomenda_id):06d}"
+        + f"Protocolo: CHK-{int(encomenda_id):06d}\n"
+        + "Kit Festou incluido: nao"
     )
 
 
@@ -1875,6 +2025,7 @@ def create_cafeteria_order(
         "Itens: " + ", ".join(item_lines),
         f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
         f"Protocolo: CAF-{telefone[-4:]}-{now_in_bot_timezone().strftime('%H%M')}",
+        "Kit Festou incluido: nao",
     ]
     if float(prepared.get("taxa_entrega") or 0) > 0:
         response_lines.append(f"Taxa entrega: {_format_currency_brl(float(prepared['taxa_entrega']))}")
@@ -1953,7 +2104,8 @@ def create_gift_order(
         f"Item: {dados['produto']}\n"
         f"{fee_line}"
         f"Total final: {_format_currency_brl(float(dados['valor_total']))}\n"
-        f"Protocolo: CHK-{int(encomenda_id):06d}"
+        f"Protocolo: CHK-{int(encomenda_id):06d}\n"
+        "Kit Festou incluido: nao"
     )
 
 
@@ -1984,6 +2136,7 @@ def save_cake_order_draft_process(
         payment_line=_build_payment_line(dados.get("pagamento")),
         endereco=dados.get("endereco"),
         delivery_fee=float(dados.get("taxa_entrega") or 0),
+        kit_festou=bool(dados.get("kit_festou")),
     )
 
 

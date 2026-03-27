@@ -61,6 +61,7 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertFalse(requests_easter_catalog("Tem croissant com ovo?"))
         self.assertFalse(requests_easter_ready_delivery_handoff("Tem croissant com ovo?"))
         self.assertFalse(message_has_easter_context("Tem croissant com ovo?"))
+        self.assertFalse(message_has_easter_context("Entao vou retirar as 17:30 e pagar no cartao sem cereja"))
 
     def test_requests_easter_catalog_does_not_short_circuit_specific_item_queries(self):
         self.assertFalse(requests_easter_catalog("Tem ovo de paçoca?"))
@@ -147,7 +148,7 @@ class AIPoliciesTests(unittest.TestCase):
         )
         self.assertEqual(
             should_force_gift_context_handoff({"current_agent": "GiftOrderAgent"}, "Quero ver presentes de Páscoa"),
-            "GiftOrderAgent",
+            None,
         )
 
     def test_requests_post_purchase_topic_detects_each_flow(self):
@@ -212,14 +213,14 @@ class AIPoliciesTests(unittest.TestCase):
                 {"current_agent": "TriageAgent"},
                 "Quero um ovo de páscoa",
             ),
-            "GiftOrderAgent",
+            None,
         )
         self.assertEqual(
             should_force_basic_context_switch(
                 {"current_agent": "TriageAgent"},
                 "Tem ovo trufado?",
             ),
-            "GiftOrderAgent",
+            None,
         )
         self.assertEqual(
             should_force_basic_context_switch(

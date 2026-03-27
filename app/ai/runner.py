@@ -23,12 +23,9 @@ from app.ai.policies import (
     current_local_datetime,
     normalize_intent_text,
     normalize_reference_time as _normalize_reference_time,
-    requests_easter_catalog as _requests_easter_catalog,
     requests_easter_gift_topic as _requests_easter_gift_topic,
-    requests_easter_order_topic as _requests_easter_order_topic,
     requests_catalog_photo as _requests_catalog_photo,
     requests_easter_date_info as _requests_easter_date_info,
-    requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
     requests_cafeteria_topic as _requests_cafeteria_topic,
     requests_cake_order_topic as _requests_cake_order_topic,
     requests_post_purchase_topic as _requests_post_purchase_topic,
@@ -36,6 +33,8 @@ from app.ai.policies import (
     requests_pix_key_info as _requests_pix_key_info,
     requests_regular_gift_topic as _requests_regular_gift_topic,
     requests_sweet_order_topic as _requests_sweet_order_topic,
+    requests_knowledge_topic as _requests_knowledge_topic,
+    mentions_easter as _mentions_easter,
     message_has_easter_context as _message_has_easter_context,
     should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
@@ -107,16 +106,111 @@ POST_PURCHASE_MESSAGES = {
 
 
 def _catalog_photo_reply() -> str:
-    link = get_settings().catalog_link
-    if link:
+    return _catalog_photo_reply_for_context({}, "")
+
+
+def _media_without_text_reply() -> str:
+    return (
+        "Recebi uma mídia, mas ainda não consigo visualizar fotos ou áudios aqui 😊\n"
+        "Pode me contar em texto o que você está procurando?"
+    )
+
+
+def _infer_catalog_context(session: dict, text: str) -> str | None:
+    normalized = normalize_intent_text(text)
+    current_agent = session.get("current_agent", "TriageAgent")
+
+    if _mentions_easter(text):
+        return "easter"
+
+    if _requests_cafeteria_topic(text) or re.search(
+        r"\b(cafeteria|pronta entrega|croissant|cappuccino|capuccino|cafe|suco|salgado|fatia)\b",
+        normalized,
+    ):
+        return "cafeteria"
+    if current_agent == "CafeteriaAgent":
+        return "cafeteria"
+
+    if _requests_sweet_order_topic(text) or re.search(
+        r"\b(doces?|docinhos?|brigadeir[oa]s?|bombo(m|ns?)|beijinhos?|camafeus?)\b",
+        normalized,
+    ):
+        return "doces"
+    if current_agent == "SweetOrderAgent":
+        return "doces"
+
+    if _requests_regular_gift_topic(text) or re.search(
+        r"\b(cesta(s)?|presente(s)?|caixinha|caixa de chocolate|flores|buque)\b",
+        normalized,
+    ):
+        return "presentes"
+    if current_agent == "GiftOrderAgent":
+        return "presentes"
+
+    if _requests_cake_order_topic(text) or re.search(
+        r"\b(bolo|torta|mesversario|mesversário|encomenda)\b",
+        normalized,
+    ):
+        return "bolos"
+    if current_agent == "CakeOrderAgent":
+        return "bolos"
+
+    if _requests_knowledge_topic(text):
+        return "ambiguous"
+
+    return None
+
+
+def _catalog_photo_reply_for_context(session: dict, text: str) -> str:
+    settings = get_settings()
+    context = _infer_catalog_context(session, text)
+    normalized = normalize_intent_text(text)
+    asks_menu = bool(re.search(r"\b(cardapio|catalogo|menu|link)\b", normalized))
+    asks_photo = bool(re.search(r"\b(foto|fotos|imagem|imagens|visual)\b", normalized))
+
+    if context == "easter":
+        return EASTER_CATALOG_MESSAGE
+
+    if context == "cafeteria":
+        if settings.cafeteria_url:
+            return (
+                "Perfeito! Aqui está o cardápio da cafeteria:\n"
+                f"{settings.cafeteria_url}\n\n"
+                "Me diz o item e a quantidade que eu te ajudo a fechar 😊"
+            )
+        return "Consigo te ajudar com os itens da cafeteria por aqui. Me diz o que você quer pedir."
+
+    if context == "doces":
+        if settings.doces_url:
+            return (
+                "Perfeito! Aqui está o cardápio de doces:\n"
+                f"{settings.doces_url}\n\n"
+                "Me diz os itens e quantidades que eu monto seu pedido 😊"
+            )
+        return "Consigo te ajudar com os doces por aqui. Me diz os itens e quantidades."
+
+    if context in {"presentes", "bolos"}:
+        if settings.catalog_link:
+            return (
+                "Perfeito! Para ver as fotos, nosso catálogo visual está aqui:\n"
+                f"{settings.catalog_link}\n\n"
+                "Me diz qual item você gostou que eu te ajudo a fechar o pedido 😊"
+            )
+        return "Consigo te ajudar com os detalhes por aqui. Me diga qual produto você quer."
+
+    if asks_photo and not asks_menu and settings.catalog_link:
         return (
             "Perfeito! Para ver as fotos, nosso catálogo visual está aqui:\n"
-            f"{link}\n\n"
+            f"{settings.catalog_link}\n\n"
             "Me diz qual item você gostou que eu te ajudo a fechar o pedido 😊"
         )
+
     return (
-        "Consigo te ajudar com os detalhes por aqui 😊 "
-        "Se quiser fotos, te conecto com a equipe para te enviar o catálogo visual."
+        "Claro! Me diz de qual categoria você quer o cardápio:\n"
+        "- bolos e encomendas\n"
+        "- doces\n"
+        "- cafeteria\n"
+        "- presentes"
     )
 
 
@@ -502,31 +596,8 @@ def _conversation_correction_instruction(session: dict) -> str | None:
     return build_conversation_correction_instruction(session.get("conversation_correction_context"))
 
 
-def _should_repeat_easter_catalog_link(session: dict, text: str) -> bool:
-    if session.get("seasonal_context") != "easter":
-        return False
-
-    normalized = (text or "").strip().casefold()
-    if not normalized:
-        return False
-
-    link_patterns = (
-        "cardapio",
-        "cardápio",
-        "catalogo",
-        "catálogo",
-        "menu",
-        "link",
-        "manda",
-        "me envia",
-        "me envia o link",
-    )
-
-    return any(pattern in normalized for pattern in link_patterns)
-
-
 def _message_mentions_easter_context(text: str) -> bool:
-    return _message_has_easter_context(text)
+    return _mentions_easter(text) or _message_has_easter_context(text)
 
 
 def _release_easter_context_if_needed(session: dict, text: str) -> bool:
@@ -574,29 +645,6 @@ def _is_non_easter_context_switch(session: dict, text: str) -> bool:
         return True
 
     return False
-
-
-def _should_handoff_after_easter_catalog(session: dict, text: str) -> bool:
-    if session.get("seasonal_context") != "easter":
-        return False
-    normalized = normalize_intent_text(text)
-    if not normalized:
-        return False
-    if _should_repeat_easter_catalog_link(session, text):
-        return False
-    if _is_non_easter_context_switch(session, text):
-        return False
-
-    detail_followup_patterns = (
-        r"\b(tem|quanto|preco|valor|sabor|sabores|peso|grama|gramagem|tamanho|recheio|esse|essa|de prestigio|de nutella)\b",
-    )
-    if _message_mentions_easter_context(text):
-        return True
-    if any(re.search(pattern, normalized) for pattern in detail_followup_patterns):
-        return True
-
-    # Sem mudança clara de assunto apos o link de Pascoa, trate como continuidade do tema.
-    return True
 
 
 def _is_draft_order_result(tool_result: str | None) -> bool:
@@ -727,6 +775,17 @@ async def process_message_with_ai(
         bootstrap_session(session, now, runtime)
         save_session(telefone, session)
 
+    if not (text or "").strip():
+        reply = _media_without_text_reply()
+        session["messages"].append({"role": "assistant", "content": reply})
+        save_session(telefone, session)
+        _maybe_log_event(
+            telefone,
+            "ai_media_without_text_reply",
+            phone_hash=_phone_hash(telefone),
+        )
+        return reply
+
     if _is_generic_greeting(text) and session.get("current_agent") == "TriageAgent":
         session["messages"].append({"role": "user", "content": text})
         greeting_already_sent = bool(session.get("greeting_sent"))
@@ -750,15 +809,7 @@ async def process_message_with_ai(
     session["messages"].append({"role": "user", "content": text})
     _update_service_date_context(session, text, now)
     _update_conversation_correction_context(session, text)
-    released_easter_context = _release_easter_context_if_needed(session, text)
     save_session(telefone, session)
-
-    if released_easter_context:
-        _maybe_log_event(
-            telefone,
-            "ai_easter_context_released",
-            phone_hash=telefone[-4:] if telefone else "anon",
-        )
 
     if _requests_opt_out(text):
         previous_agent = session.get("current_agent", "TriageAgent")
@@ -779,12 +830,18 @@ async def process_message_with_ai(
         return OPT_OUT_MESSAGE
 
     if _requests_catalog_photo(text):
+        if _message_mentions_easter_context(text):
+            session["seasonal_context"] = "easter"
+            save_session(telefone, session)
+        if session.get("seasonal_context") == "easter" and not _message_mentions_easter_context(text):
+            _release_easter_context_if_needed(session, text)
+            save_session(telefone, session)
         _maybe_log_event(
             telefone,
             "ai_catalog_link_sent",
             phone_hash=_phone_hash(telefone),
         )
-        return _catalog_photo_reply()
+        return _catalog_photo_reply_for_context(session, text)
 
     if _requests_easter_date_info(text):
         _maybe_log_event(
@@ -793,6 +850,36 @@ async def process_message_with_ai(
             phone_hash=_phone_hash(telefone),
         )
         return easter_date_message(now)
+
+    if session.get("seasonal_context") == "easter":
+        if _is_non_easter_context_switch(session, text):
+            released_easter_context = _release_easter_context_if_needed(session, text)
+            save_session(telefone, session)
+            if released_easter_context:
+                _maybe_log_event(
+                    telefone,
+                    "ai_easter_context_released",
+                    phone_hash=telefone[-4:] if telefone else "anon",
+                )
+        else:
+            _maybe_log_event(
+                telefone,
+                "ai_easter_link_only_enforced",
+                phone_hash=_phone_hash(telefone),
+                flow="seasonal_context",
+            )
+            return EASTER_CATALOG_MESSAGE
+
+    if _message_mentions_easter_context(text):
+        session["seasonal_context"] = "easter"
+        save_session(telefone, session)
+        _maybe_log_event(
+            telefone,
+            "ai_easter_link_only_enforced",
+            phone_hash=_phone_hash(telefone),
+            flow="direct_detection",
+        )
+        return EASTER_CATALOG_MESSAGE
 
     post_purchase_topic = _requests_post_purchase_topic(text)
     if post_purchase_topic:
@@ -861,64 +948,6 @@ async def process_message_with_ai(
             "ai_human_guard_handoff",
         )
         return handoff_message if isinstance(handoff_message, str) and handoff_message.strip() and handoff_message.strip().casefold() != "ok" else HUMAN_HANDOFF_MESSAGE
-
-    if _requests_easter_ready_delivery_handoff(text):
-        previous_agent = session.get("current_agent", "TriageAgent")
-        handoff_message = runtime.escalate_to_human(telefone, "Ovos pronta entrega exigem atendimento humano")
-        session["messages"] = []
-        session.pop("seasonal_context", None)
-        session.pop("service_date_context", None)
-        session.pop("conversation_correction_context", None)
-        session.pop("greeting_sent", None)
-        save_session(telefone, session)
-        _record_human_handoff_metrics(
-            telefone,
-            previous_agent,
-            "easter_ready_delivery",
-            "ai_easter_ready_delivery_handoff",
-        )
-        return handoff_message if isinstance(handoff_message, str) and handoff_message.strip() and handoff_message.strip().casefold() != "ok" else HUMAN_HANDOFF_MESSAGE
-
-    if _requests_easter_catalog(text):
-        session["seasonal_context"] = "easter"
-        save_session(telefone, session)
-        _maybe_log_event(
-            telefone,
-            "ai_easter_catalog_link_sent",
-            phone_hash=telefone[-4:] if telefone else "anon",
-        )
-        return EASTER_CATALOG_MESSAGE
-
-    if session.get("seasonal_context") == "easter":
-        if _should_repeat_easter_catalog_link(session, text):
-            _maybe_log_event(
-                telefone,
-                "ai_easter_catalog_context_followup",
-                phone_hash=telefone[-4:] if telefone else "anon",
-            )
-            return EASTER_CATALOG_MESSAGE
-        if _is_non_easter_context_switch(session, text):
-            _release_easter_context_if_needed(session, text)
-            save_session(telefone, session)
-        elif _should_handoff_after_easter_catalog(session, text):
-            previous_agent = session.get("current_agent", "TriageAgent")
-            handoff_message = runtime.escalate_to_human(
-                telefone,
-                "Cliente respondeu apos receber link de Pascoa",
-            )
-            session["messages"] = []
-            session.pop("seasonal_context", None)
-            session.pop("service_date_context", None)
-            session.pop("conversation_correction_context", None)
-            session.pop("greeting_sent", None)
-            save_session(telefone, session)
-            _record_human_handoff_metrics(
-                telefone,
-                previous_agent,
-                "easter_catalog_followup",
-                "ai_easter_catalog_followup_handoff",
-            )
-            return handoff_message if isinstance(handoff_message, str) and handoff_message.strip() and handoff_message.strip().casefold() != "ok" else HUMAN_HANDOFF_MESSAGE
 
     # Interceptor para presentes (QW1)
     if _requests_regular_gift_topic(text) and session.get("current_agent") == "TriageAgent":

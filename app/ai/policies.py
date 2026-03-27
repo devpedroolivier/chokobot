@@ -191,22 +191,42 @@ def _mentions_non_easter_egg_context(normalized: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in patterns)
 
 
-def _mentions_specific_easter_item(normalized: str) -> bool:
-    """Detecta consultas a itens específicos de Páscoa (guarda contra short-circuit).
+def mentions_easter(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if _mentions_non_easter_egg_context(normalized):
+        return False
+    return bool(
+        re.search(
+            r"\b(pascoa|ovo|ovos|trio|trios|tablete|tabletes|mini ovos?|mimos?|coelho)\b",
+            normalized,
+        )
+    )
 
-    Quando True → o cliente está perguntando sobre um produto concreto → deixar a IA responder.
-    Quando False → consulta genérica → pode enviar o link do catálogo.
+
+def _mentions_specific_easter_item(normalized: str) -> bool:
+    """Detecta consultas a itens específicos de Páscoa.
+
+    Usado para classificar contexto de Páscoa com maior precisão.
     """
-    patterns = (
+    if not normalized:
+        return False
+
+    easter_anchor = bool(
+        re.search(r"\b(pascoa|ovo|ovos|trio|trios|tablete|tabletes|mini ovos?|blister|coelho)\b", normalized)
+    )
+    if not easter_anchor:
+        return False
+
+    direct_item_patterns = (
+        r"\b(trio|trios|tablete|tabletes|mini ovos?|mini ovo|blister|caneca|pelucia)\b",
         r"\b\d+\s*(g|kg|kilo)\b",
         r"\b(supremo|intenso|cookie|pudim|trufad|crocant|colher|vertical|drage|kinder|brownie)\b",
-        r"\b(trio|tablete|mini ovos|mini ovo|blister|caneca|box|pelucia)\b",
-        r"\b(alpino|rafaello|amarena|cheesecake)\b",
-        r"\b(pacoca|pacoca)\b",
-        r"\b(pistache|lotus|negresco|ovomaltine)\b",
-        r"\b(brigadeiro|cereja|maracuja|nutella|prestigio|sensacao|sensacao)\b",
+        r"\b(alpino|rafaello|amarena|cheesecake|pacoca|pistache|lotus|negresco|ovomaltine)\b",
+        r"\b(brigadeiro|cereja|maracuja|nutella|prestigio|sensacao)\b",
     )
-    return any(re.search(pattern, normalized) for pattern in patterns)
+    return any(re.search(pattern, normalized) for pattern in direct_item_patterns)
 
 
 def requests_easter_catalog(text: str) -> bool:
@@ -268,6 +288,8 @@ def message_has_easter_context(text: str) -> bool:
     if _mentions_non_easter_egg_context(normalized):
         return False
 
+    if mentions_easter(text):
+        return True
     if requests_easter_catalog(text):
         return True
     if requests_easter_ready_delivery_handoff(text):
@@ -336,6 +358,11 @@ def requests_easter_order_topic(text: str) -> bool:
     if explicit_easter and re.search(r"\b(quero|queria|pedido|encomenda|comprar|pedir)\b", normalized):
         return True
     if explicit_item and re.search(r"\b(pascoa|trufad\w*|crocant\w*|tablete\w*|trio\w*)\b", normalized):
+        return True
+    if re.search(r"\b(ovo|ovos)\b", normalized) and re.search(
+        r"\b(quero|queria|pedido|encomenda|comprar|pedir|gostaria)\b",
+        normalized,
+    ):
         return True
     return False
 
@@ -416,6 +443,30 @@ def requests_catalog_photo(text: str) -> bool:
         r"\btem\s+imagem\b",
         r"\bver\s+foto(s)?\b",
         r"\bcatalogo\s+visual\b",
+        r"\b(manda|me manda|me envia|me passa|passa|envia)\b.*\b(cardapio|catalogo|menu|link)\b",
+        r"\bquero\s+ver\b.*\b(cardapio|catalogo|menu)\b",
+        r"\blink\b.*\b(cardapio|catalogo|menu|pascoa)\b",
+        r"\b(cardapio|catalogo|menu)\b.*\b(foto|fotos|imagem|imagens|link)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_knowledge_topic(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if requests_easter_catalog(text) or requests_easter_order_topic(text) or requests_easter_gift_topic(text):
+        return False
+    if mentions_order_intent(text):
+        return False
+    if requests_cafeteria_topic(text) or requests_sweet_order_topic(text) or requests_regular_gift_topic(text):
+        return False
+    if _mentions_cafeteria_order_intent(normalized):
+        return False
+    patterns = (
+        r"\b(preco|valor|quanto custa|quanto fica|cardapio|catalogo|menu|opcoes|sabores)\b",
+        r"\b(funcionamento|horario|abre|fecha|entrega|delivery|retirada|endereco)\b",
+        r"\b(pagamento|pix|cartao|dinheiro|parcelamento|troco)\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 
@@ -766,12 +817,6 @@ def should_force_gift_context_handoff(session: dict, user_text: str) -> str | No
     }:
         return None
 
-    if requests_easter_order_topic(user_text):
-        return "GiftOrderAgent"
-
-    if requests_easter_gift_topic(user_text):
-        return "GiftOrderAgent"
-
     if requests_regular_gift_topic(user_text):
         return "GiftOrderAgent"
 
@@ -815,6 +860,8 @@ def should_force_basic_context_switch(session: dict, user_text: str) -> str | No
 
     if current_agent == "CakeOrderAgent":
         return None
+    if current_agent != "KnowledgeAgent" and requests_knowledge_topic(user_text):
+        return "KnowledgeAgent"
     if requests_cake_order_topic(user_text):
         return "CakeOrderAgent"
     return None
