@@ -622,6 +622,42 @@ def build_cafeteria_specificity_retry_instruction(user_text: str) -> str:
     )
 
 
+def response_conflicts_with_cafeteria_total_claim(
+    reply: str | None,
+    *,
+    current_agent: str | None = None,
+) -> bool:
+    if current_agent != "CafeteriaAgent":
+        return False
+
+    normalized = normalize_intent_text(reply or "")
+    if not normalized:
+        return False
+
+    # Resumos estruturados vindos da tool de rascunho/persistencia sao permitidos.
+    if "resumo final do pedido" in normalized:
+        return False
+    if "pedido cafeteria salvo com sucesso" in normalized:
+        return False
+
+    if not re.search(r"\b(total|subtotal)\b", normalized):
+        return False
+    if not re.search(r"r\$\s*\d", normalized):
+        return False
+    return True
+
+
+def build_cafeteria_total_guard_retry_instruction(user_text: str) -> str:
+    return (
+        "CORRECAO DE SISTEMA: voce esta em CafeteriaAgent e nao pode calcular subtotal/total de memoria. "
+        "Recalcule os valores usando apenas ferramentas estruturadas e catalogo canonico. "
+        "Se ja houver dados suficientes (itens, quantidade, recebimento e pagamento), use create_cafeteria_order "
+        "para gerar o resumo de rascunho com subtotal/taxa/valor. "
+        "Se faltar detalhe, pergunte apenas os campos faltantes sem inventar preco. "
+        f"Mensagem atual do cliente: '{user_text}'."
+    )
+
+
 def response_conflicts_with_cutoff(reply: str | None, *, user_text: str, now: datetime | None = None) -> bool:
     if not reply or is_after_same_day_cake_order_cutoff(now) or not mentions_same_day(user_text, now):
         return False

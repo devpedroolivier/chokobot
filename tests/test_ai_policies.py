@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.ai.policies import (
+    build_cafeteria_total_guard_retry_instruction,
     caseirinho_clarification_message,
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
@@ -16,6 +17,7 @@ from app.ai.policies import (
     requests_post_purchase_topic,
     requests_regular_gift_topic,
     response_conflicts_with_cafeteria_specificity,
+    response_conflicts_with_cafeteria_total_claim,
     should_force_basic_context_switch,
     should_force_gift_context_handoff,
     should_force_same_day_cafeteria_handoff,
@@ -90,6 +92,40 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertIn(
             "cliente ainda nao especificou o suficiente",
             build_cafeteria_specificity_retry_instruction("Queria croissant"),
+        )
+
+    def test_cafeteria_total_claim_conflict_requires_tool_based_retry(self):
+        self.assertTrue(
+            response_conflicts_with_cafeteria_total_claim(
+                (
+                    "Aqui está o resumo do seu pedido:\n"
+                    "1 Croissant de Quatro Queijos\n"
+                    "1 Croissant de Chocolate\n"
+                    "1 Coca Lata\n"
+                    "Total: R$ 22,00"
+                ),
+                current_agent="CafeteriaAgent",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_cafeteria_total_claim(
+                (
+                    "Resumo final do pedido (rascunho)\n"
+                    "Itens:\n- 1x Croissant (Chocolate): R$14,50\n"
+                    "Subtotal: R$14,50\nValor: R$14,50"
+                ),
+                current_agent="CafeteriaAgent",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_cafeteria_total_claim(
+                "Total: R$ 22,00",
+                current_agent="SweetOrderAgent",
+            )
+        )
+        self.assertIn(
+            "nao pode calcular subtotal/total de memoria",
+            build_cafeteria_total_guard_retry_instruction("Quero croissant e coca").lower(),
         )
 
     def test_gift_topic_detection_separates_regular_catalog_from_easter(self):

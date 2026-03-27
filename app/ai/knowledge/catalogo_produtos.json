@@ -98,6 +98,27 @@
     },
     {
       "catalog": "cafeteria",
+      "section": "combos_promocionais",
+      "name": "Combo Relampago",
+      "price_brl": 23.99,
+      "unit": "combo",
+      "description": "Inclui 1 Croissant, 1 Bolo Gelado e 1 Bebida.",
+      "options": [
+        "Suco natural",
+        "Refri 220ml"
+      ],
+      "availability_note": "Disponivel somente as tercas-feiras.",
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "combo relampago",
+        "relampago",
+        "combo de terca",
+        "combo da terca",
+        "combo croissant com bolo gelado"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
       "section": "salgados_e_lanches",
       "name": "Lanchinho Fit",
       "price_brl": 14.0,

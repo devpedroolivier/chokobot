@@ -30,9 +30,15 @@ def _format_hhmm(parts: tuple[int, int]) -> str:
 SAME_DAY_CAKE_ORDER_CUTOFF_LABEL = _format_hhmm(SAME_DAY_CAKE_ORDER_CUTOFF)
 DELIVERY_CUTOFF_LABEL = _format_hhmm(DELIVERY_CUTOFF)
 DELIVERY_FEE_STANDARD_LABEL = _format_brl(DELIVERY_FEE_STANDARD)
-STORE_HOURS_SUMMARY = "Segunda: 12h-18h | Terca a sabado: 9h-18h | Domingo: fechado."
+STORE_HOURS_SUMMARY = (
+    "Segunda: 12h-18h | Terca a sabado: 9h-18h | Domingo: fechado "
+    "(excecao: domingo de Pascoa em 05/04/2026, aberto das 9h as 18h)."
+)
 STORE_OPERATION_RULE_LINE = f"Horario de funcionamento: {STORE_HOURS_SUMMARY}"
-SUNDAY_RULE_LINE = "Nao fazemos pedidos, retiradas ou encomendas para domingo."
+SUNDAY_RULE_LINE = (
+    "Nao fazemos pedidos, retiradas ou encomendas para domingo. "
+    "Excepcionalmente, no domingo de Pascoa (05/04/2026), estaremos abertos."
+)
 SUNDAY_UNAVAILABLE_MESSAGE = f"{SUNDAY_RULE_LINE} Horario de funcionamento: {STORE_HOURS_SUMMARY}"
 DELIVERY_RULE_LINE = (
     f"A Chokodelícia FAZ entregas! Taxa padrão: {DELIVERY_FEE_STANDARD_LABEL}. "

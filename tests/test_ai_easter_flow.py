@@ -173,7 +173,7 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Consulta específica")
         fake_client.chat.completions.create.assert_awaited_once()
 
-    async def test_process_message_does_not_loop_easter_link_on_specific_follow_up(self):
+    async def test_process_message_transfers_to_human_after_easter_link_follow_up(self):
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(
                 completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Temos consulta específica"))))
@@ -181,21 +181,80 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch.object(runner, "client", fake_client):
-            first_reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "Quero ver o cardapio de pascoa",
-                "Teste",
-                99,
-            )
-            second_reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "tem de prestigio?",
-                "Teste",
-                99,
-            )
+            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
+                first_reply = await runner.process_message_with_ai(
+                    "5516999999999",
+                    "Quero ver o cardapio de pascoa",
+                    "Teste",
+                    99,
+                )
+                second_reply = await runner.process_message_with_ai(
+                    "5516999999999",
+                    "tem de prestigio?",
+                    "Teste",
+                    99,
+                )
 
         self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
-        self.assertEqual(second_reply, "Temos consulta específica")
+        self.assertEqual(second_reply, HUMAN_HANDOFF_MESSAGE)
+        mocked_escalate.assert_called_once_with(
+            "5516999999999",
+            "Cliente respondeu apos receber link de Pascoa",
+        )
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_repeats_easter_link_without_handoff_when_customer_only_asks_link_again(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
+                first_reply = await runner.process_message_with_ai(
+                    "5516999999900",
+                    "Quero ver o cardapio de pascoa",
+                    "Teste",
+                    99,
+                )
+                second_reply = await runner.process_message_with_ai(
+                    "5516999999900",
+                    "manda o link da pascoa de novo",
+                    "Teste",
+                    99,
+                )
+
+        self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
+        self.assertEqual(second_reply, EASTER_CATALOG_MESSAGE)
+        mocked_escalate.assert_not_called()
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_releases_easter_context_when_customer_changes_topic(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Vamos seguir com cafeteria."))))
+            )
+        )
+
+        with patch.object(runner, "client", fake_client):
+            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
+                first_reply = await runner.process_message_with_ai(
+                    "5516999999901",
+                    "Quero ver o cardapio de pascoa",
+                    "Teste",
+                    99,
+                )
+                second_reply = await runner.process_message_with_ai(
+                    "5516999999901",
+                    "Agora quero 1 croissant de frango",
+                    "Teste",
+                    99,
+                )
+
+        self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
+        self.assertEqual(second_reply, "Vamos seguir com cafeteria.")
+        self.assertEqual(runner.CONVERSATIONS["5516999999901"]["current_agent"], "CafeteriaAgent")
+        self.assertNotIn("seasonal_context", runner.CONVERSATIONS["5516999999901"])
+        mocked_escalate.assert_not_called()
         fake_client.chat.completions.create.assert_awaited_once()
 
     async def test_process_message_answers_easter_date_from_operational_calendar(self):

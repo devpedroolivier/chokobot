@@ -23,6 +23,22 @@ class AICafeteriaOrderTests(unittest.TestCase):
 
         self.assertEqual(message, "Informe o sabor do croissant e a quantidade.")
 
+    def test_save_cafeteria_order_draft_requires_beverage_variant_for_combo_relampago(self):
+        order = ai_tools.CafeteriaOrderSchema(
+            itens=[{"nome": "Combo Relampago", "quantidade": 1}],
+            modo_recebimento="retirada",
+            pagamento={"forma": "PIX"},
+        )
+
+        message = ai_tools.save_cafeteria_order_draft_process(
+            "5511999999999",
+            "Cliente",
+            1,
+            order,
+        )
+
+        self.assertEqual(message, "No Combo Relampago, escolha a bebida: Suco natural ou Refri 220ml.")
+
     def test_create_cafeteria_order_validates_items_and_computes_total(self):
         order = ai_tools.CafeteriaOrderSchema(
             itens=[
@@ -61,6 +77,47 @@ class AICafeteriaOrderTests(unittest.TestCase):
         self.assertIn("R$34,50", message)
         self.assertEqual(saved_calls[0]["phone"], "5511999999999")
         self.assertIn("2x Croissant (Chocolate)", saved_calls[0]["itens"][0])
+        self.assertEqual(process_calls[-1]["process_type"], "ai_cafeteria_order")
+        self.assertEqual(process_calls[-1]["status"], "converted")
+
+    def test_create_cafeteria_order_computes_total_with_combo_relampago(self):
+        order = ai_tools.CafeteriaOrderSchema(
+            itens=[
+                {"nome": "Combo Relampago", "variante": "Suco natural", "quantidade": 2},
+                {"nome": "Coca Cola KS", "quantidade": 1},
+            ],
+            data_entrega="10/10/2030",
+            modo_recebimento="retirada",
+            pagamento={"forma": "PIX"},
+        )
+
+        saved_calls = []
+        process_calls = []
+
+        class _OrderGateway:
+            def save_cafeteria_order(self, **kwargs):
+                saved_calls.append(kwargs)
+
+        class _ProcessRepository:
+            def upsert_process(self, **kwargs):
+                process_calls.append(kwargs)
+                return 1
+
+        with patch("app.ai.tools.get_order_gateway", return_value=_OrderGateway()):
+            with patch("app.ai.tools.get_customer_process_repository", return_value=_ProcessRepository()):
+                message = ai_tools.create_cafeteria_order(
+                    "5511999999999",
+                    "Cliente",
+                    1,
+                    order,
+                )
+
+        self.assertIn("Pedido cafeteria salvo com sucesso!", message)
+        self.assertIn("2x Combo Relampago (Suco natural)", message)
+        self.assertIn("1x Coca Cola KS", message)
+        self.assertIn("Subtotal: R$53,48", message)
+        self.assertIn("Total final: R$53,48", message)
+        self.assertIn("2x Combo Relampago (Suco natural)", saved_calls[0]["itens"][0])
         self.assertEqual(process_calls[-1]["process_type"], "ai_cafeteria_order")
         self.assertEqual(process_calls[-1]["status"], "converted")
 

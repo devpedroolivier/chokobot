@@ -21,7 +21,7 @@ from app.ai import runner
 from app.ai.order_support import MockOrderSupportAdapter, OrderRecord, OrderSupportService
 from app.ai.runner import POST_PURCHASE_MESSAGES
 from app.observability import clear_metrics
-from app.welcome_message import OPT_OUT_MESSAGE
+from app.welcome_message import HUMAN_HANDOFF_MESSAGE, OPT_OUT_MESSAGE
 
 
 def _tool_call(name: str, arguments: dict, tool_call_id: str = "tool-1"):
@@ -306,7 +306,7 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         fake_client.chat.completions.create.assert_not_awaited()
         self.assertEqual(runner.CONVERSATIONS["5516997777777"]["messages"], [])
 
-    async def test_process_message_short_circuits_opt_out_without_human_handoff(self):
+    async def test_process_message_after_easter_link_honors_opt_out(self):
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
         )
@@ -330,10 +330,7 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, OPT_OUT_MESSAGE)
         mocked_escalate.assert_not_called()
         fake_client.chat.completions.create.assert_not_awaited()
-        self.assertEqual(
-            runner.CONVERSATIONS["5516991212121"],
-            {"current_agent": "TriageAgent", "messages": []},
-        )
+        self.assertEqual(runner.CONVERSATIONS["5516991212121"]["messages"], [])
 
     async def test_process_message_switches_from_sweet_to_cake_when_topic_changes(self):
         telefone = "5516995656565"

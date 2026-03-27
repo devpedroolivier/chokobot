@@ -33,6 +33,14 @@ class CatalogGatewayLookupTests(unittest.TestCase):
         self.assertIn("Vulcaozinho de Cenoura com Calda de Chocolate", result)
         self.assertIn("R$16,50", result)
 
+    def test_lookup_catalog_items_matches_tuesday_combo_relampago(self):
+        result = self.gateway.lookup_catalog_items("combo relampago de terca", "cafeteria")
+
+        self.assertIn("Combo Relampago", result)
+        self.assertIn("R$23,99", result)
+        self.assertIn("Suco natural", result)
+        self.assertIn("Refri 220ml", result)
+
     def test_lookup_catalog_items_separates_regular_gifts_from_easter(self):
         result = self.gateway.lookup_catalog_items("box m cafe", "presentes")
 
@@ -48,6 +56,15 @@ class CatalogGatewayLookupTests(unittest.TestCase):
         self.assertIn("bit.ly/presenteschoko", caixinha)
         self.assertIn("Flores", flores)
         self.assertIn("modelos e montagem", flores.casefold())
+
+    def test_lookup_catalog_items_matches_orquidea_box_sizes_with_prices(self):
+        box_g = self.gateway.lookup_catalog_items("box orquidea g", "presentes")
+        box_m = self.gateway.lookup_catalog_items("box orquidea m", "presentes")
+
+        self.assertIn("Box Orquídea G", box_g)
+        self.assertIn("R$150,00", box_g)
+        self.assertIn("Box Orquídea M", box_m)
+        self.assertIn("R$120,00", box_m)
 
     def test_lookup_catalog_items_returns_not_found_for_uncatalogued_item(self):
         result = self.gateway.lookup_catalog_items("saquinho pequeno", "cafeteria")

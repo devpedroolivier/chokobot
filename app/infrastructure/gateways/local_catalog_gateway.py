@@ -29,6 +29,7 @@ CATALOG_LABELS = {
 
 SECTION_LABELS = {
     "salgados_e_lanches": "Salgados e Lanches",
+    "combos_promocionais": "Combos Promocionais",
     "sobremesas": "Sobremesas",
     "cafes_quentes": "Cafés Quentes",
     "gelados_e_bebidas": "Gelados e Bebidas",

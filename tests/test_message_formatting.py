@@ -54,6 +54,8 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("☕ Cardápio da Cafeteria", menu)
         self.assertIn("Salgados e Lanches", menu)
         self.assertIn("Croissant", menu)
+        self.assertIn("Combos Promocionais", menu)
+        self.assertIn("Combo Relampago", menu)
 
     def test_lookup_catalog_items_expoe_opcoes_de_item_especifico(self):
         result = ai_tools.lookup_catalog_items("croasant de chocolate", "cafeteria")

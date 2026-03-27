@@ -94,6 +94,25 @@ class OperationalCalendarTests(unittest.TestCase):
         self.assertIn("Páscoa 2026", message)
         self.assertIn("05/04/2026 (Domingo)", message)
 
+    def test_validate_service_date_allows_easter_sunday_with_open_override(self):
+        calendar = {
+            "blocked_dates": [],
+            "date_overrides": [
+                {
+                    "date": "05/04/2026",
+                    "open": "09:00",
+                    "close": "18:00",
+                    "label": "Domingo de Pascoa - abertura excepcional",
+                }
+            ],
+            "slot_capacities": [],
+        }
+
+        with patch.object(store_schedule, "load_operational_calendar", return_value=calendar):
+            message = store_schedule.validate_service_date("05/04/2026")
+
+        self.assertIsNone(message)
+
 
 if __name__ == "__main__":
     unittest.main()

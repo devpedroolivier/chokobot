@@ -70,6 +70,22 @@
     {
       "catalog": "presentes",
       "section": "flores",
+      "name": "Box Orquídea G",
+      "price_brl": 150.0,
+      "description": "Box floral de orquídea tamanho grande.",
+      "aliases": ["box orquidea g", "box orquídea g", "orquidea g", "orquídea g", "box de orquidea g"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "flores",
+      "name": "Box Orquídea M",
+      "price_brl": 120.0,
+      "description": "Box floral de orquídea tamanho medio.",
+      "aliases": ["box orquidea m", "box orquídea m", "orquidea m", "orquídea m", "box de orquidea m"]
+    },
+    {
+      "catalog": "presentes",
+      "section": "flores",
       "name": "Flores",
       "availability_note": "Consulte modelos e montagem no catálogo regular de presentes: https://bit.ly/presenteschoko",
       "aliases": ["flores", "buque", "buquê", "ramalhete"]

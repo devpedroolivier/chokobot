@@ -214,6 +214,78 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Ola Maria! Como posso ajudar hoje? 😊")
         fake_client.chat.completions.create.assert_not_awaited()
 
+    async def test_process_message_with_ai_retries_when_cafeteria_total_is_claimed_without_tool(self):
+        telefone = "5516992919994"
+        create_mock = AsyncMock(
+            side_effect=[
+                SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content=(
+                                    "Aqui está o resumo do seu pedido:\n"
+                                    "1 Croissant de Quatro Queijos\n"
+                                    "1 Croissant de Chocolate\n"
+                                    "1 Coca Lata\n"
+                                    "Total: R$ 22,00"
+                                ),
+                                tool_calls=[],
+                            )
+                        )
+                    ],
+                    usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+                ),
+                SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content="Perfeito! Me confirme só o horário da entrega para eu calcular no resumo oficial.",
+                                tool_calls=[],
+                            )
+                        )
+                    ],
+                    usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+                ),
+            ]
+        )
+        fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock)))
+        runner.CONVERSATIONS[telefone] = {
+            "current_agent": "CafeteriaAgent",
+            "messages": [{"role": "system", "content": "prompt cafeteria"}],
+        }
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": f"menu:{category}",
+            get_cake_options=lambda category="tradicional", option_type="recheio": f"cake-options:{category}:{option_type}",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "doces",
+        )
+
+        reply = await runner.process_message_with_ai(
+            telefone,
+            "quero 1 croissant quatro queijos, 1 croissant chocolate e 1 coca lata para entrega",
+            "Maria Fernanda",
+            1,
+            ai_client=fake_client,
+            runtime=runtime,
+        )
+
+        self.assertEqual(
+            reply,
+            "Perfeito! Me confirme só o horário da entrega para eu calcular no resumo oficial.",
+        )
+        self.assertEqual(create_mock.await_count, 2)
+        second_messages = create_mock.await_args_list[1].kwargs["messages"]
+        self.assertTrue(
+            any(
+                message.get("role") == "system"
+                and "nao pode calcular subtotal/total de memoria" in message.get("content", "").lower()
+                for message in second_messages
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

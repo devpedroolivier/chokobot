@@ -1,11 +1,6 @@
 {
   "blocked_dates": [
     {
-      "date": "2026-04-05",
-      "reason": "Domingo de Pascoa — loja fechada (domingo regular)",
-      "affects": ["orders", "deliveries", "pickups"]
-    },
-    {
       "date": "2026-03-29",
       "reason": "Domingo — loja fechada (domingo regular)",
       "affects": ["orders", "deliveries", "pickups"]
@@ -23,6 +18,14 @@
       "label": "Sabado de Aleluia — vespera de Pascoa",
       "note": "Possivel alta demanda. Horario normal previsto (9h-18h) mas confirmar capacidade.",
       "operational_status": "high_demand"
+    },
+    {
+      "date": "2026-04-05",
+      "label": "Domingo de Pascoa — abertura excepcional",
+      "note": "Excepcionalmente abertos no domingo de Pascoa (dia 5), das 9h as 18h.",
+      "open": "09:00",
+      "close": "18:00",
+      "operational_status": "open_exception"
     },
     {
       "date": "2026-04-06",

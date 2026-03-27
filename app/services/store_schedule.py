@@ -594,14 +594,24 @@ def validate_service_date(value: str | None) -> str | None:
     parsed = parse_service_date(value)
     if not parsed:
         return None
-    if parsed.weekday() == 6:
-        return SUNDAY_UNAVAILABLE_MESSAGE
+
     blocked_entry = blocked_service_date_entry(parsed)
     if blocked_entry:
         return _format_blocked_date_message(parsed, blocked_entry)
+
     override = operational_day_override(parsed)
     if override and str(override.get("closed") or "").lower() in {"1", "true", "sim", "yes"}:
         return _format_closed_override_message(parsed, override)
+
+    if parsed.weekday() == 6:
+        # Domingo permanece indisponivel por padrao; override aberto libera datas excepcionais.
+        if not override:
+            return SUNDAY_UNAVAILABLE_MESSAGE
+        opening = _parse_hora(str(override.get("open") or ""))
+        closing = _parse_hora(str(override.get("close") or ""))
+        if not (opening and closing):
+            return SUNDAY_UNAVAILABLE_MESSAGE
+
     capacity_error = _capacity_violation(parsed, None)
     if capacity_error:
         return _format_capacity_message(parsed, capacity_error)

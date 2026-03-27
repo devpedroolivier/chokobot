@@ -121,6 +121,7 @@ TAXA_ENTREGA_CAFETERIA = 5.0
 CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
 CAFETERIA_VARIANT_REQUIRED_HINTS = {
     "Croissant": "Informe o sabor do croissant e a quantidade.",
+    "Combo Relampago": "No Combo Relampago, escolha a bebida: Suco natural ou Refri 220ml.",
     "Agua": "Informe se deseja agua com gas ou sem gas, e a quantidade.",
 }
 GIFT_CATEGORY_ALIASES = {
@@ -152,9 +153,14 @@ CAFETERIA_NAME_ALIASES = {
     "mocaccino": "Mocaccino",
     "achocolatado": "Achocolatado",
     "chokobenta": "ChokoBenta",
+    "combo relampago": "Combo Relampago",
+    "relampago": "Combo Relampago",
+    "combo de terca": "Combo Relampago",
+    "combo da terca": "Combo Relampago",
 }
 CAFETERIA_ITEM_KEYWORDS = {
     "Croissant": ("croissant", "croassant", "croasant"),
+    "Combo Relampago": ("combo", "relampago", "terca"),
     "Agua": ("agua",),
     "Coca Cola KS": ("coca", "cola", "ks"),
     "Refrigerante Lata": ("refrigerante", "lata"),

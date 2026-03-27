@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.policies import (
+    build_cafeteria_total_guard_retry_instruction as _build_cafeteria_total_guard_retry_instruction,
     caseirinho_clarification_message as _caseirinho_clarification_message,
     build_conversation_correction_instruction,
     build_cafeteria_specificity_retry_instruction as _build_cafeteria_specificity_retry_instruction,
@@ -23,15 +24,21 @@ from app.ai.policies import (
     normalize_intent_text,
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
+    requests_easter_gift_topic as _requests_easter_gift_topic,
+    requests_easter_order_topic as _requests_easter_order_topic,
     requests_catalog_photo as _requests_catalog_photo,
     requests_easter_date_info as _requests_easter_date_info,
     requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
+    requests_cafeteria_topic as _requests_cafeteria_topic,
+    requests_cake_order_topic as _requests_cake_order_topic,
     requests_post_purchase_topic as _requests_post_purchase_topic,
     requests_regular_gift_topic as _requests_regular_gift_topic,
+    requests_sweet_order_topic as _requests_sweet_order_topic,
     should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
     is_generic_greeting as _is_generic_greeting,
     requests_opt_out as _requests_opt_out,
+    response_conflicts_with_cafeteria_total_claim as _response_conflicts_with_cafeteria_total_claim,
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
 )
@@ -121,7 +128,10 @@ def _first_name(nome_cliente: str | None) -> str | None:
 def _is_known_customer(telefone: str, now: datetime | None = None) -> bool:
     if not telefone:
         return False
-    customer = get_customer_repository().get_customer_by_phone(telefone)
+    try:
+        customer = get_customer_repository().get_customer_by_phone(telefone)
+    except Exception:
+        return False
     if customer is None:
         return False
     created_at_raw = str(customer.criado_em or "").strip()
@@ -489,6 +499,90 @@ def _should_repeat_easter_catalog_link(session: dict, text: str) -> bool:
     return any(pattern in normalized for pattern in link_patterns)
 
 
+def _message_mentions_easter_context(text: str) -> bool:
+    if _requests_easter_catalog(text):
+        return True
+    if _requests_easter_ready_delivery_handoff(text):
+        return True
+    if _requests_easter_order_topic(text):
+        return True
+    if _requests_easter_gift_topic(text):
+        return True
+    if _requests_easter_date_info(text):
+        return True
+
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    return bool(
+        re.search(
+            r"\b(pascoa|ovo|ovos|trio|trios|tablete|tabletes|mimo|mimos|coelho|trufad\w*|crocant\w*)\b",
+            normalized,
+        )
+    )
+
+
+def _is_non_easter_context_switch(session: dict, text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+
+    acknowledgement_pattern = r"^(ok|beleza|blz|show|valeu|obrigad\w*|entendi|perfeito|certo)$"
+    if re.search(acknowledgement_pattern, normalized):
+        return True
+
+    if _requests_catalog_photo(text):
+        return True
+    if _requests_post_purchase_topic(text):
+        return True
+
+    if _requests_cafeteria_topic(text):
+        return True
+    if _requests_cake_order_topic(text):
+        return True
+    if _requests_sweet_order_topic(text):
+        return True
+    if _requests_regular_gift_topic(text) and not _requests_easter_gift_topic(text):
+        return True
+
+    forced_agent = _should_force_basic_context_switch(session, text)
+    if forced_agent in {"CakeOrderAgent", "SweetOrderAgent", "CafeteriaAgent"}:
+        return True
+    if forced_agent == "GiftOrderAgent" and not _message_mentions_easter_context(text):
+        return True
+
+    operational_patterns = (
+        r"\b(horario|funcionamento|entrega|taxa|pix|pagamento|cartao|troco|endereco|reserva|whatsapp|telefone)\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in operational_patterns) and not _message_mentions_easter_context(text):
+        return True
+
+    return False
+
+
+def _should_handoff_after_easter_catalog(session: dict, text: str) -> bool:
+    if session.get("seasonal_context") != "easter":
+        return False
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if _should_repeat_easter_catalog_link(session, text):
+        return False
+    if _is_non_easter_context_switch(session, text):
+        return False
+
+    detail_followup_patterns = (
+        r"\b(tem|quanto|preco|valor|sabor|sabores|peso|grama|gramagem|tamanho|recheio|esse|essa|de prestigio|de nutella)\b",
+    )
+    if _message_mentions_easter_context(text):
+        return True
+    if any(re.search(pattern, normalized) for pattern in detail_followup_patterns):
+        return True
+
+    # Sem mudança clara de assunto apos o link de Pascoa, trate como continuidade do tema.
+    return True
+
+
 def _is_draft_order_result(tool_result: str | None) -> bool:
     normalized = (tool_result or "").casefold()
     return normalized.startswith("resumo final do pedido") and (
@@ -755,13 +849,41 @@ async def process_message_with_ai(
         )
         return EASTER_CATALOG_MESSAGE
 
-    if _should_repeat_easter_catalog_link(session, text):
-        _maybe_log_event(
-            telefone,
-            "ai_easter_catalog_context_followup",
-            phone_hash=telefone[-4:] if telefone else "anon",
-        )
-        return EASTER_CATALOG_MESSAGE
+    if session.get("seasonal_context") == "easter":
+        if _should_repeat_easter_catalog_link(session, text):
+            _maybe_log_event(
+                telefone,
+                "ai_easter_catalog_context_followup",
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
+            return EASTER_CATALOG_MESSAGE
+        if _is_non_easter_context_switch(session, text):
+            session.pop("seasonal_context", None)
+            save_session(telefone, session)
+            _maybe_log_event(
+                telefone,
+                "ai_easter_context_released",
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
+        elif _should_handoff_after_easter_catalog(session, text):
+            previous_agent = session.get("current_agent", "TriageAgent")
+            handoff_message = runtime.escalate_to_human(
+                telefone,
+                "Cliente respondeu apos receber link de Pascoa",
+            )
+            session["messages"] = []
+            session.pop("seasonal_context", None)
+            session.pop("service_date_context", None)
+            session.pop("conversation_correction_context", None)
+            session.pop("greeting_sent", None)
+            save_session(telefone, session)
+            _record_human_handoff_metrics(
+                telefone,
+                previous_agent,
+                "easter_catalog_followup",
+                "ai_easter_catalog_followup_handoff",
+            )
+            return handoff_message if isinstance(handoff_message, str) and handoff_message.strip() and handoff_message.strip().casefold() != "ok" else HUMAN_HANDOFF_MESSAGE
 
     # Interceptor para presentes (QW1)
     if _requests_regular_gift_topic(text) and session.get("current_agent") == "TriageAgent":
@@ -832,6 +954,7 @@ async def process_message_with_ai(
     iteration_count = 0
     time_conflict_retry_used = False
     cafeteria_specificity_retry_used = False
+    cafeteria_total_guard_retry_used = False
     transient_system_note = None
 
     if active_client is None:
@@ -917,6 +1040,29 @@ async def process_message_with_ai(
             _maybe_log_event(
                 telefone,
                 "ai_cafeteria_specificity_retry",
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
+            continue
+
+        if (
+            not msg.tool_calls
+            and not cafeteria_total_guard_retry_used
+            and _response_conflicts_with_cafeteria_total_claim(
+                msg.content,
+                current_agent=current_agent_name,
+            )
+        ):
+            cafeteria_total_guard_retry_used = True
+            transient_system_note = _build_cafeteria_total_guard_retry_instruction(text)
+            _maybe_increment_counter(
+                telefone,
+                "ai_cafeteria_total_guard_retries_total",
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
+                "ai_cafeteria_total_guard_retry",
                 agent=session["current_agent"],
                 phone_hash=telefone[-4:] if telefone else "anon",
             )
