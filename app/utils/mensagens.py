@@ -3,9 +3,12 @@ import unicodedata
 from datetime import datetime
 
 from app.application.service_registry import get_messaging_gateway
+from app.observability import log_event
+from app.security import hash_phone
 from app.services.estados import append_conversation_message
 
 SAUDACOES = ["oi", "iae", "salve", "olá", "ola", "bom dia", "boa tarde", "boa noite"]
+_AGENT_PAYLOAD_PATTERN = re.compile(r"\{[^{}]*[\"']agent_name[\"']\s*:[^{}]*\}", flags=re.IGNORECASE)
 
 def is_saudacao(texto: str) -> bool:
     return any(sauda in (texto or "").lower() for sauda in SAUDACOES)
@@ -62,6 +65,28 @@ def formatar_mensagem_saida(mensagem: str) -> str:
         linhas_formatadas.append(f"{_heading_icon(titulo)} {titulo}")
     return "\n".join(linhas_formatadas)
 
+
+def _sanitize_internal_agent_payload(mensagem: str) -> tuple[str, bool]:
+    original = str(mensagem or "")
+    sanitized = _AGENT_PAYLOAD_PATTERN.sub("", original)
+
+    filtered_lines: list[str] = []
+    removed = sanitized != original
+    for line in sanitized.splitlines():
+        normalized = line.strip().casefold()
+        if "agent_name" in normalized and "{" in normalized:
+            removed = True
+            continue
+        filtered_lines.append(line)
+
+    sanitized = "\n".join(filtered_lines)
+    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized).strip()
+
+    if not sanitized:
+        sanitized = "Perfeito! Vamos continuar seu atendimento por aqui. Como posso te ajudar agora?"
+        removed = True
+    return sanitized, removed
+
 async def responder_usuario(phone: str, mensagem: str) -> bool:
     """
     Envia mensagem de forma confiável com retry controlado e lock por telefone.
@@ -77,6 +102,9 @@ async def responder_usuario_com_contexto(
     role: str = "bot",
     actor_label: str | None = None,
 ) -> bool:
+    mensagem, removed_internal_payload = _sanitize_internal_agent_payload(mensagem)
+    if removed_internal_payload:
+        log_event("outbound_internal_payload_sanitized", phone_hash=hash_phone(phone))
     mensagem = formatar_mensagem_saida(mensagem)
     ok = await get_messaging_gateway().send_text(phone, mensagem)
     if ok:

@@ -367,7 +367,59 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertEqual(len(persisted_calls), 1)
         self.assertEqual(session["messages"], [])
         self.assertEqual(saved[0][0], "5511999999999")
-        self.assertIn("pedido foi finalizado", tool_result)
+        self.assertIn("Pedido Anotado✅️", tool_result)
+        self.assertIn("Agradecemos a preferência 🥰", tool_result)
+
+    def test_create_sweet_order_with_explicit_confirmation_emits_order_closed_event_and_metric(self):
+        session = {
+            "messages": [{"role": "user", "content": "Sim, pode fechar."}],
+            "current_agent": "SweetOrderAgent",
+        }
+        runtime = runner.AIRuntime(
+            get_menu=lambda category="todas": "menu",
+            get_cake_options=lambda category="tradicional", option_type="recheio": "cake-options",
+            get_learnings=lambda: "",
+            save_learning=lambda aprendizado: aprendizado,
+            escalate_to_human=lambda telefone, motivo: "ok",
+            create_cake_order=lambda telefone, nome_cliente, cliente_id, order: "pedido",
+            create_sweet_order=lambda telefone, nome_cliente, cliente_id, order: "Pedido de doces salvo com sucesso! ID: 77",
+        )
+
+        published_events = []
+
+        class _Bus:
+            def publish(self, event):
+                published_events.append(event)
+
+        with patch("app.ai.tool_execution.get_event_bus", return_value=_Bus()):
+            should_return, tool_result = handle_tool_call(
+                runtime=runtime,
+                function_name="create_sweet_order",
+                arguments={
+                    "itens": [{"nome": "Brigadeiro Escama", "quantidade": 10}],
+                    "data_entrega": "10/10/2030",
+                    "horario_retirada": "15:00",
+                    "modo_recebimento": "retirada",
+                    "pagamento": {"forma": "PIX"},
+                },
+                telefone="5511999999999",
+                nome_cliente="Cliente",
+                cliente_id=1,
+                session=session,
+                save_session_fn=lambda telefone, state: None,
+                now=datetime(2026, 3, 27, 11, 0, tzinfo=ZoneInfo("America/Sao_Paulo")),
+            )
+
+        self.assertTrue(should_return)
+        self.assertIn("Protocolo: CHK-000077", tool_result)
+        self.assertTrue(any(type(event).__name__ == "OrderClosedByBotEvent" for event in published_events))
+        counters, _ = snapshot_metrics()
+        closed_total = sum(
+            value
+            for (name, _labels), value in counters.items()
+            if name == "pedido_fechado_autonomo_total"
+        )
+        self.assertEqual(closed_total, 1.0)
 
     def test_create_sweet_order_accepts_whatsapp_confirmation_variants(self):
         accepted_messages = [
@@ -425,7 +477,8 @@ class AIToolExecutionTests(unittest.TestCase):
 
                 self.assertTrue(should_return)
                 self.assertEqual(len(persisted_calls), 1)
-                self.assertIn("pedido foi finalizado", tool_result)
+                self.assertIn("Pedido Anotado✅️", tool_result)
+                self.assertIn("Agradecemos a preferência 🥰", tool_result)
 
     def test_create_sweet_order_rejects_ambiguous_confirmation_variants(self):
         rejected_messages = [
@@ -572,7 +625,8 @@ class AIToolExecutionTests(unittest.TestCase):
         self.assertEqual(len(persisted_calls), 1)
         self.assertEqual(session["messages"], [])
         self.assertEqual(saved[0][0], "5511999999999")
-        self.assertIn("pedido foi finalizado", tool_result)
+        self.assertIn("Pedido Anotado✅️", tool_result)
+        self.assertIn("Agradecemos a preferência 🥰", tool_result)
 
     def test_get_cake_options_uses_runtime_and_keeps_run_active(self):
         session = {"messages": [], "current_agent": "CakeOrderAgent"}

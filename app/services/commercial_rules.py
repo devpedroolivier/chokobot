@@ -38,8 +38,16 @@ DELIVERY_RULE_LINE = (
     f"A Chokodelícia FAZ entregas! Taxa padrão: {DELIVERY_FEE_STANDARD_LABEL}. "
     f"Horário limite: até {DELIVERY_CUTOFF_LABEL}."
 )
-PAYMENT_CHANGE_RULE_LINE = "Regras de pagamento: troco so existe para Dinheiro. PIX e Cartao nao usam troco."
-SIMPLE_PAYMENT_CHANGE_RULE_LINE = "Troco so existe para Dinheiro. PIX e Cartao nao usam troco."
+PAYMENT_CHANGE_RULE_LINE = (
+    "Regras de pagamento: troco so existe para Dinheiro. "
+    "Se for Dinheiro, pergunte se o cliente precisa de troco (use troco_para=0 quando nao precisar). "
+    "PIX e Cartao nao usam troco."
+)
+SIMPLE_PAYMENT_CHANGE_RULE_LINE = (
+    "Troco so existe para Dinheiro. "
+    "Se for Dinheiro, pergunte se o cliente precisa de troco (use troco_para=0 quando nao precisar). "
+    "PIX e Cartao nao usam troco."
+)
 PAYMENT_INSTALLMENT_RULE_LINE = (
     f"Parcelamento so no Cartao e somente acima de {_format_brl(CARD_INSTALLMENT_MIN_TOTAL)}, em ate {CARD_INSTALLMENT_MAX}x."
 )

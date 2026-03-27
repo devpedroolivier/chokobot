@@ -5,6 +5,8 @@ import re
 import unicodedata
 
 from app.ai.agents import AGENTS_MAP
+from app.application.events import OrderClosedByBotEvent
+from app.application.service_registry import get_event_bus
 from app.ai.tools import (
     CafeteriaOrderSchema,
     CakeOrderSchema,
@@ -17,6 +19,7 @@ from app.ai.tools import (
 )
 from app.observability import increment_counter, log_event
 from app.services.store_schedule import format_service_date, parse_service_date, resolve_service_date_reference
+from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 from app.welcome_message import HUMAN_HANDOFF_MESSAGE
 
 _CONFIRMATION_MARKERS = (
@@ -140,11 +143,74 @@ def _reset_session(session: dict) -> None:
     session.pop("seasonal_context", None)
     session.pop("service_date_context", None)
     session.pop("conversation_correction_context", None)
+    session.pop("greeting_sent", None)
+
+
+def _resolve_handoff_message(raw_result: object) -> str:
+    message = str(raw_result or "").strip()
+    if not message or message.casefold() == "ok":
+        return HUMAN_HANDOFF_MESSAGE
+    return message
 
 
 def _resolved_service_date_from_session(session: dict) -> str | None:
     context = session.get("service_date_context") or {}
     return str(context.get("date") or "").strip() or None
+
+
+def _extract_protocol(tool_result: str) -> str | None:
+    existing = re.search(r"\bProtocolo:\s*([A-Z0-9-]+)\b", tool_result, flags=re.IGNORECASE)
+    if existing:
+        return str(existing.group(1)).upper()
+    match = re.search(r"\bID(?:\s+da\s+Encomenda)?\s*:\s*(\d+)\b", tool_result, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return f"CHK-{int(match.group(1)):06d}"
+
+
+def _extract_order_id(tool_result: str) -> int | None:
+    match = re.search(r"\bID(?:\s+da\s+Encomenda)?\s*:\s*(\d+)\b", tool_result, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _record_autonomous_order_closure(
+    *,
+    telefone: str,
+    current_agent: str | None,
+    tool_name: str,
+    tool_result: str,
+    now: datetime | None = None,
+) -> None:
+    reference = normalize_to_bot_timezone(now) if now is not None else now_in_bot_timezone()
+    day = reference.strftime("%Y-%m-%d")
+    protocol = _extract_protocol(tool_result)
+    order_id = _extract_order_id(tool_result)
+
+    increment_counter(
+        "pedido_fechado_autonomo_total",
+        dia=day,
+        agent=str(current_agent or "unknown"),
+        tool_name=tool_name,
+    )
+    get_event_bus().publish(
+        OrderClosedByBotEvent(
+            phone=telefone,
+            agente=str(current_agent or "unknown"),
+            ferramenta=tool_name,
+            order_id=order_id,
+            protocolo=protocol,
+        )
+    )
+
+
+def _final_saved_order_message(tool_result: str) -> str:
+    header = "Pedido Anotado✅️\nAgradecemos a preferência 🥰"
+    protocol = _extract_protocol(tool_result)
+    if protocol:
+        return f"{header}\nProtocolo: {protocol}"
+    return header
 
 
 def _apply_service_date_resolution(arguments: dict, session: dict, now: datetime | None = None) -> None:
@@ -275,10 +341,10 @@ def handle_tool_call(
     elif function_name == "save_learning":
         tool_result = runtime.save_learning(arguments.get("aprendizado"))
     elif function_name == "escalate_to_human":
-        runtime.escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
+        handoff_result = runtime.escalate_to_human(telefone, arguments.get("motivo", "Solicitado pelo cliente"))
         _reset_session(session)
         save_session_fn(telefone, session)
-        return True, HUMAN_HANDOFF_MESSAGE
+        return True, _resolve_handoff_message(handoff_result)
     elif function_name == "create_cake_order":
         try:
             _apply_service_date_resolution(arguments, session, now)
@@ -300,9 +366,16 @@ def handle_tool_call(
             else:
                 tool_result = runtime.create_cake_order(telefone, nome_cliente, cliente_id, order)
                 if _is_saved_order_result(str(tool_result)):
+                    _record_autonomous_order_closure(
+                        telefone=telefone,
+                        current_agent=session.get("current_agent"),
+                        tool_name=function_name,
+                        tool_result=str(tool_result),
+                        now=now,
+                    )
                     _reset_session(session)
                     save_session_fn(telefone, session)
-                    return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+                    return True, _final_saved_order_message(str(tool_result))
         except Exception as exc:
             tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
     elif function_name == "create_sweet_order":
@@ -326,9 +399,16 @@ def handle_tool_call(
             else:
                 tool_result = runtime.create_sweet_order(telefone, nome_cliente, cliente_id, order)
                 if _is_saved_order_result(str(tool_result)):
+                    _record_autonomous_order_closure(
+                        telefone=telefone,
+                        current_agent=session.get("current_agent"),
+                        tool_name=function_name,
+                        tool_result=str(tool_result),
+                        now=now,
+                    )
                     _reset_session(session)
                     save_session_fn(telefone, session)
-                    return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+                    return True, _final_saved_order_message(str(tool_result))
         except Exception as exc:
             tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
     elif function_name == "create_cafeteria_order":
@@ -356,9 +436,16 @@ def handle_tool_call(
                 else:
                     tool_result = cafeteria_fn(telefone, nome_cliente, cliente_id, order)
                     if _is_saved_order_result(str(tool_result)):
+                        _record_autonomous_order_closure(
+                            telefone=telefone,
+                            current_agent=session.get("current_agent"),
+                            tool_name=function_name,
+                            tool_result=str(tool_result),
+                            now=now,
+                        )
                         _reset_session(session)
                         save_session_fn(telefone, session)
-                        return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+                        return True, _final_saved_order_message(str(tool_result))
         except Exception as exc:
             tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
     elif function_name == "create_gift_order":
@@ -386,9 +473,16 @@ def handle_tool_call(
                 else:
                     tool_result = gift_fn(telefone, nome_cliente, cliente_id, order)
                     if _is_saved_order_result(str(tool_result)):
+                        _record_autonomous_order_closure(
+                            telefone=telefone,
+                            current_agent=session.get("current_agent"),
+                            tool_name=function_name,
+                            tool_result=str(tool_result),
+                            now=now,
+                        )
                         _reset_session(session)
                         save_session_fn(telefone, session)
-                        return True, f"✅ O seu pedido foi finalizado e salvo no nosso sistema! {tool_result}"
+                        return True, _final_saved_order_message(str(tool_result))
         except Exception as exc:
             tool_result = f"Erro ao salvar pedido: Falta de campos ou dados inválidos -> {str(exc)}"
 

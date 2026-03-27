@@ -96,6 +96,19 @@ def requests_opt_out(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in patterns)
 
 
+def is_generic_greeting(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+
+    # Mantem o detector estrito para nao capturar mensagens com intencao de pedido.
+    greeting_patterns = (
+        r"^(oi|ola|ol[aá]|bom dia|boa tarde|boa noite|tudo bem|opa|e ai|eai)$",
+        r"^(oi|ola|ol[aá])\s+(bom dia|boa tarde|boa noite)$",
+    )
+    return any(re.search(pattern, normalized) for pattern in greeting_patterns)
+
+
 def caseirinho_clarification_message(text: str) -> str | None:
     normalized = normalize_intent_text(text)
     if not normalized:
@@ -197,7 +210,7 @@ def _mentions_specific_easter_item(normalized: str) -> bool:
 
 
 def requests_easter_catalog(text: str) -> bool:
-    """Retorna True para qualquer mensagem sobre Páscoa — envia o link direto, sem IA."""
+    """Retorna True apenas quando cliente pede catalogo/link/menu de Páscoa."""
     normalized = normalize_intent_text(text)
     if _mentions_non_easter_egg_context(normalized):
         return False
@@ -206,23 +219,21 @@ def requests_easter_catalog(text: str) -> bool:
     if re.search(r"\bpronta\s*entrega\b", normalized):
         return False
 
-    # Qualquer menção a Páscoa → link direto, sem envolver IA
-    if re.search(r"\bpascoa\b", normalized):
-        return True
-
-    # Itens específicos de Páscoa citados sem a palavra "páscoa" → deixar a IA responder
-    # (o cliente está perguntando sobre um produto concreto, não pedindo o catálogo genérico)
-    if _mentions_specific_easter_item(normalized):
+    easter_context = bool(
+        re.search(r"\b(pascoa|ovos?|trio|trios|tablete|mini ovos?|mimos?)\b", normalized)
+    )
+    if not easter_context:
         return False
 
-    # Padrões genéricos de ovo em contexto de Páscoa
-    generic_egg_patterns = (
-        r"\b(encomendar|encomenda|comprar|pedido|pedir|quero)\b.*\bovos?\b",
-        r"\bovos?\s+de\s+pascoa\b",
-        r"\btem\s+ovos?\b",
-        r"\btem\s+ovo\b",
+    link_or_menu_request = bool(
+        re.search(r"\b(cardapio|catalogo|menu|link|site|mostrar|mostra|ver|fotos?)\b", normalized)
     )
-    return any(re.search(pattern, normalized) for pattern in generic_egg_patterns)
+    if not link_or_menu_request:
+        return False
+
+    if _mentions_specific_easter_item(normalized):
+        return False
+    return True
 
 
 def requests_easter_ready_delivery_handoff(text: str) -> bool:
@@ -268,9 +279,35 @@ def requests_regular_gift_topic(text: str) -> bool:
         r"\bflores\b",
         r"\bbuque\b",
         r"\bbuque\b",
+        r"\bmimo(s)?\b",
         r"\bpresente(s)?\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_easter_order_topic(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if _mentions_non_easter_egg_context(normalized):
+        return False
+    if requests_easter_ready_delivery_handoff(text):
+        return False
+    if requests_easter_catalog(text):
+        return False
+
+    explicit_easter = re.search(r"\bpascoa\b", normalized)
+    explicit_item = re.search(
+        r"\b(ovo|ovos|trio|trios|tablete|tabletes|mini ovos?|mimos?|coelho|colher|trufad\w*|crocant\w*)\b",
+        normalized,
+    )
+    if explicit_easter and explicit_item:
+        return True
+    if explicit_easter and re.search(r"\b(quero|queria|pedido|encomenda|comprar|pedir)\b", normalized):
+        return True
+    if explicit_item and re.search(r"\b(pascoa|trufad\w*|crocant\w*|tablete\w*|trio\w*)\b", normalized):
+        return True
+    return False
 
 
 def requests_post_purchase_topic(text: str) -> str | None:
@@ -305,6 +342,32 @@ def requests_post_purchase_topic(text: str) -> str | None:
     return None
 
 
+def requests_catalog_photo(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    patterns = (
+        r"\btem\s+foto(s)?\b",
+        r"\bmanda\s+(uma\s+)?foto\b",
+        r"\bme\s+manda\s+(uma\s+)?foto\b",
+        r"\bme\s+envia\s+(uma\s+)?foto\b",
+        r"\bposso\s+ver\s+como\s+fica\b",
+        r"\btem\s+imagem\b",
+        r"\bver\s+foto(s)?\b",
+        r"\bcatalogo\s+visual\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def requests_easter_date_info(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    asks_when = re.search(r"\b(quando|que dia|qual dia|data)\b", normalized)
+    asks_easter = re.search(r"\bpascoa\b", normalized)
+    return bool(asks_when and asks_easter)
+
+
 def requests_easter_gift_topic(text: str) -> bool:
     normalized = normalize_intent_text(text)
     if not normalized or "pascoa" not in normalized:
@@ -328,11 +391,13 @@ def requests_sweet_order_topic(text: str) -> bool:
         return False
     if requests_regular_gift_topic(text) or requests_easter_gift_topic(text):
         return False
-    if not re.search(r"\b(brigadeir[oa]s?|bombons?|beijinhos?|doces?|camafeus?|trios?)\b", normalized):
+    if not re.search(r"\b(brigadeir[oa]s?|bombo(m|ns?)|beijinhos?|doces?|docinhos?|camafeus?)\b", normalized):
         return False
     if re.search(r"\b(encomenda|pedido|quantidade|caixa|duzia|doces? avulsos|doces? em quantidade)\b", normalized):
         return True
-    if re.search(r"\b\d+\b.*\b(brigadeir[oa]s?|bombons?|doces?)\b", normalized):
+    if re.search(r"\b\d+\b.*\b(brigadeir[oa]s?|bombo(m|ns?)|doces?)\b", normalized):
+        return True
+    if re.search(r"\b(quero|queria|tem|quanto|preco|valor|cardapio|menu)\b", normalized):
         return True
     return False
 
@@ -408,6 +473,38 @@ def cafeteria_order_needs_specificity(user_text: str) -> bool:
         return False
 
     has_quantity = _has_explicit_quantity(normalized)
+
+    if re.search(r"\bcombo(s)?\b", normalized):
+        has_croissant_option = _mentions_any(
+            normalized,
+            (
+                r"\bfrango\b",
+                r"\brequeijao\b",
+                r"\bpresunto\b",
+                r"\bmucarela\b",
+                r"\bmuzzarela\b",
+                r"\bperu\b",
+                r"\bprovolone\b",
+                r"\bquatro queijos\b",
+                r"\bchocolate\b",
+            ),
+        )
+        has_beverage = _mentions_any(
+            normalized,
+            (
+                r"\bcoca\b",
+                r"\brefrigerante\b",
+                r"\bks\b",
+                r"\blata\b",
+                r"\bsuco\b",
+                r"\bcafe\b",
+                r"\bcappuccino\b",
+                r"\bcapuccino\b",
+                r"\bachocolatado\b",
+                r"\bmocaccino\b",
+            ),
+        )
+        return not (has_quantity and has_croissant_option and has_beverage)
 
     if _mentions_any(normalized, (r"\b(cafeteria|pronta entrega|alguma coisa|algum item|item da cafeteria|lanche|bebida)\b",)):
         return True
@@ -572,8 +669,11 @@ def should_force_gift_context_handoff(session: dict, user_text: str) -> str | No
     }:
         return None
 
+    if requests_easter_order_topic(user_text):
+        return "GiftOrderAgent"
+
     if requests_easter_gift_topic(user_text):
-        return "KnowledgeAgent"
+        return "GiftOrderAgent"
 
     if requests_regular_gift_topic(user_text):
         return "GiftOrderAgent"

@@ -6,8 +6,11 @@ from app.ai.policies import (
     caseirinho_clarification_message,
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
+    is_generic_greeting,
+    requests_catalog_photo,
     requests_cake_order_topic,
     requests_easter_catalog,
+    requests_easter_date_info,
     requests_easter_gift_topic,
     requests_easter_ready_delivery_handoff,
     requests_post_purchase_topic,
@@ -35,10 +38,11 @@ class AIPoliciesTests(unittest.TestCase):
         )
         self.assertIsNone(caseirinho_clarification_message("quero caseirinho de cenoura com cobertura vulcao"))
 
-    def test_requests_easter_catalog_treats_generic_ovo_as_easter(self):
-        self.assertTrue(requests_easter_catalog("Eu gostaria de encomendar um ovo"))
-        self.assertTrue(requests_easter_catalog("Quero encomendar ovos de Páscoa"))
-        self.assertTrue(requests_easter_catalog("Tem ovo de Páscoa disponível?"))
+    def test_requests_easter_catalog_only_for_link_or_menu_queries(self):
+        self.assertTrue(requests_easter_catalog("Quero ver o cardápio de ovos de Páscoa"))
+        self.assertTrue(requests_easter_catalog("Manda o link da Páscoa"))
+        self.assertFalse(requests_easter_catalog("Eu gostaria de encomendar um ovo"))
+        self.assertFalse(requests_easter_catalog("Tem ovo de Páscoa disponível?"))
 
     def test_requests_easter_catalog_ignores_ready_delivery_egg_context(self):
         self.assertFalse(requests_easter_catalog("Oi tem ovo pronta entrega?"))
@@ -61,10 +65,12 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertTrue(cafeteria_order_needs_specificity("Queria croissant"))
         self.assertTrue(cafeteria_order_needs_specificity("Quero coca tbm"))
         self.assertTrue(cafeteria_order_needs_specificity("Me vê uma fatia"))
+        self.assertTrue(cafeteria_order_needs_specificity("Quero 1 combo croissant de frango"))
 
     def test_cafeteria_order_specificity_ignores_specific_or_information_requests(self):
         self.assertFalse(cafeteria_order_needs_specificity("Qual valor do croissant de chocolate?"))
         self.assertFalse(cafeteria_order_needs_specificity("1 croissant frango 1 croissant chocolate 2 coca lata"))
+        self.assertFalse(cafeteria_order_needs_specificity("2 combos croissant peito de peru com coca normal"))
 
     def test_cafeteria_specificity_conflict_blocks_premature_reply(self):
         self.assertTrue(
@@ -89,6 +95,7 @@ class AIPoliciesTests(unittest.TestCase):
     def test_gift_topic_detection_separates_regular_catalog_from_easter(self):
         self.assertTrue(requests_regular_gift_topic("Vocês têm cesta box e flores?"))
         self.assertTrue(requests_regular_gift_topic("Quero ver presentes"))
+        self.assertTrue(requests_regular_gift_topic("Tem mimo para presente?"))
         self.assertFalse(requests_regular_gift_topic("Quero ver presentes de Páscoa"))
         self.assertTrue(requests_easter_gift_topic("Quero ver mimos de Páscoa"))
         self.assertFalse(requests_easter_gift_topic("Quero ver flores"))
@@ -100,7 +107,7 @@ class AIPoliciesTests(unittest.TestCase):
         )
         self.assertEqual(
             should_force_gift_context_handoff({"current_agent": "GiftOrderAgent"}, "Quero ver presentes de Páscoa"),
-            "KnowledgeAgent",
+            "GiftOrderAgent",
         )
 
     def test_requests_post_purchase_topic_detects_each_flow(self):
@@ -108,6 +115,23 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertEqual(requests_post_purchase_topic("Confirma o PIX do pedido?"), "pix")
         self.assertEqual(requests_post_purchase_topic("Quero cancelar a encomenda do sábado"), "cancel")
         self.assertEqual(requests_post_purchase_topic("Preciso da nota fiscal do bolo"), "invoice")
+
+    def test_requests_catalog_photo_and_easter_date_info(self):
+        self.assertTrue(requests_catalog_photo("Tem foto?"))
+        self.assertTrue(requests_catalog_photo("Me manda uma foto"))
+        self.assertTrue(requests_catalog_photo("Posso ver como fica?"))
+        self.assertFalse(requests_catalog_photo("Quero 10 brigadeiros"))
+
+        self.assertTrue(requests_easter_date_info("Quando é a Páscoa?"))
+        self.assertTrue(requests_easter_date_info("Qual a data da páscoa"))
+        self.assertFalse(requests_easter_date_info("Quero ovos de páscoa"))
+
+    def test_is_generic_greeting_detects_only_short_salutations(self):
+        self.assertTrue(is_generic_greeting("oi"))
+        self.assertTrue(is_generic_greeting("olá"))
+        self.assertTrue(is_generic_greeting("boa tarde"))
+        self.assertFalse(is_generic_greeting("oi quero um bolo"))
+        self.assertFalse(is_generic_greeting("quero cardápio"))
 
     def test_basic_context_switch_routes_between_supported_topics(self):
         self.assertEqual(
@@ -130,6 +154,34 @@ class AIPoliciesTests(unittest.TestCase):
                 "Vocês têm cestas box?",
             ),
             "GiftOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "TriageAgent"},
+                "Quero um ovo de páscoa",
+            ),
+            "GiftOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "TriageAgent"},
+                "Tem ovo trufado?",
+            ),
+            "GiftOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "TriageAgent"},
+                "Quero brigadeiros",
+            ),
+            "SweetOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "TriageAgent"},
+                "Quanto custa bombom?",
+            ),
+            "SweetOrderAgent",
         )
 
     def test_requests_cake_order_topic_ignores_cafeteria_and_easter_cases(self):

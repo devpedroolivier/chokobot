@@ -21,6 +21,8 @@ def __getattr__(name: str):
         "ZAPI_ENDPOINT_IMAGE": settings.zapi_endpoint_image,
         "CAFETERIA_URL": settings.cafeteria_url,
         "DOCES_URL": settings.doces_url,
+        "CATALOG_LINK": settings.catalog_link,
+        "PIX_KEY": settings.pix_key,
         "STORE_CLOSED_NOTICE": settings.store_closed_notice or DEFAULT_STORE_CLOSED_NOTICE,
     }
     if name in mapping:

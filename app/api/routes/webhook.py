@@ -1,5 +1,7 @@
 import json
 import traceback
+import asyncio
+from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -19,6 +21,43 @@ from app.utils.datetime_utils import now_in_bot_timezone
 from app.utils.payload import is_automated_order_message, is_group_message, normalize_incoming
 
 router = APIRouter()
+
+
+@dataclass
+class _InboundPhoneLockState:
+    lock: asyncio.Lock
+    queued_requests: int = 0
+
+
+_inbound_phone_locks: dict[str, _InboundPhoneLockState] = {}
+_inbound_phone_locks_guard = asyncio.Lock()
+
+
+async def _acquire_inbound_phone_lock(phone_key: str) -> asyncio.Lock:
+    async with _inbound_phone_locks_guard:
+        state = _inbound_phone_locks.get(phone_key)
+        if state is None:
+            state = _InboundPhoneLockState(lock=asyncio.Lock())
+            _inbound_phone_locks[phone_key] = state
+        state.queued_requests += 1
+        lock = state.lock
+    await lock.acquire()
+    return lock
+
+
+async def _release_inbound_phone_lock(phone_key: str, lock: asyncio.Lock) -> None:
+    async with _inbound_phone_locks_guard:
+        state = _inbound_phone_locks.get(phone_key)
+        if state is None:
+            if lock.locked():
+                lock.release()
+            return
+
+        if lock.locked():
+            lock.release()
+        state.queued_requests = max(0, state.queued_requests - 1)
+        if state.queued_requests == 0 and not state.lock.locked():
+            _inbound_phone_locks.pop(phone_key, None)
 
 
 def _track_webhook_event(phone: str | None, *, status: str, reason: str) -> None:
@@ -64,6 +103,9 @@ async def receber_webhook(request: Request):
     norm = normalize_incoming(body)
     phone = norm.get("phone")
     track_phone = should_track_phone(phone)
+    if not track_phone:
+        log_event("webhook_test_phone_ignored", phone_hash=hash_phone(phone))
+        return {"status": "ignored", "detail": "test_phone"}
 
     if body.get("fromMe") or body.get("type") == "DeliveryCallback":
         _track_webhook_event(phone, status="ignored", reason="self_or_callback")
@@ -85,7 +127,15 @@ async def receber_webhook(request: Request):
     get_event_bus().publish(MessageReceivedEvent(payload=norm))
 
     try:
-        await dispatch_inbound_message(body)
+        phone_key = phone or "anon"
+        state = _inbound_phone_locks.get(phone_key)
+        if state is not None and state.lock.locked():
+            log_event("webhook_inbound_waiting_phone_lock", phone_hash=hash_phone(phone))
+        phone_lock = await _acquire_inbound_phone_lock(phone_key)
+        try:
+            await dispatch_inbound_message(body)
+        finally:
+            await _release_inbound_phone_lock(phone_key, phone_lock)
         if track_phone:
             increment_counter("webhook_events_total", status="ok", reason="processed")
         return {"status": "ok"}

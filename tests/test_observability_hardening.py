@@ -88,6 +88,11 @@ class ObservabilityHardeningTests(unittest.TestCase):
         self.assertFalse(should_track_phone("11888888888"))
         self.assertTrue(should_track_phone("5511999999999"))
 
+    def test_should_track_phone_honors_env_test_phones(self):
+        with patch.dict(os.environ, {"TEST_PHONES": "5511777777777"}, clear=False):
+            self.assertFalse(should_track_phone("5511777777777"))
+            self.assertTrue(should_track_phone("5511999999999"))
+
     def test_normalize_reason_label_formats_unknown_or_blank(self):
         self.assertEqual(normalize_reason_label("  pix_missing "), "pix_missing")
         self.assertEqual(normalize_reason_label(None), "unknown")

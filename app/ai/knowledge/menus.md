@@ -7,6 +7,8 @@
 - Quando o cliente perguntar por **Pascoa, ovos, trios ou mimos de Pascoa**, envie SOMENTE o link: https://pascoachoko.goomer.app — nunca responda com precos ou sabores.
 - Nao misture pronta entrega com encomenda na mesma resposta, a menos que o cliente pergunte explicitamente pelos dois.
 - Regra anti-alucinacao: responda somente com categorias, regras, links e produtos cadastrados neste arquivo. Se um sabor, preco ou disponibilidade nao estiver aqui, diga que vai confirmar e nao invente.
+- Pedidos e reservas podem ser feitos pelo WhatsApp: coletar produto, data/horario, retirada/entrega e pagamento.
+- Se o cliente pedir fotos, enviar o link de catalogo visual configurado no ambiente (CATALOG_LINK) e seguir o atendimento.
 
 ## Pronta Entrega
 
@@ -239,6 +241,7 @@
 - **Horário limite para entregas:** até 17:30
 - **Taxa de entrega padrao:** geralmente R$10,00, salvo regra especifica
 - **Formas de pagamento:** PIX, Cartao (debito/credito), Dinheiro
+- **Chave PIX:** usar a chave configurada em `PIX_KEY` no ambiente e informar ao cliente quando ele pedir
 - **Troco:** somente para pagamento em Dinheiro. PIX e Cartao nao usam troco
 - **Parcelamento:** somente no Cartao, acima de R$100,00, em ate 2x
 

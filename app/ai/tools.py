@@ -117,6 +117,7 @@ LINE_SIMPLE_FLAVORS = ("Chocolate", "Cenoura")
 LINE_SIMPLE_COVERAGES = ("Vulcão", "Simples")
 
 TAXA_ENTREGA_PADRAO = DELIVERY_FEE_STANDARD
+TAXA_ENTREGA_CAFETERIA = 5.0
 CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
 CAFETERIA_VARIANT_REQUIRED_HINTS = {
     "Croissant": "Informe o sabor do croissant e a quantidade.",
@@ -253,6 +254,19 @@ def _normalize_payment_data(pagamento: dict | None) -> dict:
 
     payload["parcelas"] = parcelas_int if parcelas_int and parcelas_int > 1 else None
     return payload
+
+
+def _validate_cash_change_requirement(payment_data: dict | None) -> str | None:
+    payment = dict(payment_data or {})
+    method = str(payment.get("forma") or "").strip()
+    if method != "Dinheiro":
+        return None
+    if payment.get("troco_para") is None:
+        return (
+            "Pagamento em dinheiro: pergunte se o cliente precisa de troco. "
+            "Se nao precisar, envie troco_para=0; se precisar, informe o valor."
+        )
+    return None
 
 
 def _apply_card_installment_rule(pagamento: dict | None, total_value: float) -> dict:
@@ -546,21 +560,43 @@ def _merge_cafeteria_validated_items(items: list[dict]) -> list[dict]:
 
 def _build_cafeteria_confirmation_message(prepared: dict) -> str:
     item_lines = [f"- {item['descricao']}: {_format_currency_brl(float(item['preco_total']))}" for item in prepared["itens"]]
+    service_line = _build_service_line(
+        {
+            "modo_recebimento": prepared["modo_recebimento"],
+            "data_entrega": prepared.get("data_entrega"),
+            "horario_retirada": prepared.get("horario_retirada"),
+        }
+    )
+    date_line = service_line
+    delivery_line = service_line
+    if service_line and " " in service_line:
+        mode_token, remainder = service_line.split(" ", 1)
+        delivery_line = mode_token
+        date_line = remainder
+    endereco = str(prepared.get("endereco") or "").strip()
+    if endereco and delivery_line.casefold() == "entrega":
+        delivery_line = f"{delivery_line} ({endereco})"
+
     lines = [
-        "Resumo final do pedido",
+        "Resumo final do pedido (rascunho)",
         "",
-        "Pedido cafeteria",
+        "Confirma seu pedido?",
+        "📦 Pedido cafeteria",
         "Itens:",
         *item_lines,
-        _build_service_line(
-            {
-                "modo_recebimento": prepared["modo_recebimento"],
-                "data_entrega": prepared.get("data_entrega"),
-                "horario_retirada": prepared.get("horario_retirada"),
-            }
-        ),
-        f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
     ]
+    if date_line:
+        lines.append(f"📅 {date_line}")
+    if delivery_line:
+        lines.append(f"🚗 {delivery_line}")
+    if service_line:
+        lines.append(service_line)
+    lines.extend(
+        [
+        f"💰 Total: {_format_currency_brl(float(prepared['valor_total']))}",
+        _build_payment_line(prepared.get("pagamento")),
+        f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
+    ])
     if float(prepared.get("taxa_entrega") or 0) > 0:
         lines.append(f"Taxa entrega: {_format_currency_brl(float(prepared['taxa_entrega']))}")
     lines.append(f"Valor: {_format_currency_brl(float(prepared['valor_total']))}")
@@ -576,6 +612,9 @@ def _build_cafeteria_confirmation_message(prepared: dict) -> str:
 def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
+    if payment_error:
+        return None, payment_error
     if not (dados.get("data_entrega") or "").strip():
         dados["data_entrega"] = _today_service_date_str()
 
@@ -632,7 +671,7 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
 
     taxa_entrega = float(dados.get("taxa_entrega") or 0)
     if dados["modo_recebimento"] == "entrega" and taxa_entrega <= 0:
-        taxa_entrega = TAXA_ENTREGA_PADRAO
+        taxa_entrega = TAXA_ENTREGA_CAFETERIA
     valor_total = round(subtotal + taxa_entrega, 2)
     dados["pagamento"] = _apply_card_installment_rule(dados.get("pagamento"), valor_total)
 
@@ -675,6 +714,9 @@ def _prepare_gift_order_data(order_details: "GiftOrderSchema") -> tuple[dict | N
     dados = order_details.model_dump()
     dados["categoria"] = _normalize_gift_category(dados.get("categoria"))
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
+    if payment_error:
+        return None, payment_error
 
     schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
     if schedule_error:
@@ -1111,16 +1153,56 @@ def _build_service_line(dados: dict) -> str:
     return " ".join(parts)
 
 
-def _build_draft_confirmation_message(*, title: str, flavor_line: str, service_line: str, total_value: float) -> str:
+def _build_payment_line(payment: dict | None) -> str:
+    payment_data = payment or {}
+    method = str(payment_data.get("forma") or "").strip() or "A confirmar"
+    installments = payment_data.get("parcelas")
+    change_for = payment_data.get("troco_para")
+
+    details = [method]
+    if method.casefold().startswith("cartao") and installments:
+        details.append(f"{int(installments)}x")
+    if method.casefold() == "dinheiro" and change_for:
+        details.append(f"troco para {_format_currency_brl(float(change_for))}")
+    return "Forma de pagamento: " + " | ".join(details)
+
+
+def _build_draft_confirmation_message(
+    *,
+    title: str,
+    flavor_line: str,
+    service_line: str,
+    total_value: float,
+    payment_line: str,
+    endereco: str | None = None,
+) -> str:
+    item_summary = title
+    if flavor_line:
+        item_summary = f"{title} | {flavor_line}"
+
+    date_line = service_line
+    delivery_line = service_line
+    if service_line and " " in service_line:
+        mode_token, remainder = service_line.split(" ", 1)
+        delivery_line = mode_token
+        date_line = remainder
+    if endereco and (delivery_line or "").strip().casefold() == "entrega":
+        delivery_line = f"{delivery_line} ({endereco})"
+
     lines = [
         "Resumo final do pedido (rascunho)",
         "",
-        title,
+        "Confirma seu pedido?",
+        f"📦 {item_summary}",
     ]
-    if flavor_line:
-        lines.append(flavor_line)
+    if date_line:
+        lines.append(f"📅 {date_line}")
+    if delivery_line:
+        lines.append(f"🚗 {delivery_line}")
     if service_line:
         lines.append(service_line)
+    lines.append(f"💰 Total: {_format_currency_brl(total_value)}")
+    lines.append(payment_line)
     lines.append(f"Valor: {_format_currency_brl(total_value)}")
     lines.append("")
     lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
@@ -1160,6 +1242,9 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
     categoria = (dados.get("categoria") or "").lower()
     dados["categoria"] = categoria
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
+    if payment_error:
+        return None, payment_error
 
     schedule_error = validate_service_schedule(dados.get("data_entrega"), dados.get("horario_retirada"))
     if schedule_error:
@@ -1227,6 +1312,9 @@ def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | N
 def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
     dados["pagamento"] = _normalize_payment_data(dados.get("pagamento"))
+    payment_error = _validate_cash_change_requirement(dados.get("pagamento"))
+    if payment_error:
+        return None, payment_error
     itens_validados: List[Dict] = []
     total_doces = 0.0
     erros: list[str] = []
@@ -1582,7 +1670,10 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
     )
 
     preco_txt = f" | Valor: R${dados['valor_total']:.2f}" if dados.get("valor_total") else ""
-    return f"Pedido salvo com sucesso! ID da Encomenda: {encomenda_id}{preco_txt}"
+    return (
+        f"Pedido salvo com sucesso! ID da Encomenda: {encomenda_id}{preco_txt}\n"
+        f"Protocolo: CHK-{int(encomenda_id):06d}"
+    )
 
 
 def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_details: SweetOrderSchema) -> str:
@@ -1664,7 +1755,8 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
         f"Itens: {desc_itens}\n"
         f"Total doces: R${total_doces:.2f}\n"
         + (f"Taxa entrega: R${taxa_entrega:.2f}\n" if taxa_entrega else "")
-        + f"Total final: R${valor_final:.2f}"
+        + f"Total final: R${valor_final:.2f}\n"
+        + f"Protocolo: CHK-{int(encomenda_id):06d}"
     )
 
 
@@ -1709,6 +1801,7 @@ def create_cafeteria_order(
         "Pedido cafeteria salvo com sucesso!",
         "Itens: " + ", ".join(item_lines),
         f"Subtotal: {_format_currency_brl(float(prepared['subtotal']))}",
+        f"Protocolo: CAF-{telefone[-4:]}-{now_in_bot_timezone().strftime('%H%M')}",
     ]
     if float(prepared.get("taxa_entrega") or 0) > 0:
         response_lines.append(f"Taxa entrega: {_format_currency_brl(float(prepared['taxa_entrega']))}")
@@ -1780,7 +1873,8 @@ def create_gift_order(
     return (
         f"Pedido presente salvo com sucesso! ID: {encomenda_id}\n"
         f"Item: {dados['produto']}\n"
-        f"Total final: {_format_currency_brl(float(dados['valor_total']))}"
+        f"Total final: {_format_currency_brl(float(dados['valor_total']))}\n"
+        f"Protocolo: CHK-{int(encomenda_id):06d}"
     )
 
 
@@ -1808,6 +1902,8 @@ def save_cake_order_draft_process(
         flavor_line=_build_cake_flavor_line(dados),
         service_line=_build_service_line(dados),
         total_value=float(dados.get("valor_total") or 0),
+        payment_line=_build_payment_line(dados.get("pagamento")),
+        endereco=dados.get("endereco"),
     )
 
 
@@ -1850,6 +1946,8 @@ def save_sweet_order_draft_process(
             }
         ),
         total_value=float(prepared["valor_final"]),
+        payment_line=_build_payment_line(dados.get("pagamento")),
+        endereco=dados.get("endereco"),
     )
 
 
@@ -1908,4 +2006,6 @@ def save_gift_order_draft_process(
         flavor_line=_build_gift_detail_line(dados),
         service_line=_build_service_line(dados),
         total_value=float(dados["valor_total"]),
+        payment_line=_build_payment_line(dados.get("pagamento")),
+        endereco=dados.get("endereco"),
     )

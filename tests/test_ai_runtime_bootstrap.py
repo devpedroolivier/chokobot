@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.ai import runner
+from app.welcome_message import WELCOME_MESSAGE
 
 
 class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
@@ -74,7 +75,7 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
 
         reply = await runner.process_message_with_ai(
             "5511999999999",
-            "Oi",
+            "Quero o menu de pronta entrega",
             "Teste",
             1,
             ai_client=fake_client,
@@ -84,7 +85,7 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Resposta final")
         first_messages = create_mock.await_args_list[0].kwargs["messages"]
         self.assertIn("REGRAS APRENDIDAS ANTERIORMENTE:\nregra de teste", first_messages[0]["content"])
-        self.assertEqual(first_messages[1]["content"], "Oi")
+        self.assertEqual(first_messages[1]["content"], "Quero o menu de pronta entrega")
         second_messages = create_mock.await_args_list[1].kwargs["messages"]
         tool_messages = [message for message in second_messages if message["role"] == "tool"]
         self.assertTrue(tool_messages)
@@ -121,7 +122,7 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
 
         reply = await runner.process_message_with_ai(
             "5511999999999",
-            "oi",
+            "quero cardapio da cafeteria",
             "Teste",
             1,
             ai_client=fake_client,
@@ -139,7 +140,7 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Olá! Como posso te ajudar?")
         messages = create_mock.await_args.kwargs["messages"]
         self.assertEqual([message["role"] for message in messages], ["system", "user"])
-        self.assertEqual(messages[1]["content"], "oi")
+        self.assertEqual(messages[1]["content"], "quero cardapio da cafeteria")
 
     async def test_process_message_with_ai_prompts_caseirinho_clarification_before_ai(self):
         telefone = "5511888888888"
@@ -167,6 +168,51 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("cobertura", reply.lower())
         self.assertEqual(runner.CONVERSATIONS[telefone]["current_agent"], "CakeOrderAgent")
         mocked_completion.assert_not_awaited()
+
+    async def test_process_message_with_ai_sends_welcome_once_and_uses_short_followup_after_repeat_greeting(self):
+        telefone = "5511777000000"
+        fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
+
+        with patch.object(runner, "client", fake_client):
+            first_reply = await runner.process_message_with_ai(
+                telefone,
+                "oi",
+                "Cliente Novo",
+                1,
+            )
+            second_reply = await runner.process_message_with_ai(
+                telefone,
+                "oi",
+                "Cliente Novo",
+                1,
+            )
+
+        self.assertEqual(first_reply, WELCOME_MESSAGE)
+        self.assertIn("qual produto", second_reply.casefold())
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_with_ai_uses_short_greeting_for_known_customer(self):
+        telefone = "5511888000000"
+        fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
+
+        class _Customer:
+            criado_em = "2026-03-20 10:00:00"
+
+        class _CustomerRepository:
+            def get_customer_by_phone(self, phone):
+                return _Customer() if phone == telefone else None
+
+        with patch.object(runner, "client", fake_client):
+            with patch("app.ai.runner.get_customer_repository", return_value=_CustomerRepository()):
+                reply = await runner.process_message_with_ai(
+                    telefone,
+                    "olá",
+                    "Maria Clara",
+                    1,
+                )
+
+        self.assertEqual(reply, "Ola Maria! Como posso ajudar hoje? 😊")
+        fake_client.chat.completions.create.assert_not_awaited()
 
 
 if __name__ == "__main__":

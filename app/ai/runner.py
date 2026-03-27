@@ -2,7 +2,7 @@ import json
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict
 
 try:
@@ -23,19 +23,24 @@ from app.ai.policies import (
     normalize_intent_text,
     normalize_reference_time as _normalize_reference_time,
     requests_easter_catalog as _requests_easter_catalog,
+    requests_catalog_photo as _requests_catalog_photo,
+    requests_easter_date_info as _requests_easter_date_info,
     requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
     requests_post_purchase_topic as _requests_post_purchase_topic,
     requests_regular_gift_topic as _requests_regular_gift_topic,
     should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
+    is_generic_greeting as _is_generic_greeting,
     requests_opt_out as _requests_opt_out,
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
 )
+from app.application.service_registry import get_customer_repository
 from app.services.store_schedule import resolve_service_date_context
+from app.services.store_schedule import easter_date_message
 from app.ai.tool_execution import handle_tool_call
 from app.ai.tool_registry import build_openai_tools
-from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE, OPT_OUT_MESSAGE
+from app.welcome_message import EASTER_CATALOG_MESSAGE, HUMAN_HANDOFF_MESSAGE, OPT_OUT_MESSAGE, WELCOME_MESSAGE
 from app.ai.tools import (
     create_cafeteria_order,
     create_cake_order,
@@ -57,6 +62,7 @@ from app.settings import get_settings
 client = None
 
 CONVERSATIONS = ai_sessions
+_KNOWN_CUSTOMER_WINDOW = timedelta(minutes=5)
 _PAYMENT_FORMS = {
     "pix": "PIX",
     "cartao": "Cartão (débito/crédito)",
@@ -87,6 +93,61 @@ POST_PURCHASE_MESSAGES = {
         "A nota é emitida após a confirmação do pagamento e enviada por e-mail em até um dia útil."
     ),
 }
+
+
+def _catalog_photo_reply() -> str:
+    link = get_settings().catalog_link
+    if link:
+        return (
+            "Perfeito! Para ver as fotos, nosso catálogo visual está aqui:\n"
+            f"{link}\n\n"
+            "Me diz qual item você gostou que eu te ajudo a fechar o pedido 😊"
+        )
+    return (
+        "Consigo te ajudar com os detalhes por aqui 😊 "
+        "Se quiser fotos, te conecto com a equipe para te enviar o catálogo visual."
+    )
+
+
+def _first_name(nome_cliente: str | None) -> str | None:
+    raw = str(nome_cliente or "").strip()
+    if not raw:
+        return None
+    if raw.casefold() in {"nome nao informado", "nome não informado"}:
+        return None
+    return raw.split()[0]
+
+
+def _is_known_customer(telefone: str, now: datetime | None = None) -> bool:
+    if not telefone:
+        return False
+    customer = get_customer_repository().get_customer_by_phone(telefone)
+    if customer is None:
+        return False
+    created_at_raw = str(customer.criado_em or "").strip()
+    if not created_at_raw:
+        return True
+    try:
+        created_at = datetime.fromisoformat(created_at_raw)
+    except ValueError:
+        try:
+            created_at = datetime.strptime(created_at_raw, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return True
+    reference_time = _normalize_reference_time(now)
+    created_at_local = _normalize_reference_time(created_at)
+    return (reference_time - created_at_local) >= _KNOWN_CUSTOMER_WINDOW
+
+
+def _known_customer_greeting(nome_cliente: str) -> str:
+    first_name = _first_name(nome_cliente)
+    if first_name:
+        return f"Ola {first_name}! Como posso ajudar hoje? 😊"
+    return "Ola! Como posso ajudar hoje? 😊"
+
+
+def _followup_after_greeting() -> str:
+    return "Me conta qual produto voce quer hoje e eu te ajudo a fechar rapidinho."
 
 
 def _should_record_for_phone(telefone: str | None) -> bool:
@@ -555,7 +616,26 @@ async def process_message_with_ai(
     if not session["messages"]:
         bootstrap_session(session, now, runtime)
         save_session(telefone, session)
-    
+
+    if _is_generic_greeting(text) and session.get("current_agent") == "TriageAgent":
+        session["messages"].append({"role": "user", "content": text})
+        greeting_already_sent = bool(session.get("greeting_sent"))
+        known_customer = _is_known_customer(telefone, now)
+        if greeting_already_sent:
+            reply = _followup_after_greeting()
+        else:
+            reply = _known_customer_greeting(nome_cliente) if known_customer else WELCOME_MESSAGE
+            session["greeting_sent"] = True
+        session["messages"].append({"role": "assistant", "content": reply})
+        save_session(telefone, session)
+        _maybe_log_event(
+            telefone,
+            "ai_greeting_sent",
+            phone_hash=_phone_hash(telefone),
+            short=bool(greeting_already_sent or known_customer),
+        )
+        return reply
+
     # Adiciona a mensagem do usuário
     session["messages"].append({"role": "user", "content": text})
     _update_service_date_context(session, text, now)
@@ -569,6 +649,7 @@ async def process_message_with_ai(
         session.pop("seasonal_context", None)
         session.pop("service_date_context", None)
         session.pop("conversation_correction_context", None)
+        session.pop("greeting_sent", None)
         save_session(telefone, session)
         _maybe_increment_counter(telefone, "ai_opt_out_requests_total", agent=previous_agent)
         _maybe_log_event(
@@ -578,6 +659,22 @@ async def process_message_with_ai(
             phone_hash=telefone[-4:] if telefone else "anon",
         )
         return OPT_OUT_MESSAGE
+
+    if _requests_catalog_photo(text):
+        _maybe_log_event(
+            telefone,
+            "ai_catalog_link_sent",
+            phone_hash=_phone_hash(telefone),
+        )
+        return _catalog_photo_reply()
+
+    if _requests_easter_date_info(text):
+        _maybe_log_event(
+            telefone,
+            "ai_easter_date_answered",
+            phone_hash=_phone_hash(telefone),
+        )
+        return easter_date_message(now)
 
     post_purchase_topic = _requests_post_purchase_topic(text)
     if post_purchase_topic:
@@ -616,11 +713,12 @@ async def process_message_with_ai(
 
     if _requests_human_handoff(text):
         previous_agent = session.get("current_agent", "TriageAgent")
-        runtime.escalate_to_human(telefone, "Cliente pediu humano")
+        handoff_message = runtime.escalate_to_human(telefone, "Cliente pediu humano")
         session["messages"] = []
         session.pop("seasonal_context", None)
         session.pop("service_date_context", None)
         session.pop("conversation_correction_context", None)
+        session.pop("greeting_sent", None)
         save_session(telefone, session)
         _record_human_handoff_metrics(
             telefone,
@@ -628,15 +726,16 @@ async def process_message_with_ai(
             "customer_request",
             "ai_human_guard_handoff",
         )
-        return HUMAN_HANDOFF_MESSAGE
+        return handoff_message if isinstance(handoff_message, str) and handoff_message.strip() and handoff_message.strip().casefold() != "ok" else HUMAN_HANDOFF_MESSAGE
 
     if _requests_easter_ready_delivery_handoff(text):
         previous_agent = session.get("current_agent", "TriageAgent")
-        runtime.escalate_to_human(telefone, "Ovos pronta entrega exigem atendimento humano")
+        handoff_message = runtime.escalate_to_human(telefone, "Ovos pronta entrega exigem atendimento humano")
         session["messages"] = []
         session.pop("seasonal_context", None)
         session.pop("service_date_context", None)
         session.pop("conversation_correction_context", None)
+        session.pop("greeting_sent", None)
         save_session(telefone, session)
         _record_human_handoff_metrics(
             telefone,
@@ -644,7 +743,7 @@ async def process_message_with_ai(
             "easter_ready_delivery",
             "ai_easter_ready_delivery_handoff",
         )
-        return HUMAN_HANDOFF_MESSAGE
+        return handoff_message if isinstance(handoff_message, str) and handoff_message.strip() and handoff_message.strip().casefold() != "ok" else HUMAN_HANDOFF_MESSAGE
 
     if _requests_easter_catalog(text):
         session["seasonal_context"] = "easter"
@@ -757,6 +856,15 @@ async def process_message_with_ai(
             request_messages.append({"role": "system", "content": correction_instruction})
         if transient_system_note:
             request_messages.append({"role": "system", "content": transient_system_note})
+        history_count = sum(1 for message in session.get("messages", []) if message.get("role") in {"user", "assistant"})
+        _maybe_log_event(
+            telefone,
+            "ai_history_loaded",
+            phone_hash=_phone_hash(telefone),
+            agent=session.get("current_agent"),
+            history_messages=history_count,
+            request_messages=len(request_messages),
+        )
 
         response = await request_ai_completion(active_client, messages=request_messages, tools_config=tools_config)
         transient_system_note = None

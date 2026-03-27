@@ -55,6 +55,7 @@ class AppSettings:
     db_path: str
     database_url: str
     redis_url: str
+    state_sqlite_path: str
     state_backend_fallback_enabled: bool
     outbox_path: str
     outbox_events_path: str
@@ -64,6 +65,8 @@ class AppSettings:
     bot_timezone: str
     cafeteria_url: str
     doces_url: str
+    catalog_link: str
+    pix_key: str
     store_closed_notice: str
     conversation_service_url: str
     conversation_service_timeout: float
@@ -71,7 +74,9 @@ class AppSettings:
     webhook_secret_header: str
     webhook_verify_enabled: bool
     webhook_replay_window_seconds: int
+    test_phones: tuple[str, ...]
     admin_phones: tuple[str, ...]
+    automation_disabled_phones: tuple[str, ...]
     panel_auth_enabled: bool
     panel_auth_username: str
     panel_auth_password: str
@@ -83,6 +88,9 @@ class AppSettings:
     http_backoff_factor: float
     order_support_db_path: str
     order_support_invoice_email: str
+    knowledge_failure_alert_threshold: int
+    knowledge_failure_alert_window_minutes: int
+    knowledge_failure_alert_webhook: str
 
     @property
     def zapi_endpoint_text(self) -> str:
@@ -110,6 +118,7 @@ def get_settings() -> AppSettings:
         db_path=db_path,
         database_url=database_url,
         redis_url=_env_str("REDIS_URL"),
+        state_sqlite_path=_env_str("STATE_SQLITE_PATH", "dados/state_store.db"),
         state_backend_fallback_enabled=_env_bool("STATE_BACKEND_FALLBACK_ENABLED", True),
         outbox_path=_env_str("OUTBOX_PATH", "dados/outbox.jsonl"),
         outbox_events_path=_env_str("OUTBOX_EVENTS_PATH", "dados/domain_events.jsonl"),
@@ -122,6 +131,8 @@ def get_settings() -> AppSettings:
         bot_timezone=_env_str("BOT_TIMEZONE") or "America/Sao_Paulo",
         cafeteria_url=_env_str("CAFETERIA_URL", "http://bit.ly/44ZlKlZ"),
         doces_url=_env_str("DOCES_URL", "https://bit.ly/doceschoko"),
+        catalog_link=_env_str("CATALOG_LINK", "https://bit.ly/presenteschoko"),
+        pix_key=_env_str("PIX_KEY"),
         store_closed_notice=store_closed_notice,
         conversation_service_url=_env_str("CONVERSATION_SERVICE_URL"),
         conversation_service_timeout=_env_float("CONVERSATION_SERVICE_TIMEOUT", 10.0),
@@ -129,7 +140,9 @@ def get_settings() -> AppSettings:
         webhook_secret_header=_env_str("WEBHOOK_SECRET_HEADER", "X-Webhook-Secret"),
         webhook_verify_enabled=_env_bool("WEBHOOK_VERIFY_ENABLED", False),
         webhook_replay_window_seconds=max(1, _env_int("WEBHOOK_REPLAY_WINDOW_SECONDS", 300)),
+        test_phones=_env_csv("TEST_PHONES"),
         admin_phones=_env_csv("ADMIN_PHONES"),
+        automation_disabled_phones=_env_csv("AUTOMATION_DISABLED_PHONES"),
         panel_auth_enabled=_env_bool("PANEL_AUTH_ENABLED", False),
         panel_auth_username=_env_str("PANEL_AUTH_USERNAME"),
         panel_auth_password=_env_str("PANEL_AUTH_PASSWORD"),
@@ -138,7 +151,10 @@ def get_settings() -> AppSettings:
         http_timeout_connect=max(1, _env_int("HTTP_TIMEOUT_CONNECT", 5)),
         http_timeout_read=max(1, _env_int("HTTP_TIMEOUT_READ", 20)),
         http_max_retries=max(1, _env_int("HTTP_MAX_RETRIES", 3)),
-    http_backoff_factor=max(0.0, _env_float("HTTP_BACKOFF_FACTOR", 1.0)),
+        http_backoff_factor=max(0.0, _env_float("HTTP_BACKOFF_FACTOR", 1.0)),
         order_support_db_path=_env_str("ORDER_SUPPORT_DB_PATH", db_path),
         order_support_invoice_email=_env_str("ORDER_SUPPORT_INVOICE_EMAIL", "financeiro@chokodelicia.com"),
+        knowledge_failure_alert_threshold=max(1, _env_int("KNOWLEDGE_FAILURE_ALERT_THRESHOLD", 5)),
+        knowledge_failure_alert_window_minutes=max(1, _env_int("KNOWLEDGE_FAILURE_ALERT_WINDOW_MINUTES", 60)),
+        knowledge_failure_alert_webhook=_env_str("KNOWLEDGE_FAILURE_ALERT_WEBHOOK"),
     )

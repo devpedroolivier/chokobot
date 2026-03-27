@@ -233,6 +233,28 @@
         {% endfor %}
       </div>
       {% endif %}
+
+      {% if sync_overview.telemetry and sync_overview.telemetry.escalations_by_category_day %}
+      <div class="mt-5 panel rounded-[24px] p-5">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+          Escalacoes por Categoria/Dia
+        </p>
+        <div class="mt-3 space-y-3">
+          {% for day_entry in sync_overview.telemetry.escalations_by_category_day %}
+          <div class="rounded-2xl border border-[color:var(--line)] bg-white p-3">
+            <p class="text-sm font-semibold">{{ day_entry.day }} • {{ day_entry.total }} total</p>
+            <div class="mt-2 flex flex-wrap gap-2 text-xs">
+              {% for category in day_entry.categories %}
+              <span class="badge bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
+                {{ category.label }}: {{ category.value }}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </section>
 
     <section class="mb-6">

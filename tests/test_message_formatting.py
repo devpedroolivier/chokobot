@@ -10,7 +10,7 @@ os.environ.setdefault("ZAPI_BASE", "https://example.test")
 from app.ai import tools as ai_tools
 from app.ai.tools import CakeOrderSchema
 from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, KNOWLEDGE_PROMPT, SWEET_ORDER_PROMPT, TRIAGE_PROMPT
-from app.utils.mensagens import formatar_mensagem_saida
+from app.utils.mensagens import _sanitize_internal_agent_payload, formatar_mensagem_saida
 from app.welcome_message import (
     BOT_REACTIVATED_MESSAGE,
     EASTER_CATALOG_MESSAGE,
@@ -142,6 +142,15 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("transferindo você", HUMAN_HANDOFF_MESSAGE)
         self.assertIn("atendentes humanos", HUMAN_HANDOFF_MESSAGE)
         self.assertIn("Trufinha voltou por aqui", BOT_REACTIVATED_MESSAGE)
+
+    def test_sanitiza_payload_interno_de_transferencia(self):
+        sanitized, removed = _sanitize_internal_agent_payload(
+            'Perfeito! {"agent_name":"CakeOrderAgent"}\nMe diga o tamanho do bolo.'
+        )
+
+        self.assertTrue(removed)
+        self.assertNotIn("agent_name", sanitized)
+        self.assertIn("Me diga o tamanho do bolo.", sanitized)
 
 
 if __name__ == "__main__":

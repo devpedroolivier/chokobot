@@ -8,15 +8,14 @@ from app.application.events import AiReplyGeneratedEvent
 from app.application.service_registry import get_command_bus, get_customer_repository, get_event_bus
 from app.application.use_cases.manage_human_handoff import build_reactivation_message, deactivate_human_handoff
 from app.config import get_store_closed_notice, is_store_closed
-from app.observability import log_event
-from app.security import get_admin_phones, hash_phone, preview_text
+from app.observability import log_event, should_track_phone
+from app.security import get_admin_phones, hash_phone, is_phone_automation_disabled, preview_text
 from app.services.estados import (
     append_conversation_message,
     estados_atendimento,
     get_recent_message,
-    has_processed_message,
     is_bot_ativo,
-    mark_processed_message,
+    mark_processed_message_if_new,
     set_bot_ativo,
     set_recent_message,
 )
@@ -26,6 +25,7 @@ from app.utils.payload import normalize_incoming
 
 
 REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot", "ativar chat", "ativar bot"]
+MESSAGE_IDEMPOTENCY_TTL_SECONDS = 60
 
 
 async def generate_ai_reply(telefone: str, texto: str, nome_cliente: str, cliente_id: int) -> str:
@@ -115,13 +115,31 @@ async def process_inbound_message(
         )
         return
 
+    if is_phone_automation_disabled(telefone):
+        log_event("handler_phone_automation_disabled", phone_hash=hash_phone(telefone), text=preview_text(texto))
+        return
+
+    if not should_track_phone(telefone):
+        log_event("handler_test_phone_ignored", phone_hash=hash_phone(telefone))
+        return
+
     agora = now_in_bot_timezone()
 
-    if msg_id and has_processed_message(msg_id):
-        log_event("handler_duplicate_webhook", message_id=msg_id, phone_hash=hash_phone(telefone))
+    if msg_id and not mark_processed_message_if_new(msg_id, agora, ttl_seconds=MESSAGE_IDEMPOTENCY_TTL_SECONDS):
+        log_event(
+            "handler_duplicate_webhook",
+            message_id=msg_id,
+            phone_hash=hash_phone(telefone),
+            duplicate_window_seconds=MESSAGE_IDEMPOTENCY_TTL_SECONDS,
+        )
+        log_event(
+            "handler_duplicate_webhook_alert",
+            message_id=msg_id,
+            phone_hash=hash_phone(telefone),
+            duplicate_window_seconds=MESSAGE_IDEMPOTENCY_TTL_SECONDS,
+            severity="warning",
+        )
         return
-    if msg_id:
-        mark_processed_message(msg_id, agora)
 
     ultima = get_recent_message(telefone)
     ultima_hora = None

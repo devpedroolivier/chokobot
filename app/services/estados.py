@@ -28,6 +28,10 @@ def mark_processed_message(message_id: str, seen_at) -> None:
     _store.mark_processed_message(message_id, seen_at)
 
 
+def mark_processed_message_if_new(message_id: str, seen_at, ttl_seconds: int = 60) -> bool:
+    return _store.mark_processed_message_if_new(message_id, seen_at, ttl_seconds=ttl_seconds)
+
+
 def get_recent_message(phone: str) -> dict | None:
     return _store.get_recent_message(phone)
 

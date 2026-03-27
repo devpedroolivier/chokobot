@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import RLock
 
-from app.application.service_registry import get_customer_process_repository
+from app.application.events import HumanHandoffEscalatedEvent
+from app.application.service_registry import get_customer_process_repository, get_event_bus
 from app.domain.repositories.customer_process_repository import CustomerProcessRecord
-from app.observability import log_event
+from app.observability import increment_counter, log_event
+from app.services.commercial_rules import STORE_HOURS_SUMMARY
 from app.services.estados import (
     estados_atendimento,
     estados_cafeteria,
@@ -14,25 +18,40 @@ from app.services.estados import (
     estados_entrega,
     recent_messages,
 )
+from app.services.store_schedule import store_window_for_date
+from app.settings import get_settings
 from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 from app.welcome_message import BOT_REACTIVATED_MESSAGE, HUMAN_HANDOFF_MESSAGE
 
 _DUPLICATE_HANDOFF_AUDIT_WINDOW = timedelta(minutes=10)
+_KNOWLEDGE_FAILURE_WINDOW_STATE: dict[str, list[datetime]] = {}
+_KNOWLEDGE_FAILURE_LAST_ALERT_AT: dict[str, datetime] = {}
+_KNOWLEDGE_FAILURE_LOCK = RLock()
+_ESCALATION_CATEGORIES = (
+    "cliente_solicitou",
+    "produto_fora_escopo",
+    "falha_bot",
+    "spam_fora_contexto",
+    "assumido_painel",
+)
 
 
 def _handoff_audit_path() -> Path:
     return Path("dados/atendimentos.txt")
 
 
-def register_handoff_audit(telefone: str, nome: str, motivo: str) -> None:
+def register_handoff_audit(telefone: str, nome: str, motivo: str, categoria: str = "falha_bot") -> None:
     path = _handoff_audit_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         agora = now_in_bot_timezone().strftime("%d/%m/%Y %H:%M")
-        linha = f"{agora} - {nome} | {telefone} solicitou atendimento humano | motivo={motivo}\n"
+        linha = (
+            f"{agora} - {nome} | {telefone} solicitou atendimento humano | "
+            f"categoria={categoria} | motivo={motivo}\n"
+        )
         with path.open("a", encoding="utf-8") as handle:
             handle.write(linha)
-        log_event("human_handoff_audited", telefone=telefone, nome=nome, motivo=motivo)
+        log_event("human_handoff_audited", telefone=telefone, nome=nome, motivo=motivo, categoria=categoria)
     except OSError as exc:
         log_event(
             "human_handoff_audit_failed",
@@ -41,6 +60,112 @@ def register_handoff_audit(telefone: str, nome: str, motivo: str) -> None:
             motivo=motivo,
             error_type=type(exc).__name__,
         )
+
+
+def _normalize_text(value: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    clean = "".join(char for char in normalized if not unicodedata.combining(char))
+    return " ".join(clean.casefold().split())
+
+
+def _resolve_escalation_source(motivo: str) -> str:
+    normalized = _normalize_text(motivo)
+    if "painel" in normalized:
+        return "painel"
+    if "cliente" in normalized or "humano" in normalized:
+        return "ai"
+    return "runtime"
+
+
+def _classify_escalation_category(motivo: str) -> str:
+    normalized = _normalize_text(motivo)
+    if "assumido_pelo_painel" in normalized or "assumido pelo painel" in normalized:
+        return "assumido_painel"
+    if any(token in normalized for token in ("cliente pediu humano", "solicitado pelo cliente", "falar com humano")):
+        return "cliente_solicitou"
+    if any(token in normalized for token in ("spam", "teste", "flood", "ruido")):
+        return "spam_fora_contexto"
+    if any(token in normalized for token in ("fora de contexto", "fora de escopo", "produto fora", "nao encontrado")):
+        return "produto_fora_escopo"
+    if any(token in normalized for token in ("ovos pronta entrega", "pronta entrega exige atendimento humano")):
+        return "produto_fora_escopo"
+    return "falha_bot"
+
+
+def _failure_topic_from_reason(motivo: str, categoria: str) -> str:
+    normalized = _normalize_text(motivo)
+    if categoria == "spam_fora_contexto":
+        return "fora_contexto"
+    if "pix" in normalized:
+        return "pix"
+    if "pascoa" in normalized:
+        return "pascoa"
+    if any(token in normalized for token in ("foto", "imagem", "catalogo")):
+        return "catalogo_visual"
+    if any(token in normalized for token in ("cesta", "presente", "flores", "caixinha")):
+        return "presentes"
+    if any(token in normalized for token in ("doces", "brigadeiro", "bombom")):
+        return "doces"
+    if any(token in normalized for token in ("combo", "cafeteria", "croissant", "capuccino", "cappuccino")):
+        return "cafeteria"
+    if "bolo" in normalized:
+        return "bolos"
+    return "geral"
+
+
+def _record_failure_alert_if_needed(topic: str, *, now: datetime) -> None:
+    settings = get_settings()
+    threshold = max(1, settings.knowledge_failure_alert_threshold)
+    window = timedelta(minutes=max(1, settings.knowledge_failure_alert_window_minutes))
+
+    with _KNOWLEDGE_FAILURE_LOCK:
+        samples = list(_KNOWLEDGE_FAILURE_WINDOW_STATE.get(topic, []))
+        samples = [sample for sample in samples if (now - sample) <= window]
+        samples.append(now)
+        _KNOWLEDGE_FAILURE_WINDOW_STATE[topic] = samples
+
+        if len(samples) < threshold:
+            return
+
+        last_alert = _KNOWLEDGE_FAILURE_LAST_ALERT_AT.get(topic)
+        if last_alert is not None and (now - last_alert) <= window:
+            return
+        _KNOWLEDGE_FAILURE_LAST_ALERT_AT[topic] = now
+
+    increment_counter("knowledge_failure_alert_total", topico=topic)
+    log_event(
+        "knowledge_failure_alert",
+        level="WARNING",
+        topico=topic,
+        ocorrencias=len(samples),
+        janela_minutos=int(window.total_seconds() // 60),
+        threshold=threshold,
+        webhook_configurado=bool(settings.knowledge_failure_alert_webhook),
+    )
+    if settings.knowledge_failure_alert_webhook:
+        log_event(
+            "knowledge_failure_alert_webhook_pending",
+            level="WARNING",
+            topico=topic,
+            webhook_target="configured",
+        )
+
+
+def _record_escalation_metrics(
+    *,
+    handoff_started_at: datetime,
+    categoria: str,
+    origem: str,
+    motivo: str,
+) -> None:
+    day = handoff_started_at.strftime("%Y-%m-%d")
+    increment_counter("escalacao_total", categoria=categoria, dia=day, origem=origem)
+    increment_counter("pedido_escalado_total", categoria=categoria, dia=day, origem=origem)
+
+    if categoria in {"produto_fora_escopo", "falha_bot", "spam_fora_contexto"}:
+        topic = _failure_topic_from_reason(motivo, categoria)
+        increment_counter("falha_conhecimento_total", topico=topic, dia=day)
+        _record_failure_alert_if_needed(topic, now=handoff_started_at)
 
 
 def clear_customer_active_flows(telefone: str) -> None:
@@ -194,6 +319,66 @@ def _unique_strings(values: list[str]) -> list[str]:
     return items
 
 
+def _truncate_summary(value: str, *, limit: int = 120) -> str:
+    clean = " ".join(str(value or "").strip().split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: limit - 3].rstrip() + "..."
+
+
+def _next_business_opening(reference: datetime) -> tuple[datetime, str] | None:
+    for offset in range(0, 14):
+        candidate = reference + timedelta(days=offset)
+        window = store_window_for_date(candidate.date())
+        if window is None:
+            continue
+        opening = datetime.combine(candidate.date(), datetime.strptime(window[0], "%H:%M").time())
+        opening = opening.replace(tzinfo=reference.tzinfo)
+        if offset == 0 and reference.time() <= opening.time():
+            return opening, window[0]
+        if offset > 0:
+            return opening, window[0]
+    return None
+
+
+def _handoff_expectation_message(reference: datetime) -> str:
+    window = store_window_for_date(reference.date())
+    if window is not None and window[0] <= reference.strftime("%H:%M") <= window[1]:
+        return (
+            "Respondemos em ate 20 minutos no horario comercial "
+            f"({STORE_HOURS_SUMMARY})"
+        )
+
+    next_open = _next_business_opening(reference)
+    if next_open is None:
+        return f"Estamos fora do horario comercial agora ({STORE_HOURS_SUMMARY})"
+
+    opening_at, opening_hour = next_open
+    weekday = opening_at.strftime("%d/%m/%Y")
+    return (
+        "Estamos fora do horario comercial agora. "
+        f"Nosso proximo atendimento comeca em {weekday} as {opening_hour} "
+        f"({STORE_HOURS_SUMMARY})"
+    )
+
+
+def _build_handoff_customer_message(handoff_context: dict, *, now: datetime) -> str:
+    summary = _truncate_summary(str(handoff_context.get("resumo") or ""))
+    if not summary:
+        summary = _truncate_summary(str(handoff_context.get("ultima_mensagem_cliente") or ""))
+
+    expected = _handoff_expectation_message(now)
+    if summary:
+        return (
+            f"Entendi que voce quer: {summary}. "
+            f"Estou transferindo voce para nossa equipe humana agora. {expected}."
+        )
+    return (
+        "Estou transferindo voce para nossa equipe humana agora. "
+        f"{expected}."
+    )
+
+
 def _build_handoff_context(
     telefone: str,
     *,
@@ -252,10 +437,14 @@ def activate_human_handoff(
     now: datetime | None = None,
 ) -> str:
     handoff_started_at = normalize_to_bot_timezone(now)
+    categoria = _classify_escalation_category(motivo)
+    origem = _resolve_escalation_source(motivo)
+    if categoria not in _ESCALATION_CATEGORIES:
+        categoria = "falha_bot"
     is_duplicate_request = _is_duplicate_handoff_request(telefone, motivo, now=handoff_started_at)
 
     if audit_writer is not None and not is_duplicate_request:
-        audit_writer(telefone, nome, motivo)
+        audit_writer(telefone, nome, motivo, categoria)
 
     clear_customer_active_flows(telefone)
     process_repository = process_repository or get_customer_process_repository()
@@ -269,6 +458,8 @@ def activate_human_handoff(
         draft_payload={
             "nome": nome,
             "motivo": motivo,
+            "categoria": categoria,
+            "origem": origem,
             "duplicated_request": is_duplicate_request,
             "contexto": handoff_context,
         },
@@ -279,19 +470,40 @@ def activate_human_handoff(
         "audit_at": handoff_started_at.isoformat(),
         "nome": nome,
         "motivo": motivo,
+        "categoria": categoria,
+        "origem": origem,
         "contexto_resumo": handoff_context.get("resumo") or "",
         "proximo_passo": handoff_context.get("proximo_passo") or "",
     }
+    if not is_duplicate_request:
+        _record_escalation_metrics(
+            handoff_started_at=handoff_started_at,
+            categoria=categoria,
+            origem=origem,
+            motivo=motivo,
+        )
+        get_event_bus().publish(
+            HumanHandoffEscalatedEvent(
+                phone=telefone,
+                nome=nome,
+                motivo=motivo,
+                categoria=categoria,
+                origem=origem,
+            )
+        )
     log_event(
         "human_handoff_activated",
         telefone=telefone,
         nome=nome,
         motivo=motivo,
+        categoria=categoria,
+        origem=origem,
         duplicate=is_duplicate_request,
         contexto_resumo=handoff_context.get("resumo") or "",
         risk_flags=handoff_context.get("risk_flags") or [],
     )
-    return HUMAN_HANDOFF_MESSAGE
+    message = _build_handoff_customer_message(handoff_context, now=handoff_started_at)
+    return message or HUMAN_HANDOFF_MESSAGE
 
 
 def deactivate_human_handoff(telefone: str, *, process_repository=None) -> bool:

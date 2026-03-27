@@ -9,6 +9,8 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from app.settings import get_settings
+
 
 _request_id: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 _metrics_lock = threading.Lock()
@@ -17,7 +19,7 @@ _histogram_metrics: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, floa
     lambda: {"count": 0.0, "sum": 0.0}
 )
 
-_TEST_PHONE_VARIANTS = frozenset({"5511888888888", "11888888888"})
+_DEFAULT_TEST_PHONE_VARIANTS = frozenset({"5511888888888", "11888888888"})
 
 
 def normalize_tracking_phone(phone: str | None) -> str:
@@ -27,9 +29,15 @@ def normalize_tracking_phone(phone: str | None) -> str:
     return "".join(char for char in raw_value if char.isdigit())
 
 
+def _test_phone_variants() -> frozenset[str]:
+    configured = {normalize_tracking_phone(phone) for phone in get_settings().test_phones}
+    configured.discard("")
+    return frozenset(_DEFAULT_TEST_PHONE_VARIANTS | configured)
+
+
 def should_track_phone(phone: str | None) -> bool:
     normalized = normalize_tracking_phone(phone)
-    return not normalized or normalized not in _TEST_PHONE_VARIANTS
+    return not normalized or normalized not in _test_phone_variants()
 
 
 def normalize_reason_label(value: str | None, default: str = "unknown") -> str:
@@ -110,10 +118,11 @@ def render_metrics() -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def log_event(event: str, **fields) -> None:
+def log_event(event: str, level: str = "INFO", **fields) -> None:
+    normalized_level = str(level or "INFO").upper()
     payload = {
         "ts": datetime.now(timezone.utc).isoformat(),
-        "level": "INFO",
+        "level": normalized_level,
         "event": event,
         "request_id": get_request_id(),
     }

@@ -4,7 +4,7 @@ import unittest
 os.environ.setdefault("ZAPI_TOKEN", "test-token")
 os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
-from app.application.use_cases.panel_dashboard import build_sync_overview
+from app.application.use_cases.panel_dashboard import build_sync_overview, current_business_date
 from app.observability import clear_metrics, increment_counter
 
 
@@ -50,7 +50,8 @@ class PanelSyncOverviewTests(unittest.TestCase):
         self.assertIsInstance(telemetry, dict)
         self.assertEqual(telemetry["handoffs_by_reason"], [])
         self.assertEqual(telemetry["post_purchase_fallbacks"], [])
-        self.assertEqual(len(telemetry["operational_metrics"]), 3)
+        self.assertEqual(telemetry["escalations_by_category_day"], [])
+        self.assertEqual(len(telemetry["operational_metrics"]), 4)
         self.assertTrue(all((metric["value"] == "—" for metric in telemetry["operational_metrics"])))
 
     def test_build_sync_overview_reports_telemetry_percentages(self):
@@ -59,6 +60,12 @@ class PanelSyncOverviewTests(unittest.TestCase):
         increment_counter("ai_runs_total", stage="started", agent="TriageAgent")
         increment_counter("ai_post_purchase_fallback_total", outcome="success", topic="status", failure_reason="success")
         increment_counter("ai_post_purchase_fallback_total", outcome="failure", topic="status", failure_reason="order_not_found")
+        day_label = current_business_date().strftime("%Y-%m-%d")
+        increment_counter("pedido_fechado_autonomo_total", dia=day_label, agent="CakeOrderAgent", tool_name="create_cake_order")
+        increment_counter("pedido_fechado_autonomo_total", dia=day_label, agent="CakeOrderAgent", tool_name="create_cake_order")
+        increment_counter("pedido_escalado_total", dia=day_label, categoria="cliente_solicitou", origem="ai")
+        increment_counter("escalacao_total", dia=day_label, categoria="cliente_solicitou", origem="ai")
+        increment_counter("escalacao_total", dia=day_label, categoria="falha_bot", origem="ai")
 
         process_cards = []
         whatsapp_cards = []
@@ -80,6 +87,16 @@ class PanelSyncOverviewTests(unittest.TestCase):
         self.assertEqual(resolution_metric["value"], "50%")
         self.assertIsNotNone(human_metric)
         self.assertEqual(human_metric["value"], "50%")
+        autonomy_metric = next((metric for metric in metrics if metric["label"].startswith("Taxa de autonomia")), None)
+        self.assertIsNotNone(autonomy_metric)
+        self.assertEqual(autonomy_metric["value"], "67%")
+
+        escalation_daily = overview["telemetry"]["escalations_by_category_day"]
+        self.assertEqual(len(escalation_daily), 1)
+        self.assertEqual(escalation_daily[0]["day"], day_label)
+        labels = {item["label"] for item in escalation_daily[0]["categories"]}
+        self.assertIn("Cliente Solicitou", labels)
+        self.assertIn("Falha Bot", labels)
 
 
 if __name__ == "__main__":

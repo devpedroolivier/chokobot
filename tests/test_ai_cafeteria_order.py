@@ -101,6 +101,24 @@ class AICafeteriaOrderTests(unittest.TestCase):
 
         self.assertEqual(message, "Informe o horario da entrega.")
 
+    def test_create_cafeteria_order_applies_5_reais_delivery_fee(self):
+        order = ai_tools.CafeteriaOrderSchema(
+            itens=[{"nome": "Croissant", "variante": "Chocolate", "quantidade": 1}],
+            data_entrega="10/10/2030",
+            horario_retirada="15:00",
+            modo_recebimento="entrega",
+            endereco="Rua Teste, 123",
+            pagamento={"forma": "PIX"},
+        )
+
+        with patch("app.ai.tools._sync_ai_process", return_value=None):
+            with patch.object(ai_tools, "get_order_gateway") as mocked_gateway:
+                mocked_gateway.return_value.save_cafeteria_order.return_value = None
+                message = ai_tools.create_cafeteria_order("5511999999999", "Cliente", 1, order)
+
+        self.assertIn("Taxa entrega: R$5,00", message)
+        self.assertIn("Total final: R$19,50", message)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,5 +31,12 @@
       "operational_status": "normal"
     }
   ],
-  "slot_capacities": []
+  "slot_capacities": [],
+  "seasonal_dates": [
+    {
+      "name": "pascoa",
+      "date": "2026-04-05",
+      "label": "Páscoa 2026"
+    }
+  ]
 }

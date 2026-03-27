@@ -1183,6 +1183,10 @@ def _sum_counters(counters: dict, metric_name: str, **label_filters: str) -> int
     return total
 
 
+def _metric_day_label() -> str:
+    return current_business_date().strftime("%Y-%m-%d")
+
+
 def _build_handoff_reason_breakdown(counters: dict) -> list[dict]:
     total = _sum_counters(counters, "ai_human_guard_handoffs_total")
     return _breakdown_by_label(counters, "ai_human_guard_handoffs_total", "reason", total=total)
@@ -1191,6 +1195,33 @@ def _build_handoff_reason_breakdown(counters: dict) -> list[dict]:
 def _build_post_purchase_failure_breakdown(counters: dict) -> list[dict]:
     total = _sum_counters(counters, "ai_post_purchase_fallback_total")
     return _breakdown_by_label(counters, "ai_post_purchase_fallback_total", "failure_reason", total=total)
+
+
+def _build_escalation_category_daily_breakdown(counters: dict, *, max_days: int = 7) -> list[dict]:
+    grouped: dict[str, dict[str, int]] = defaultdict(dict)
+    for (name, labels), value in counters.items():
+        if name != "escalacao_total":
+            continue
+        labels_map = dict(labels)
+        day = labels_map.get("dia") or "sem_data"
+        category = labels_map.get("categoria") or "unknown"
+        grouped.setdefault(day, {})
+        grouped[day][category] = grouped[day].get(category, 0) + int(value)
+
+    if not grouped:
+        return []
+
+    entries: list[dict] = []
+    for day in sorted(grouped.keys(), reverse=True)[:max_days]:
+        category_items = sorted(grouped[day].items(), key=lambda item: (-item[1], item[0]))
+        entries.append(
+            {
+                "day": day,
+                "total": sum(value for _, value in category_items),
+                "categories": [{"label": _format_reason_label(category), "value": str(count)} for category, count in category_items],
+            }
+        )
+    return entries
 
 
 def _format_percentage(rate: float | None) -> str:
@@ -1215,6 +1246,13 @@ def _build_operational_metrics(counters: dict) -> list[dict]:
     resolution_without_human_rate = None
     if runs_started:
         resolution_without_human_rate = max(0.0, 1 - min(human_handoffs, runs_started) / runs_started)
+
+    day_label = _metric_day_label()
+    bot_closed_today = _sum_counters(counters, "pedido_fechado_autonomo_total", dia=day_label)
+    escalated_today = _sum_counters(counters, "pedido_escalado_total", dia=day_label)
+    autonomy_rate = None
+    if bot_closed_today + escalated_today:
+        autonomy_rate = bot_closed_today / (bot_closed_today + escalated_today)
 
     metrics: list[dict] = []
     metrics.append(
@@ -1242,6 +1280,17 @@ def _build_operational_metrics(counters: dict) -> list[dict]:
             "hint": runs_started
                 and f"{max(runs_started - human_handoffs, 0)}/{runs_started} sem handoff humano"
                 or "Sem dados",
+        }
+    )
+    metrics.append(
+        {
+            "label": "Taxa de autonomia do bot (hoje)",
+            "value": _format_percentage(autonomy_rate),
+            "hint": (
+                f"{bot_closed_today}/{bot_closed_today + escalated_today} fechado(s) sem escalacao em {day_label}"
+                if (bot_closed_today + escalated_today)
+                else "Sem dados"
+            ),
         }
     )
     return metrics
@@ -1299,6 +1348,7 @@ def build_sync_overview(
 
     telemetry = {
         "handoffs_by_reason": _build_handoff_reason_breakdown(counters),
+        "escalations_by_category_day": _build_escalation_category_daily_breakdown(counters),
         "post_purchase_fallbacks": _build_post_purchase_failure_breakdown(counters),
         "operational_metrics": _build_operational_metrics(counters),
     }

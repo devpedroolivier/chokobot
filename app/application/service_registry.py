@@ -5,7 +5,13 @@ from functools import lru_cache
 from app.application.command_bus import LocalCommandBus
 from app.application.commands import GenerateAiReplyCommand, HandleInboundMessageCommand
 from app.application.event_bus import LocalEventBus
-from app.application.events import AiReplyGeneratedEvent, MessageReceivedEvent, OrderCreatedEvent
+from app.application.events import (
+    AiReplyGeneratedEvent,
+    HumanHandoffEscalatedEvent,
+    MessageReceivedEvent,
+    OrderClosedByBotEvent,
+    OrderCreatedEvent,
+)
 from app.application.ports.attention_gateway import AttentionGateway
 from app.application.ports.catalog_gateway import CatalogGateway
 from app.application.ports.conversation_gateway import ConversationGateway
@@ -90,7 +96,13 @@ def get_event_bus() -> LocalEventBus:
     from app.application.handlers.persist_domain_event import persist_domain_event
 
     bus = LocalEventBus()
-    for event_type in (MessageReceivedEvent, AiReplyGeneratedEvent, OrderCreatedEvent):
+    for event_type in (
+        MessageReceivedEvent,
+        AiReplyGeneratedEvent,
+        OrderCreatedEvent,
+        OrderClosedByBotEvent,
+        HumanHandoffEscalatedEvent,
+    ):
         bus.subscribe(event_type, persist_domain_event)
     return bus
 

@@ -34,6 +34,7 @@ class SecurityHardeningTests(unittest.TestCase):
     def setUp(self):
         clear_replay_cache()
         clear_metrics()
+        webhook_module._inbound_phone_locks.clear()
 
     def test_panel_routes_are_protected_by_auth_dependency(self):
         for router_module in (painel_module, pedidos_module, clientes_module):
@@ -159,9 +160,47 @@ class SecurityHardeningTests(unittest.TestCase):
         with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
             result = asyncio.run(webhook_module.receber_webhook(request))
 
-        self.assertEqual(result, {"status": "ignored"})
+        self.assertEqual(result, {"status": "ignored", "detail": "test_phone"})
         counters, _ = snapshot_metrics()
         self.assertEqual(counters, {})
+
+    def test_webhook_ignores_configured_test_phone_before_dispatch(self):
+        request = FakeRequest(
+            {
+                "id": "msg-test-phone-config-1",
+                "phone": "5511777777777",
+                "message": "oi",
+            },
+            headers={"X-Webhook-Secret": "super-secret"},
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "WEBHOOK_SECRET": "super-secret",
+                "TEST_PHONES": "5511777777777",
+            },
+            clear=False,
+        ):
+            with patch.object(webhook_module, "dispatch_inbound_message", AsyncMock()) as mocked_process:
+                result = asyncio.run(webhook_module.receber_webhook(request))
+
+        self.assertEqual(result, {"status": "ignored", "detail": "test_phone"})
+        mocked_process.assert_not_awaited()
+
+    def test_webhook_cleans_phone_lock_after_processing(self):
+        request = FakeRequest(
+            {"id": "msg-lock-cleanup-1", "phone": "5511999999999", "message": "Oi"},
+            headers={"X-Webhook-Secret": "super-secret"},
+        )
+
+        with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
+            with patch.object(webhook_module, "dispatch_inbound_message", AsyncMock()) as mocked_process:
+                result = asyncio.run(webhook_module.receber_webhook(request))
+
+        self.assertEqual(result, {"status": "ok"})
+        mocked_process.assert_awaited_once()
+        self.assertEqual(webhook_module._inbound_phone_locks, {})
 
     def test_save_learning_is_blocked_by_default(self):
         with tempfile.TemporaryDirectory() as tmpdir:

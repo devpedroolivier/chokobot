@@ -36,6 +36,37 @@ def get_admin_phones() -> set[str]:
     return set(get_settings().admin_phones)
 
 
+def _normalize_phone(phone: str | None) -> str:
+    raw_value = str(phone or "").strip()
+    if not raw_value:
+        return ""
+    return "".join(char for char in raw_value if char.isdigit())
+
+
+def _phone_variants(phone: str | None) -> set[str]:
+    normalized = _normalize_phone(phone)
+    if not normalized:
+        return set()
+    variants = {normalized}
+    if normalized.startswith("55") and len(normalized) > 11:
+        variants.add(normalized[2:])
+    if len(normalized) in {10, 11}:
+        variants.add(f"55{normalized}")
+    return variants
+
+
+def is_phone_automation_disabled(phone: str | None) -> bool:
+    blocked_phones = get_settings().automation_disabled_phones
+    if not blocked_phones:
+        return False
+
+    blocked_variants: set[str] = set()
+    for blocked in blocked_phones:
+        blocked_variants.update(_phone_variants(blocked))
+
+    return bool(_phone_variants(phone) & blocked_variants)
+
+
 def hash_phone(phone: str | None) -> str:
     if not phone:
         return "anon"

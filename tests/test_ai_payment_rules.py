@@ -75,6 +75,47 @@ class AIPaymentRulesTests(unittest.TestCase):
         self.assertEqual(dados["pagamento"]["forma"], "Dinheiro")
         self.assertEqual(dados["pagamento"]["troco_para"], 200.0)
 
+    def test_prepare_cake_order_requires_cash_change_confirmation(self):
+        dados, error = _prepare_cake_order_data(
+            CakeOrderSchema(
+                linha="tradicional",
+                categoria="tradicional",
+                tamanho="B3",
+                massa="Chocolate",
+                recheio="Brigadeiro",
+                mousse="Ninho",
+                descricao="Bolo teste",
+                data_entrega="10/10/2030",
+                horario_retirada="15:00",
+                modo_recebimento="retirada",
+                pagamento={"forma": "Dinheiro"},
+            )
+        )
+
+        self.assertIsNone(dados)
+        self.assertIn("pergunte se o cliente precisa de troco", str(error).casefold())
+
+    def test_prepare_cake_order_accepts_cash_without_change_using_zero(self):
+        dados, error = _prepare_cake_order_data(
+            CakeOrderSchema(
+                linha="tradicional",
+                categoria="tradicional",
+                tamanho="B3",
+                massa="Chocolate",
+                recheio="Brigadeiro",
+                mousse="Ninho",
+                descricao="Bolo teste",
+                data_entrega="10/10/2030",
+                horario_retirada="15:00",
+                modo_recebimento="retirada",
+                pagamento={"forma": "Dinheiro", "troco_para": 0},
+            )
+        )
+
+        self.assertIsNone(error)
+        assert dados is not None
+        self.assertEqual(dados["pagamento"]["troco_para"], 0.0)
+
     def test_prepare_cake_order_allows_card_installments_above_100(self):
         dados, error = _prepare_cake_order_data(
             CakeOrderSchema(
@@ -125,6 +166,23 @@ class AIPaymentRulesTests(unittest.TestCase):
         self.assertIsNone(error)
         assert prepared is not None
         self.assertEqual(prepared["pagamento"]["parcelas"], 2)
+
+    def test_prepare_cafeteria_order_uses_5_reais_delivery_fee_for_entrega(self):
+        prepared, error = _prepare_cafeteria_order_data(
+            CafeteriaOrderSchema(
+                itens=[{"nome": "Croissant", "variante": "Chocolate", "quantidade": 1}],
+                data_entrega="10/10/2030",
+                horario_retirada="15:00",
+                modo_recebimento="entrega",
+                endereco="Rua Teste, 123",
+                pagamento={"forma": "PIX"},
+            )
+        )
+
+        self.assertIsNone(error)
+        assert prepared is not None
+        self.assertEqual(prepared["taxa_entrega"], 5.0)
+        self.assertEqual(prepared["valor_total"], 19.5)
 
 
 if __name__ == "__main__":

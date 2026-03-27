@@ -84,6 +84,7 @@ _DEFAULT_OPERATIONAL_CALENDAR = {
     "blocked_dates": [],
     "date_overrides": [],
     "slot_capacities": [],
+    "seasonal_dates": [],
 }
 
 
@@ -345,6 +346,51 @@ def _match_calendar_entry(entries: list[dict], target_date: date) -> dict | None
     return None
 
 
+def seasonal_date_entry(name: str, *, reference: date | datetime | None = None) -> dict | None:
+    target = _normalize_text(name)
+    if not target:
+        return None
+    base_date = _reference_service_date(reference)
+    entries = [
+        entry
+        for entry in load_operational_calendar().get("seasonal_dates", [])
+        if isinstance(entry, dict) and _normalize_text(str(entry.get("name") or "")) == target
+    ]
+    if not entries:
+        return None
+
+    parsed: list[tuple[date, dict]] = []
+    for entry in entries:
+        parsed_date = _calendar_date(entry)
+        if parsed_date is None:
+            continue
+        parsed.append((parsed_date, entry))
+    if not parsed:
+        return None
+
+    future = [item for item in parsed if item[0] >= base_date]
+    if future:
+        future.sort(key=lambda item: item[0])
+        return future[0][1]
+    parsed.sort(key=lambda item: item[0], reverse=True)
+    return parsed[0][1]
+
+
+def easter_date_message(reference: date | datetime | None = None) -> str:
+    entry = seasonal_date_entry("pascoa", reference=reference)
+    if entry is None:
+        return "A data da Páscoa varia por ano. Posso confirmar para você com a equipe em instantes."
+
+    target = _calendar_date(entry)
+    if target is None:
+        return "A data da Páscoa varia por ano. Posso confirmar para você com a equipe em instantes."
+    label = str(entry.get("label") or "Páscoa").strip()
+    return (
+        f"{label}: {format_service_date_with_weekday(target)}. "
+        "Se quiser, eu já te ajudo a escolher os itens do pedido."
+    )
+
+
 def _slot_time_bounds(entry: dict) -> tuple[str | None, str | None]:
     time_from = _parse_hora(str(entry.get("time_from") or ""))
     time_to = _parse_hora(str(entry.get("time_to") or ""))
@@ -602,12 +648,14 @@ __all__ = [
     "SUNDAY_UNAVAILABLE_MESSAGE",
     "build_calendar_reference_context",
     "build_operational_calendar_context",
+    "easter_date_message",
     "format_service_date",
     "format_service_date_with_weekday",
     "is_sunday_service_date",
     "load_operational_calendar",
     "operational_day_override",
     "parse_service_date",
+    "seasonal_date_entry",
     "resolve_service_date_context",
     "resolve_service_date_reference",
     "store_window_for_date",

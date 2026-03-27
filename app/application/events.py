@@ -31,3 +31,23 @@ class OrderCreatedEvent:
     categoria: str
     source: str
     occurred_at: str = field(default_factory=_event_time)
+
+
+@dataclass(frozen=True)
+class OrderClosedByBotEvent:
+    phone: str
+    agente: str
+    ferramenta: str
+    order_id: int | None
+    protocolo: str | None
+    occurred_at: str = field(default_factory=_event_time)
+
+
+@dataclass(frozen=True)
+class HumanHandoffEscalatedEvent:
+    phone: str
+    nome: str
+    motivo: str
+    categoria: str
+    origem: str
+    occurred_at: str = field(default_factory=_event_time)

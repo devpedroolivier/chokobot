@@ -51,7 +51,7 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
 
-    async def test_process_message_handles_pascoa_without_accent(self):
+    async def test_process_message_handles_pascoa_without_accent_for_catalog_request(self):
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
         )
@@ -59,7 +59,7 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(runner, "client", fake_client):
             reply = await runner.process_message_with_ai(
                 "5516999999999",
-                "Tem ovo de pascoa disponivel?",
+                "Manda o cardapio de pascoa",
                 "Teste",
                 99,
             )
@@ -85,9 +85,11 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Resposta catalogada")
         fake_client.chat.completions.create.assert_awaited_once()
 
-    async def test_process_message_handles_generic_ovo_request_as_easter(self):
+    async def test_process_message_routes_generic_ovo_request_to_ai_flow(self):
         fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Fluxo de encomenda de Páscoa"))))
+            )
         )
 
         with patch.object(runner, "client", fake_client):
@@ -98,8 +100,8 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
                 99,
             )
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
+        self.assertEqual(reply, "Fluxo de encomenda de Páscoa")
+        fake_client.chat.completions.create.assert_awaited_once()
 
     async def test_process_message_handles_ovo_pronta_entrega_via_human_handoff(self):
         fake_client = SimpleNamespace(
@@ -195,6 +197,40 @@ class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
         self.assertEqual(second_reply, "Temos consulta específica")
         fake_client.chat.completions.create.assert_awaited_once()
+
+    async def test_process_message_answers_easter_date_from_operational_calendar(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                "5516999999999",
+                "Quando é a Páscoa?",
+                "Teste",
+                99,
+            )
+
+        self.assertIn("Páscoa 2026", reply)
+        self.assertIn("05/04/2026", reply)
+        fake_client.chat.completions.create.assert_not_awaited()
+
+    async def test_process_message_returns_catalog_link_for_photo_requests(self):
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
+        )
+
+        with patch.dict(os.environ, {"CATALOG_LINK": "https://catalogo.exemplo"}, clear=False):
+            with patch.object(runner, "client", fake_client):
+                reply = await runner.process_message_with_ai(
+                    "5516999999999",
+                    "Tem foto dos produtos?",
+                    "Teste",
+                    99,
+                )
+
+        self.assertIn("https://catalogo.exemplo", reply)
+        fake_client.chat.completions.create.assert_not_awaited()
 
 
 if __name__ == "__main__":

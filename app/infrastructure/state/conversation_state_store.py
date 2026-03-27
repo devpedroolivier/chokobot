@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import sqlite3
+import threading
+from datetime import datetime, timedelta
 from collections.abc import MutableMapping, Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from app.observability import log_event
 from app.settings import get_settings
+
+_PROCESSED_MESSAGE_TTL_SECONDS = 60
 
 
 class StateBackend:
@@ -97,6 +102,122 @@ class RedisStateBackend(StateBackend):
         self.client.set(self._flag_key(name), "1" if value else "0")
 
 
+class SQLiteStateBackend(StateBackend):
+    def __init__(self, sqlite_path: str):
+        resolved_path = str(sqlite_path or "").strip() or "dados/state_store.db"
+        self.sqlite_path = resolved_path
+        self._db_lock = threading.RLock()
+        Path(self.sqlite_path).parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.sqlite_path, timeout=5.0)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    def _init_db(self) -> None:
+        with self._db_lock:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS state_kv (
+                        namespace TEXT NOT NULL,
+                        key TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        PRIMARY KEY (namespace, key)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS state_flags (
+                        name TEXT PRIMARY KEY,
+                        value TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
+                connection.commit()
+
+    def get(self, namespace: str, key: str):
+        with self._db_lock:
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT value FROM state_kv WHERE namespace = ? AND key = ?",
+                    (namespace, key),
+                ).fetchone()
+        if row is None:
+            return None
+        try:
+            return json.loads(str(row["value"]))
+        except json.JSONDecodeError:
+            return None
+
+    def set(self, namespace: str, key: str, value) -> None:
+        payload = json.dumps(value, default=str)
+        now_iso = datetime.utcnow().isoformat()
+        with self._db_lock:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO state_kv(namespace, key, value, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(namespace, key) DO UPDATE SET
+                        value = excluded.value,
+                        updated_at = excluded.updated_at
+                    """,
+                    (namespace, key, payload, now_iso),
+                )
+                connection.commit()
+
+    def delete(self, namespace: str, key: str) -> None:
+        with self._db_lock:
+            with self._connect() as connection:
+                connection.execute(
+                    "DELETE FROM state_kv WHERE namespace = ? AND key = ?",
+                    (namespace, key),
+                )
+                connection.commit()
+
+    def keys(self, namespace: str) -> list[str]:
+        with self._db_lock:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    "SELECT key FROM state_kv WHERE namespace = ? ORDER BY updated_at ASC",
+                    (namespace,),
+                ).fetchall()
+        return [str(row["key"]) for row in rows]
+
+    def get_flag(self, name: str, default: bool) -> bool:
+        with self._db_lock:
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT value FROM state_flags WHERE name = ?",
+                    (name,),
+                ).fetchone()
+        if row is None:
+            return default
+        return str(row["value"]) == "1"
+
+    def set_flag(self, name: str, value: bool) -> None:
+        now_iso = datetime.utcnow().isoformat()
+        serialized = "1" if value else "0"
+        with self._db_lock:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO state_flags(name, value, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(name) DO UPDATE SET
+                        value = excluded.value,
+                        updated_at = excluded.updated_at
+                    """,
+                    (name, serialized, now_iso),
+                )
+                connection.commit()
+
+
 class StateMap(MutableMapping[str, dict]):
     def __init__(self, namespace: str, backend: StateBackend):
         self.namespace = namespace
@@ -145,13 +266,52 @@ class ConversationStateStore:
     def has_processed_message(self, message_id: str) -> bool:
         if not message_id:
             return False
-        return message_id in self.processed_messages
+        payload = self.processed_messages.get(message_id)
+        if payload is None:
+            return False
 
-    def mark_processed_message(self, message_id: str, seen_at: datetime) -> None:
+        expires_at_raw = str(payload.get("expires_at") or "").strip()
+        if not expires_at_raw:
+            seen_at_raw = str(payload.get("seen_at") or "").strip()
+            if seen_at_raw:
+                try:
+                    seen_at = datetime.fromisoformat(seen_at_raw)
+                    expires_at_raw = (seen_at + timedelta(seconds=_PROCESSED_MESSAGE_TTL_SECONDS)).isoformat()
+                except ValueError:
+                    expires_at_raw = ""
+
+        if expires_at_raw:
+            try:
+                expires_at = datetime.fromisoformat(expires_at_raw)
+                if datetime.now(tz=expires_at.tzinfo) >= expires_at:
+                    self.processed_messages.pop(message_id, None)
+                    return False
+            except ValueError:
+                pass
+        return True
+
+    def mark_processed_message(self, message_id: str, seen_at: datetime, ttl_seconds: int = _PROCESSED_MESSAGE_TTL_SECONDS) -> None:
         if not message_id:
             return
-        self.processed_messages[message_id] = {"seen_at": seen_at.isoformat()}
+        expires_at = seen_at + timedelta(seconds=max(1, ttl_seconds))
+        self.processed_messages[message_id] = {
+            "seen_at": seen_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
+        }
         self._trim_namespace(self.processed_messages, limit=2000, sort_key="seen_at")
+
+    def mark_processed_message_if_new(
+        self,
+        message_id: str,
+        seen_at: datetime,
+        ttl_seconds: int = _PROCESSED_MESSAGE_TTL_SECONDS,
+    ) -> bool:
+        if not message_id:
+            return True
+        if self.has_processed_message(message_id):
+            return False
+        self.mark_processed_message(message_id, seen_at, ttl_seconds=ttl_seconds)
+        return True
 
     def get_recent_message(self, phone: str) -> dict | None:
         if not phone:
@@ -234,7 +394,11 @@ def build_conversation_state_store() -> ConversationStateStore:
     settings = get_settings()
     redis_url = settings.redis_url
     if not redis_url:
-        return ConversationStateStore(InMemoryStateBackend())
+        try:
+            return ConversationStateStore(SQLiteStateBackend(settings.state_sqlite_path))
+        except Exception as exc:
+            log_event("state_backend_fallback", backend="memory", reason=type(exc).__name__)
+            return ConversationStateStore(InMemoryStateBackend())
 
     try:
         return ConversationStateStore(RedisStateBackend(redis_url))
@@ -243,5 +407,9 @@ def build_conversation_state_store() -> ConversationStateStore:
             raise RuntimeError(
                 f"Redis state backend unavailable and fallback is disabled: {type(exc).__name__}"
             ) from exc
-        log_event("state_backend_fallback", backend="memory", reason=type(exc).__name__)
-        return ConversationStateStore(InMemoryStateBackend())
+        log_event("state_backend_fallback", backend="sqlite", reason=type(exc).__name__)
+        try:
+            return ConversationStateStore(SQLiteStateBackend(settings.state_sqlite_path))
+        except Exception as sqlite_exc:
+            log_event("state_backend_fallback", backend="memory", reason=type(sqlite_exc).__name__)
+            return ConversationStateStore(InMemoryStateBackend())

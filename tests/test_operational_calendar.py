@@ -78,6 +78,22 @@ class OperationalCalendarTests(unittest.TestCase):
         self.assertIn("26/03/2026 bloqueado (manutencao)", context)
         self.assertIn("27/03/2026 horario especial 10:00-15:00 (horario especial)", context)
 
+    def test_easter_date_message_reads_seasonal_date_from_calendar(self):
+        calendar = {
+            "blocked_dates": [],
+            "date_overrides": [],
+            "slot_capacities": [],
+            "seasonal_dates": [
+                {"name": "pascoa", "date": "05/04/2026", "label": "Páscoa 2026"}
+            ],
+        }
+
+        with patch.object(store_schedule, "load_operational_calendar", return_value=calendar):
+            message = store_schedule.easter_date_message(datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo("America/Sao_Paulo")))
+
+        self.assertIn("Páscoa 2026", message)
+        self.assertIn("05/04/2026 (Domingo)", message)
+
 
 if __name__ == "__main__":
     unittest.main()

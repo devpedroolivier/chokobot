@@ -51,6 +51,7 @@ class PanelSnapshotPayloadTests(unittest.TestCase):
                 "alerts": [],
                 "telemetry": {
                     "handoffs_by_reason": [],
+                    "escalations_by_category_day": [],
                     "post_purchase_fallbacks": [],
                     "operational_metrics": [],
                 },

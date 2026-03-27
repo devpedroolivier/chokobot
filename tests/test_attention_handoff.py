@@ -3,9 +3,11 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+from app.application.use_cases import manage_human_handoff as handoff_module
 from app.application.use_cases.manage_human_handoff import activate_human_handoff, deactivate_human_handoff
 from app.domain.repositories.customer_process_repository import CustomerProcessRecord
 from app.infrastructure.gateways.local_attention_gateway import LocalAttentionGateway
+from app.observability import clear_metrics, snapshot_metrics
 from app.services.estados import (
     estados_atendimento,
     estados_cafeteria,
@@ -18,6 +20,9 @@ from app.services.estados import (
 
 class AttentionHandoffTests(unittest.TestCase):
     def setUp(self):
+        clear_metrics()
+        handoff_module._KNOWLEDGE_FAILURE_WINDOW_STATE.clear()
+        handoff_module._KNOWLEDGE_FAILURE_LAST_ALERT_AT.clear()
         for state_map in (
             estados_atendimento,
             estados_encomenda,
@@ -54,7 +59,7 @@ class AttentionHandoffTests(unittest.TestCase):
         )
 
         self.assertIn(telefone, estados_atendimento)
-        self.assertEqual(message, "Um momento! Estou transferindo você para um dos nossos atendentes humanos. 👩‍🍳")
+        self.assertIn("transferindo", message.casefold())
         self.assertNotIn(telefone, estados_encomenda)
         self.assertNotIn(telefone, estados_cafeteria)
         self.assertNotIn(telefone, estados_entrega)
@@ -73,7 +78,7 @@ class AttentionHandoffTests(unittest.TestCase):
 
         self.assertIn(telefone, estados_atendimento)
         self.assertEqual(estados_atendimento[telefone]["motivo"], "cliente pediu ajuda")
-        self.assertEqual(result, "Um momento! Estou transferindo você para um dos nossos atendentes humanos. 👩‍🍳")
+        self.assertIn("transferindo", result.casefold())
         self.assertNotIn(telefone, estados_encomenda)
 
     def test_deactivate_human_handoff_reports_previous_state(self):
@@ -219,6 +224,86 @@ class AttentionHandoffTests(unittest.TestCase):
         self.assertIn("rascunho_ia", payload["contexto"]["risk_flags"])
         self.assertIn("nao_confirmado", payload["contexto"]["risk_flags"])
         self.assertEqual(payload["contexto"]["proximo_passo"], "Confirmar resumo final com o cliente")
+
+    def test_activate_human_handoff_records_escalation_category_metric(self):
+        telefone = "5511222233333"
+
+        class _ProcessRepository:
+            def upsert_process(self, **kwargs):
+                return 1
+
+        class _EventBus:
+            def __init__(self):
+                self.events = []
+
+            def publish(self, event):
+                self.events.append(event)
+
+        bus = _EventBus()
+        with patch("app.application.use_cases.manage_human_handoff.get_event_bus", return_value=bus):
+            activate_human_handoff(
+                telefone,
+                nome="Cliente Teste",
+                motivo="Cliente pediu humano",
+                audit_writer=None,
+                process_repository=_ProcessRepository(),
+                now=datetime(2026, 3, 24, 17, 0, 0),
+            )
+
+        counters, _ = snapshot_metrics()
+        category_total = sum(
+            value
+            for (name, labels), value in counters.items()
+            if name == "escalacao_total" and dict(labels).get("categoria") == "cliente_solicitou"
+        )
+        self.assertEqual(category_total, 1.0)
+        escalated_total = sum(
+            value
+            for (name, _labels), value in counters.items()
+            if name == "pedido_escalado_total"
+        )
+        self.assertEqual(escalated_total, 1.0)
+        self.assertEqual(bus.events[0].categoria, "cliente_solicitou")
+
+    def test_activate_human_handoff_emits_knowledge_failure_warning_after_threshold(self):
+        telefone = "5511333344444"
+
+        class _ProcessRepository:
+            def upsert_process(self, **kwargs):
+                return 1
+
+        with patch.dict(
+            "os.environ",
+            {
+                "KNOWLEDGE_FAILURE_ALERT_THRESHOLD": "2",
+                "KNOWLEDGE_FAILURE_ALERT_WINDOW_MINUTES": "60",
+            },
+            clear=False,
+        ):
+            with patch("app.application.use_cases.manage_human_handoff.get_event_bus") as mocked_bus:
+                mocked_bus.return_value.publish = lambda event: None
+                with patch("app.application.use_cases.manage_human_handoff.log_event") as mocked_log_event:
+                    activate_human_handoff(
+                        telefone,
+                        nome="Cliente Teste",
+                        motivo="Produto fora de contexto da loja",
+                        audit_writer=None,
+                        process_repository=_ProcessRepository(),
+                        now=datetime(2026, 3, 24, 10, 0, 0),
+                    )
+                    activate_human_handoff(
+                        "5511333344445",
+                        nome="Cliente Teste",
+                        motivo="Produto fora de contexto da loja",
+                        audit_writer=None,
+                        process_repository=_ProcessRepository(),
+                        now=datetime(2026, 3, 24, 10, 10, 0),
+                    )
+
+        warning_calls = [
+            call for call in mocked_log_event.call_args_list if call.args and call.args[0] == "knowledge_failure_alert"
+        ]
+        self.assertTrue(warning_calls)
 
 
 if __name__ == "__main__":
