@@ -4,6 +4,7 @@ from __future__ import annotations
 SAME_DAY_CAKE_ORDER_CUTOFF = (11, 0)
 DELIVERY_CUTOFF = (17, 30)
 DELIVERY_FEE_STANDARD = 10.0
+DELIVERY_FEE_CAFETERIA = 5.0
 CROISSANT_PREP_MINUTES = 20
 CARD_INSTALLMENT_MIN_TOTAL = 100.0
 CARD_INSTALLMENT_MAX = 2
@@ -30,6 +31,7 @@ def _format_hhmm(parts: tuple[int, int]) -> str:
 SAME_DAY_CAKE_ORDER_CUTOFF_LABEL = _format_hhmm(SAME_DAY_CAKE_ORDER_CUTOFF)
 DELIVERY_CUTOFF_LABEL = _format_hhmm(DELIVERY_CUTOFF)
 DELIVERY_FEE_STANDARD_LABEL = _format_brl(DELIVERY_FEE_STANDARD)
+DELIVERY_FEE_CAFETERIA_LABEL = _format_brl(DELIVERY_FEE_CAFETERIA)
 STORE_HOURS_SUMMARY = (
     "Segunda: 12h-18h | Terca a sabado: 9h-18h | Domingo: fechado "
     "(excecao: domingo de Pascoa em 05/04/2026, aberto das 9h as 18h)."
@@ -41,7 +43,8 @@ SUNDAY_RULE_LINE = (
 )
 SUNDAY_UNAVAILABLE_MESSAGE = f"{SUNDAY_RULE_LINE} Horario de funcionamento: {STORE_HOURS_SUMMARY}"
 DELIVERY_RULE_LINE = (
-    f"A Chokodelícia FAZ entregas! Taxa padrão: {DELIVERY_FEE_STANDARD_LABEL}. "
+    f"A Chokodelícia FAZ entregas! Taxa para bolos/encomendas/presentes: {DELIVERY_FEE_STANDARD_LABEL}. "
+    f"Taxa para itens da cafeteria: {DELIVERY_FEE_CAFETERIA_LABEL}. "
     f"Horário limite: até {DELIVERY_CUTOFF_LABEL}."
 )
 PAYMENT_CHANGE_RULE_LINE = (

@@ -86,7 +86,7 @@ class AICafeteriaOrderTests(unittest.TestCase):
                 {"nome": "Combo Relampago", "variante": "Suco natural", "quantidade": 2},
                 {"nome": "Coca Cola KS", "quantidade": 1},
             ],
-            data_entrega="10/10/2030",
+            data_entrega="24/03/2026",
             modo_recebimento="retirada",
             pagamento={"forma": "PIX"},
         )
@@ -175,6 +175,45 @@ class AICafeteriaOrderTests(unittest.TestCase):
 
         self.assertIn("Taxa entrega: R$5,00", message)
         self.assertIn("Total final: R$19,50", message)
+
+    def test_create_cafeteria_order_blocks_combo_relampago_outside_tuesday(self):
+        order = ai_tools.CafeteriaOrderSchema(
+            itens=[{"nome": "Combo Relampago", "variante": "Suco natural", "quantidade": 1}],
+            data_entrega="28/03/2026",
+            modo_recebimento="retirada",
+            pagamento={"forma": "PIX"},
+        )
+
+        message = ai_tools.create_cafeteria_order("5511999999999", "Cliente", 1, order)
+
+        self.assertIn("somente as tercas-feiras", message.casefold())
+        self.assertIn("28/03/2026", message)
+
+    def test_create_cafeteria_order_infers_combo_relampago_beverage_alias_from_name(self):
+        order = ai_tools.CafeteriaOrderSchema(
+            itens=[{"nome": "Combo Suco", "quantidade": 1}],
+            data_entrega="24/03/2026",
+            modo_recebimento="retirada",
+            pagamento={"forma": "PIX"},
+        )
+
+        saved_calls = []
+
+        class _OrderGateway:
+            def save_cafeteria_order(self, **kwargs):
+                saved_calls.append(kwargs)
+
+        class _ProcessRepository:
+            def upsert_process(self, **kwargs):
+                return 1
+
+        with patch("app.ai.tools.get_order_gateway", return_value=_OrderGateway()):
+            with patch("app.ai.tools.get_customer_process_repository", return_value=_ProcessRepository()):
+                message = ai_tools.create_cafeteria_order("5511999999999", "Cliente", 1, order)
+
+        self.assertIn("1x Combo Relampago (Suco natural)", message)
+        self.assertIn("Subtotal: R$23,99", message)
+        self.assertIn("1x Combo Relampago (Suco natural)", saved_calls[0]["itens"][0])
 
 
 if __name__ == "__main__":

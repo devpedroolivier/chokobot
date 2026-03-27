@@ -32,8 +32,11 @@ from app.ai.policies import (
     requests_cafeteria_topic as _requests_cafeteria_topic,
     requests_cake_order_topic as _requests_cake_order_topic,
     requests_post_purchase_topic as _requests_post_purchase_topic,
+    requests_delivery_fee_info as _requests_delivery_fee_info,
+    requests_pix_key_info as _requests_pix_key_info,
     requests_regular_gift_topic as _requests_regular_gift_topic,
     requests_sweet_order_topic as _requests_sweet_order_topic,
+    message_has_easter_context as _message_has_easter_context,
     should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
     is_generic_greeting as _is_generic_greeting,
@@ -64,6 +67,7 @@ from app.ai.tools import (
 from app.ai.order_support import DEFAULT_ORDER_SUPPORT, OrderSupportService
 from app.observability import increment_counter, log_event, normalize_reason_label, observe_duration, should_track_phone
 from app.services.estados import ai_sessions
+from app.services.commercial_rules import DELIVERY_CUTOFF_LABEL, DELIVERY_FEE_CAFETERIA_LABEL, DELIVERY_FEE_STANDARD_LABEL
 from app.settings import get_settings
 
 client = None
@@ -113,6 +117,28 @@ def _catalog_photo_reply() -> str:
     return (
         "Consigo te ajudar com os detalhes por aqui 😊 "
         "Se quiser fotos, te conecto com a equipe para te enviar o catálogo visual."
+    )
+
+
+def _pix_key_reply() -> str:
+    pix_key = (get_settings().pix_key or "").strip()
+    if not pix_key:
+        return (
+            "A chave PIX oficial esta temporariamente indisponivel aqui no bot. "
+            "Posso te conectar com a equipe para confirmar agora."
+        )
+    return (
+        f"Chave PIX oficial: {pix_key}\n"
+        "Assim que fizer o pagamento, me envie o comprovante para validacao."
+    )
+
+
+def _delivery_fee_reply() -> str:
+    return (
+        "Taxa de entrega:\n"
+        f"- Bolos, encomendas e presentes: {DELIVERY_FEE_STANDARD_LABEL}\n"
+        f"- Itens da cafeteria: {DELIVERY_FEE_CAFETERIA_LABEL}\n"
+        f"Horario limite das entregas: ate {DELIVERY_CUTOFF_LABEL}."
     )
 
 
@@ -500,26 +526,16 @@ def _should_repeat_easter_catalog_link(session: dict, text: str) -> bool:
 
 
 def _message_mentions_easter_context(text: str) -> bool:
-    if _requests_easter_catalog(text):
-        return True
-    if _requests_easter_ready_delivery_handoff(text):
-        return True
-    if _requests_easter_order_topic(text):
-        return True
-    if _requests_easter_gift_topic(text):
-        return True
-    if _requests_easter_date_info(text):
-        return True
+    return _message_has_easter_context(text)
 
-    normalized = normalize_intent_text(text)
-    if not normalized:
+
+def _release_easter_context_if_needed(session: dict, text: str) -> bool:
+    if session.get("seasonal_context") != "easter":
         return False
-    return bool(
-        re.search(
-            r"\b(pascoa|ovo|ovos|trio|trios|tablete|tabletes|mimo|mimos|coelho|trufad\w*|crocant\w*)\b",
-            normalized,
-        )
-    )
+    if _message_mentions_easter_context(text):
+        return False
+    session.pop("seasonal_context", None)
+    return True
 
 
 def _is_non_easter_context_switch(session: dict, text: str) -> bool:
@@ -734,7 +750,15 @@ async def process_message_with_ai(
     session["messages"].append({"role": "user", "content": text})
     _update_service_date_context(session, text, now)
     _update_conversation_correction_context(session, text)
+    released_easter_context = _release_easter_context_if_needed(session, text)
     save_session(telefone, session)
+
+    if released_easter_context:
+        _maybe_log_event(
+            telefone,
+            "ai_easter_context_released",
+            phone_hash=telefone[-4:] if telefone else "anon",
+        )
 
     if _requests_opt_out(text):
         previous_agent = session.get("current_agent", "TriageAgent")
@@ -784,6 +808,22 @@ async def process_message_with_ai(
             phone_hash=_phone_hash(telefone),
         )
         return _respond_with_order_support(post_purchase_topic, telefone, support_service)
+
+    if _requests_pix_key_info(text):
+        _maybe_log_event(
+            telefone,
+            "ai_pix_key_sent",
+            phone_hash=_phone_hash(telefone),
+        )
+        return _pix_key_reply()
+
+    if _requests_delivery_fee_info(text):
+        _maybe_log_event(
+            telefone,
+            "ai_delivery_fee_sent",
+            phone_hash=_phone_hash(telefone),
+        )
+        return _delivery_fee_reply()
 
     caseirinho_clarification = _caseirinho_clarification_message(text)
     if caseirinho_clarification:
@@ -858,13 +898,8 @@ async def process_message_with_ai(
             )
             return EASTER_CATALOG_MESSAGE
         if _is_non_easter_context_switch(session, text):
-            session.pop("seasonal_context", None)
+            _release_easter_context_if_needed(session, text)
             save_session(telefone, session)
-            _maybe_log_event(
-                telefone,
-                "ai_easter_context_released",
-                phone_hash=telefone[-4:] if telefone else "anon",
-            )
         elif _should_handoff_after_easter_catalog(session, text):
             previous_agent = session.get("current_agent", "TriageAgent")
             handoff_message = runtime.escalate_to_human(

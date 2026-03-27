@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime
 from typing import Iterable
 
@@ -41,7 +42,12 @@ class SQLiteCustomerRepository(CustomerRepository):
         conn = get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM clientes WHERE telefone = ?", (telefone,))
+            try:
+                cursor.execute("SELECT * FROM clientes WHERE telefone = ?", (telefone,))
+            except sqlite3.OperationalError as exc:
+                if "no such table" in str(exc).lower():
+                    return None
+                raise
             return _map_customer(cursor.fetchone())
         finally:
             conn.close()

@@ -214,6 +214,28 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Ola Maria! Como posso ajudar hoje? 😊")
         fake_client.chat.completions.create.assert_not_awaited()
 
+    async def test_process_message_with_ai_replies_pix_key_deterministically_and_releases_easter_context(self):
+        telefone = "5511888555777"
+        fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
+        runner.CONVERSATIONS[telefone] = {
+            "current_agent": "TriageAgent",
+            "messages": [{"role": "system", "content": "prompt"}],
+            "seasonal_context": "easter",
+        }
+
+        with patch.object(runner, "client", fake_client):
+            with patch("app.ai.runner.get_settings", return_value=SimpleNamespace(pix_key="Pix 16847366000130", catalog_link="")):
+                reply = await runner.process_message_with_ai(
+                    telefone,
+                    "me passa a chave pix",
+                    "Cliente Pix",
+                    1,
+                )
+
+        self.assertIn("Pix 16847366000130", reply)
+        self.assertNotIn("seasonal_context", runner.CONVERSATIONS[telefone])
+        fake_client.chat.completions.create.assert_not_awaited()
+
     async def test_process_message_with_ai_retries_when_cafeteria_total_is_claimed_without_tool(self):
         telefone = "5516992919994"
         create_mock = AsyncMock(
@@ -285,6 +307,22 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
                 for message in second_messages
             )
         )
+
+    async def test_process_message_with_ai_replies_delivery_fee_with_cafeteria_and_encomenda_values(self):
+        telefone = "5511888999000"
+        fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "qual a taxa de entrega?",
+                "Cliente Taxa",
+                1,
+            )
+
+        self.assertIn("Bolos, encomendas e presentes: R$10,00", reply)
+        self.assertIn("Itens da cafeteria: R$5,00", reply)
+        fake_client.chat.completions.create.assert_not_awaited()
 
 
 if __name__ == "__main__":

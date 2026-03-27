@@ -45,6 +45,7 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Item específico, sabor, preço, opções → `lookup_catalog_items`", CAFETERIA_PROMPT)
         self.assertIn("Pedido e reserva podem ser feitos pelo WhatsApp", KNOWLEDGE_PROMPT)
         self.assertIn("Chave PIX oficial:", KNOWLEDGE_PROMPT)
+        self.assertIn("Não faça handoff nesse primeiro passo", KNOWLEDGE_PROMPT)
 
     def test_prompts_cover_cash_change_rule_and_croissant_prep_time(self):
         self.assertIn("Troco: somente para Dinheiro", KNOWLEDGE_PROMPT)

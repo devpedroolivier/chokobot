@@ -66,31 +66,33 @@ class MessageFormattingTests(unittest.TestCase):
 
     def test_save_cake_order_draft_process_formata_resumo_final_claro(self):
         with patch("app.ai.tools._sync_ai_process", return_value=None):
-            result = ai_tools.save_cake_order_draft_process(
-                telefone="5511999999999",
-                nome_cliente="Ana",
-                cliente_id=7,
-                order_details=CakeOrderSchema(
-                    linha="tradicional",
-                    categoria="tradicional",
-                    tamanho="B4",
-                    massa="Chocolate",
-                    recheio="Doce de Leite",
-                    mousse="Trufa Preta",
-                    adicional="Nozes",
-                    descricao="Bolo B4 de chocolate",
-                    data_entrega="28/03/2026",
-                    horario_retirada="17:00",
-                    modo_recebimento="retirada",
-                    pagamento={"forma": "PIX"},
-                ),
-            )
+            with patch.object(ai_tools, "_PIX_KEY", "Pix 16847366000130"):
+                result = ai_tools.save_cake_order_draft_process(
+                    telefone="5511999999999",
+                    nome_cliente="Ana",
+                    cliente_id=7,
+                    order_details=CakeOrderSchema(
+                        linha="tradicional",
+                        categoria="tradicional",
+                        tamanho="B4",
+                        massa="Chocolate",
+                        recheio="Doce de Leite",
+                        mousse="Trufa Preta",
+                        adicional="Nozes",
+                        descricao="Bolo B4 de chocolate",
+                        data_entrega="28/03/2026",
+                        horario_retirada="17:00",
+                        modo_recebimento="retirada",
+                        pagamento={"forma": "PIX"},
+                    ),
+                )
 
         self.assertIn("Resumo final do pedido", result)
         self.assertIn("Bolo B4 de chocolate", result)
         self.assertIn("Recheio: Doce de Leite com Trufa Preta e adicional de nozes", result)
         self.assertIn("Retirada 28/3 Sabado 17h", result)
         self.assertIn("Valor: R$190,00", result)
+        self.assertIn("Forma de pagamento: PIX | chave Pix 16847366000130", result)
         self.assertIn("Ainda nao foi salvo como pedido confirmado no sistema.", result)
         self.assertIn('ex.: "sim", "ok", "ta bom", "certo" ou "confirmado"', result)
 

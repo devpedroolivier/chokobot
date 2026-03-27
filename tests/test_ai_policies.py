@@ -8,13 +8,16 @@ from app.ai.policies import (
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
     is_generic_greeting,
+    message_has_easter_context,
     requests_catalog_photo,
     requests_cake_order_topic,
     requests_easter_catalog,
     requests_easter_date_info,
     requests_easter_gift_topic,
     requests_easter_ready_delivery_handoff,
+    requests_pix_key_info,
     requests_post_purchase_topic,
+    requests_delivery_fee_info,
     requests_regular_gift_topic,
     response_conflicts_with_cafeteria_specificity,
     response_conflicts_with_cafeteria_total_claim,
@@ -57,6 +60,7 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertFalse(requests_easter_catalog("Quero um lanche com ovo"))
         self.assertFalse(requests_easter_catalog("Tem croissant com ovo?"))
         self.assertFalse(requests_easter_ready_delivery_handoff("Tem croissant com ovo?"))
+        self.assertFalse(message_has_easter_context("Tem croissant com ovo?"))
 
     def test_requests_easter_catalog_does_not_short_circuit_specific_item_queries(self):
         self.assertFalse(requests_easter_catalog("Tem ovo de paçoca?"))
@@ -161,6 +165,18 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertTrue(requests_easter_date_info("Quando é a Páscoa?"))
         self.assertTrue(requests_easter_date_info("Qual a data da páscoa"))
         self.assertFalse(requests_easter_date_info("Quero ovos de páscoa"))
+
+    def test_requests_pix_key_info_detects_key_request_without_post_purchase_confirmation(self):
+        self.assertTrue(requests_pix_key_info("Me passa a chave PIX"))
+        self.assertTrue(requests_pix_key_info("Qual o pix de vocês?"))
+        self.assertTrue(requests_pix_key_info("PIX CNPJ, por favor"))
+        self.assertFalse(requests_pix_key_info("Confirma o PIX do pedido?"))
+
+    def test_requests_delivery_fee_info_detects_taxa_queries(self):
+        self.assertTrue(requests_delivery_fee_info("Qual a taxa de entrega?"))
+        self.assertTrue(requests_delivery_fee_info("Quanto fica o frete?"))
+        self.assertTrue(requests_delivery_fee_info("Delivery tem taxa?"))
+        self.assertFalse(requests_delivery_fee_info("Quero retirar na loja"))
 
     def test_is_generic_greeting_detects_only_short_salutations(self):
         self.assertTrue(is_generic_greeting("oi"))

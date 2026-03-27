@@ -43,6 +43,23 @@ class CustomerRepositoryTests(unittest.TestCase):
         self.assertEqual(set(customers_by_phone), {"5511999999999", "5511888888888"})
         self.assertEqual(customers_by_phone["5511888888888"].nome, "Bia")
 
+    def test_get_customer_by_phone_returns_none_when_clientes_table_is_missing(self):
+        repository = SQLiteCustomerRepository()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "chokobot.db")
+            previous_db_path = os.environ.get("DB_PATH")
+            os.environ["DB_PATH"] = db_path
+            try:
+                customer = repository.get_customer_by_phone("5511999999999")
+            finally:
+                if previous_db_path is None:
+                    os.environ.pop("DB_PATH", None)
+                else:
+                    os.environ["DB_PATH"] = previous_db_path
+
+        self.assertIsNone(customer)
+
 
 if __name__ == "__main__":
     unittest.main()

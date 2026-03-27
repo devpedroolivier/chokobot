@@ -20,6 +20,7 @@ from app.security import ai_learning_enabled, security_audit
 from app.services.commercial_rules import (
     CARD_INSTALLMENT_MAX,
     CARD_INSTALLMENT_MIN_TOTAL,
+    DELIVERY_FEE_CAFETERIA,
     DELIVERY_FEE_STANDARD,
 )
 from app.services.encomendas_utils import (
@@ -33,7 +34,9 @@ from app.services.encomendas_utils import (
     _normaliza_produto,
 )
 from app.services.store_schedule import format_service_date, validate_service_schedule
+from app.services.store_schedule import format_service_date_with_weekday, parse_service_date
 from app.utils.datetime_utils import now_in_bot_timezone
+from app.settings import get_settings
 from app.services.precos import (
     DOCES_UNITARIOS,
     DOCES_ALIASES,
@@ -117,7 +120,7 @@ LINE_SIMPLE_FLAVORS = ("Chocolate", "Cenoura")
 LINE_SIMPLE_COVERAGES = ("Vulcão", "Simples")
 
 TAXA_ENTREGA_PADRAO = DELIVERY_FEE_STANDARD
-TAXA_ENTREGA_CAFETERIA = 5.0
+TAXA_ENTREGA_CAFETERIA = DELIVERY_FEE_CAFETERIA
 CAFETERIA_CATALOG_PATH = Path("app/ai/knowledge/catalogo_produtos.json")
 CAFETERIA_VARIANT_REQUIRED_HINTS = {
     "Croissant": "Informe o sabor do croissant e a quantidade.",
@@ -157,6 +160,9 @@ CAFETERIA_NAME_ALIASES = {
     "relampago": "Combo Relampago",
     "combo de terca": "Combo Relampago",
     "combo da terca": "Combo Relampago",
+    "combo suco": "Combo Relampago",
+    "combo refri": "Combo Relampago",
+    "combo refrigerante": "Combo Relampago",
 }
 CAFETERIA_ITEM_KEYWORDS = {
     "Croissant": ("croissant", "croassant", "croasant"),
@@ -173,6 +179,21 @@ CAFETERIA_ITEM_KEYWORDS = {
     "Cappuccino Lotus": ("cappuccino", "lotus"),
     "Cappuccino Pistache": ("cappuccino", "pistache"),
 }
+COMBO_RELAMPAGO_OPTION_ALIASES = {
+    "suco": "Suco natural",
+    "suco natural": "Suco natural",
+    "laranja": "Suco natural",
+    "laranja natural": "Suco natural",
+    "refri": "Refri 220ml",
+    "refri 220": "Refri 220ml",
+    "refri 220ml": "Refri 220ml",
+    "refrigerante": "Refri 220ml",
+    "refrigerante 220": "Refri 220ml",
+    "refrigerante 220ml": "Refri 220ml",
+    "coca": "Refri 220ml",
+    "coca cola": "Refri 220ml",
+}
+_PIX_KEY = (get_settings().pix_key or "").strip()
 
 
 # ============================================================
@@ -440,6 +461,33 @@ def _candidate_cafeteria_items(raw_name: str, raw_variant: str | None = None) ->
     return [item for _score, item in candidates]
 
 
+def _infer_combo_relampago_option(raw_text: str | None) -> str | None:
+    normalized = _normalize_text(raw_text or "")
+    if not normalized:
+        return None
+    for alias, canonical in COMBO_RELAMPAGO_OPTION_ALIASES.items():
+        if alias in normalized:
+            return canonical
+    return None
+
+
+def _validate_cafeteria_item_availability(item: dict, data_entrega: str | None) -> str | None:
+    availability_note = _normalize_text(str(item.get("availability_note") or ""))
+    if not availability_note:
+        return None
+    target_date = parse_service_date(data_entrega)
+    if target_date is None:
+        return None
+
+    # Combos promocionais com restricao semanal devem respeitar a data do atendimento.
+    if "somente as tercas" in availability_note and target_date.weekday() != 1:
+        return (
+            f"{item.get('name', 'Este item')} esta disponivel somente as tercas-feiras. "
+            f"Data solicitada: {format_service_date_with_weekday(target_date)}."
+        )
+    return None
+
+
 def _resolve_cafeteria_item(
     raw_name: str,
     raw_variant: str | None = None,
@@ -464,12 +512,23 @@ def _resolve_cafeteria_item(
 
     options = candidate.get("options") or []
     if options:
+        option_aliases = {
+            _normalize_text(option): option for option in options
+        }
+        if name == "Combo Relampago":
+            inferred_option = _infer_combo_relampago_option(raw_variant) or _infer_combo_relampago_option(raw_name)
+            if inferred_option:
+                raw_variant = inferred_option
+            option_aliases.update(
+                {
+                    _normalize_text(alias): canonical
+                    for alias, canonical in COMBO_RELAMPAGO_OPTION_ALIASES.items()
+                }
+            )
         matched_option = _match_catalog_value(
             raw_variant or raw_name,
             tuple(options),
-            aliases={
-                _normalize_text(option): option for option in options
-            },
+            aliases=option_aliases,
         )
         if not matched_option:
             return None, None, CAFETERIA_VARIANT_REQUIRED_HINTS.get(
@@ -649,6 +708,9 @@ def _prepare_cafeteria_order_data(order_details: "CafeteriaOrderSchema") -> tupl
         if error:
             return None, error
         assert item is not None
+        availability_error = _validate_cafeteria_item_availability(item, dados.get("data_entrega"))
+        if availability_error:
+            return None, availability_error
         unit_price = float(item.get("price_brl") or 0)
         quantity = int(raw_item["quantidade"])
         line_total = unit_price * quantity
@@ -1166,6 +1228,8 @@ def _build_payment_line(payment: dict | None) -> str:
     change_for = payment_data.get("troco_para")
 
     details = [method]
+    if method.casefold() == "pix" and _PIX_KEY:
+        details.append(f"chave {_PIX_KEY}")
     if method.casefold().startswith("cartao") and installments:
         details.append(f"{int(installments)}x")
     if method.casefold() == "dinheiro" and change_for:
@@ -1181,6 +1245,7 @@ def _build_draft_confirmation_message(
     total_value: float,
     payment_line: str,
     endereco: str | None = None,
+    delivery_fee: float = 0.0,
 ) -> str:
     item_summary = title
     if flavor_line:
@@ -1209,6 +1274,8 @@ def _build_draft_confirmation_message(
         lines.append(service_line)
     lines.append(f"💰 Total: {_format_currency_brl(total_value)}")
     lines.append(payment_line)
+    if float(delivery_fee or 0) > 0:
+        lines.append(f"Taxa entrega: {_format_currency_brl(float(delivery_fee))}")
     lines.append(f"Valor: {_format_currency_brl(total_value)}")
     lines.append("")
     lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
@@ -1876,9 +1943,15 @@ def create_gift_order(
         draft_payload=_build_gift_process_payload(dados),
         order_id=encomenda_id,
     )
+    fee_line = (
+        f"Taxa entrega: {_format_currency_brl(float(dados.get('taxa_entrega') or 0))}\n"
+        if float(dados.get("taxa_entrega") or 0) > 0
+        else ""
+    )
     return (
         f"Pedido presente salvo com sucesso! ID: {encomenda_id}\n"
         f"Item: {dados['produto']}\n"
+        f"{fee_line}"
         f"Total final: {_format_currency_brl(float(dados['valor_total']))}\n"
         f"Protocolo: CHK-{int(encomenda_id):06d}"
     )
@@ -1910,6 +1983,7 @@ def save_cake_order_draft_process(
         total_value=float(dados.get("valor_total") or 0),
         payment_line=_build_payment_line(dados.get("pagamento")),
         endereco=dados.get("endereco"),
+        delivery_fee=float(dados.get("taxa_entrega") or 0),
     )
 
 
@@ -1954,6 +2028,7 @@ def save_sweet_order_draft_process(
         total_value=float(prepared["valor_final"]),
         payment_line=_build_payment_line(dados.get("pagamento")),
         endereco=dados.get("endereco"),
+        delivery_fee=float(prepared.get("taxa_entrega") or 0),
     )
 
 
@@ -2014,4 +2089,5 @@ def save_gift_order_draft_process(
         total_value=float(dados["valor_total"]),
         payment_line=_build_payment_line(dados.get("pagamento")),
         endereco=dados.get("endereco"),
+        delivery_fee=float(dados.get("taxa_entrega") or 0),
     )

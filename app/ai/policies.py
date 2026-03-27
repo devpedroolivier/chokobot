@@ -261,6 +261,36 @@ def requests_easter_ready_delivery_handoff(text: str) -> bool:
     return has_egg and has_ready
 
 
+def message_has_easter_context(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if _mentions_non_easter_egg_context(normalized):
+        return False
+
+    if requests_easter_catalog(text):
+        return True
+    if requests_easter_ready_delivery_handoff(text):
+        return True
+    if requests_easter_order_topic(text):
+        return True
+    if requests_easter_gift_topic(text):
+        return True
+    if requests_easter_date_info(text):
+        return True
+    if re.search(r"\bpascoa\b", normalized):
+        return True
+    if _mentions_specific_easter_item(normalized):
+        return True
+
+    if re.search(r"\bovos?\b", normalized) and re.search(
+        r"\b(chocolate|trufad\w*|crocant\w*|kinder|colher|tablete|trio|mimo|nutella|prestigio|ovomaltine|rafaello|amarena|pistache|lotus|negresco)\b",
+        normalized,
+    ):
+        return True
+    return False
+
+
 def requests_regular_gift_topic(text: str) -> bool:
     normalized = normalize_intent_text(text)
     if not normalized:
@@ -340,6 +370,37 @@ def requests_post_purchase_topic(text: str) -> str | None:
     if ("nota" in tokens and "fiscal" in tokens) or "nf" in tokens or _contains_fragment("fatura"):
         return "invoice"
     return None
+
+
+def requests_pix_key_info(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    if "pix" not in normalized:
+        return False
+
+    key_patterns = (
+        r"\b(chave|chave pix)\b",
+        r"\b(passa|me passa|manda|me manda|envia|me envia)\b.*\bpix\b",
+        r"\bqual\b.*\bpix\b",
+        r"\bpix\b.*\b(cnpj|cpf)\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in key_patterns):
+        return True
+    return bool(re.search(r"\bq?r?\s*code\b", normalized))
+
+
+def requests_delivery_fee_info(text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    patterns = (
+        r"\b(taxa|frete)\b.*\b(entrega|delivery)\b",
+        r"\b(entrega|delivery)\b.*\b(taxa|frete|valor|quanto)\b",
+        r"\bqual\b.*\btaxa\b",
+        r"\bquanto\b.*\bfrete\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
 
 
 def requests_catalog_photo(text: str) -> bool:

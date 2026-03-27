@@ -11,6 +11,8 @@ class CommercialRulesTests(unittest.TestCase):
         self.assertEqual(DELIVERY_CUTOFF_LABEL, "17:30")
         self.assertIn("DEPOIS das 11:00", TRIAGE_PROMPT)
         self.assertIn("até 17:30", DELIVERY_RULE_LINE)
+        self.assertIn("R$10,00", DELIVERY_RULE_LINE)
+        self.assertIn("R$5,00", DELIVERY_RULE_LINE)
 
     def test_shared_operational_rule_lines_are_reused_in_prompts(self):
         self.assertIn(DELIVERY_RULE_LINE, TRIAGE_PROMPT)
