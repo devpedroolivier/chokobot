@@ -193,8 +193,13 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(retry_messages[-1]["role"], "system")
         self.assertIn("ainda NAO passou das 11:00", retry_messages[-1]["content"])
         session_messages = runner.CONVERSATIONS["5516991426835"]["messages"]
+        # Só verifica mensagens do assistente — o sistema pode conter "passou das 11:00" nas regras de roteamento
         self.assertFalse(
-            any("já passou das 11:00" in (message.get("content") or "") for message in session_messages)
+            any(
+                message.get("role") == "assistant"
+                and "já passou das 11:00" in (message.get("content") or "")
+                for message in session_messages
+            )
         )
 
     async def test_process_message_forces_cafeteria_handoff_after_cutoff_for_same_day_order(self):

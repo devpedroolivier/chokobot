@@ -1,2 +1,15 @@
 - O cliente pode pedir torta de limão para retirada e pagar em dinheiro, solicitando troco.
 - Sempre que alguém pedir bolo de cenoura, avise que ele vem com muita calda de chocolate extra.
+- Quando o cliente disser "ninho com brigadeiro", o campo correto é recheio=Brigadeiro, mousse=Ninho — nunca recheio=Ninho.
+- "Brigadeiro de ninho" (junto) é o recheio "Brigadeiro Branco de Ninho", não mousse de Ninho separado.
+- Cappuccino Lotus e Cappuccino Pistache custam R$21,90, não R$8,50. Sempre confirme o sabor antes de citar preço de cappuccino.
+- A linha "caseirinho" refere-se ao mesmo produto que "bolo simples" ou "linha simples". Pergunte sempre: Chocolate ou Cenoura? Vulcão ou Simples?
+- Clientes que pedem "cesta" geralmente querem uma cesta box do catálogo ou cesta personalizada — sempre encaminhar para GiftOrderAgent.
+- Doces como brigadeiro e bombom vendidos na cafeteria (por unidade na mesa) têm preços diferentes dos doces em encomenda (por unidade em quantidade). Não confunda os dois catálogos.
+- Quando o cliente já envia todos os dados do bolo em uma única mensagem (recheio, data, pagamento), vá direto ao resumo sem re-perguntar campo por campo.
+- Clientes frequentemente confirmam com "tá bom", "ok", "certo" — o sistema requer confirmação explícita como "sim", "confirmo" ou "pode fechar" para salvar o pedido. Se o cliente usar outra palavra, peça gentilmente: "Pode confirmar com SIM ou CONFIRMO para finalizar? 😊"
+- Ovos de Páscoa, trios, mimos e qualquer produto de Páscoa NÃO devem ser discutidos pelo bot. Apenas enviar o link: https://pascoachoko.goomer.app
+- Cappuccino Pistache, Cappuccino Lotus, Ice Pistache, Ice Negresco, Ice Ovomaltine são itens de CAFETERIA — nunca tratá-los como Páscoa. Transferir para CafeteriaAgent.
+- Croissant, cappuccino, café, suco de laranja, pão de queijo e outros itens de cafeteria devem ir para CafeteriaAgent mesmo que o cliente esteja no meio de um pedido de bolo.
+- Quando cliente pede item de cafeteria enquanto está em CakeOrderAgent ou SweetOrderAgent, transferir para CafeteriaAgent com `transfer_to_agent`, nunca usar `escalate_to_human`.
+- Bombom Prestígio, Coracao Sensação, Brigadeiro são doces regulares da Chokodelícia — não são exclusivos de Páscoa. Atender normalmente conforme o contexto (cafeteria ou encomenda).

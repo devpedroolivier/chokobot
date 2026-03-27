@@ -179,12 +179,19 @@ def _mentions_non_easter_egg_context(normalized: str) -> bool:
 
 
 def _mentions_specific_easter_item(normalized: str) -> bool:
+    """Detecta consultas a itens específicos de Páscoa (guarda contra short-circuit).
+
+    Quando True → o cliente está perguntando sobre um produto concreto → deixar a IA responder.
+    Quando False → consulta genérica → pode enviar o link do catálogo.
+    """
     patterns = (
         r"\b\d+\s*(g|kg|kilo)\b",
-        r"\b(supremo|intenso|lotus|cookie|pudim|trufad|crocant|colher|vertical|drage|kinder|brownie)\b",
+        r"\b(supremo|intenso|cookie|pudim|trufad|crocant|colher|vertical|drage|kinder|brownie)\b",
         r"\b(trio|tablete|mini ovos|mini ovo|blister|caneca|box|pelucia)\b",
-        r"\b(brigadeiro|cereja|maracuja|negresco|nutella|alpino|ovomaltine|rafaello|amarena|cheesecake|pistache)\b",
-        r"\b(prestigio|sensacao|sensação|pacoca|paçoca)\b",
+        r"\b(alpino|rafaello|amarena|cheesecake)\b",
+        r"\b(pacoca|pacoca)\b",
+        r"\b(pistache|lotus|negresco|ovomaltine)\b",
+        r"\b(brigadeiro|cereja|maracuja|nutella|prestigio|sensacao|sensacao)\b",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 
@@ -203,9 +210,10 @@ def requests_easter_catalog(text: str) -> bool:
     if re.search(r"\bpascoa\b", normalized):
         return True
 
-    # Itens específicos de Páscoa citados sem a palavra "páscoa" → link direto
+    # Itens específicos de Páscoa citados sem a palavra "páscoa" → deixar a IA responder
+    # (o cliente está perguntando sobre um produto concreto, não pedindo o catálogo genérico)
     if _mentions_specific_easter_item(normalized):
-        return True
+        return False
 
     # Padrões genéricos de ovo em contexto de Páscoa
     generic_egg_patterns = (
@@ -246,7 +254,7 @@ def requests_regular_gift_topic(text: str) -> bool:
     normalized = normalize_intent_text(text)
     if not normalized:
         return False
-    if "pascoa" in normalized:
+    if "pascoa" in normalized and "cesta" not in normalized:
         return False
     present_aliases = _load_present_aliases()
     if any(alias in normalized for alias in present_aliases):
@@ -284,7 +292,7 @@ def requests_post_purchase_topic(text: str) -> str | None:
         return "status"
     if "pix" in tokens and (
         _contains_fragment("confirm")
-        or _matches_any("comprovante", "recebido")
+        or _matches_any("comprovante", "recebido", "fiz", "mandei", "enviei", "enviado")
     ):
         return "pix"
     if (
@@ -327,6 +335,29 @@ def requests_sweet_order_topic(text: str) -> bool:
     if re.search(r"\b\d+\b.*\b(brigadeir[oa]s?|bombons?|doces?)\b", normalized):
         return True
     return False
+
+
+def requests_cafeteria_topic(text: str) -> bool:
+    """Detecta menção a itens exclusivos de cafeteria/pronta entrega.
+
+    Usado para forçar troca de contexto para CafeteriaAgent quando o cliente menciona
+    um item que claramente pertence à cafeteria, independente do agente ativo.
+    Só inclui termos que NUNCA aparecem em encomenda (evita falsos positivos).
+    """
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    patterns = (
+        r"\b(croissant|croassant|croasant)\b",
+        r"\b(cappuccino|capuccino)\b",
+        r"\b(mocaccino|achocolatado)\b",
+        r"\b(pao de queijo|bauru|lanche fit|croque madame|toast de parma)\b",
+        r"\b(suco de laranja|soda italiana)\b",
+        r"\b(ice pistache|ice cappuccino|ice negresco|ice ovomaltine|ice chocolate)\b",
+        r"\b(chokobenta|vulcaozinho)\b",
+        r"\b(cafe curto|cafe longo|cafe com leite)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
 
 
 def requests_cake_order_topic(text: str) -> bool:
@@ -575,8 +606,16 @@ def should_force_basic_context_switch(session: dict, user_text: str) -> str | No
         "CafeteriaAgent",
         "GiftOrderAgent",
         "KnowledgeAgent",
+        "TriageAgent",
     }:
         return None
+
+    # Força troca para CafeteriaAgent quando o cliente menciona item exclusivo de cafeteria,
+    # independentemente do agente ativo (incluindo CakeOrderAgent).
+    # Deve rodar ANTES do early-return de CakeOrderAgent para garantir o roteamento correto.
+    if current_agent != "CafeteriaAgent" and requests_cafeteria_topic(user_text):
+        return "CafeteriaAgent"
+
     if current_agent == "CakeOrderAgent":
         return None
     if requests_cake_order_topic(user_text):

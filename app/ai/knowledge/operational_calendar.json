@@ -1,5 +1,35 @@
 {
-  "blocked_dates": [],
-  "date_overrides": [],
+  "blocked_dates": [
+    {
+      "date": "2026-04-05",
+      "reason": "Domingo de Pascoa — loja fechada (domingo regular)",
+      "affects": ["orders", "deliveries", "pickups"]
+    },
+    {
+      "date": "2026-03-29",
+      "reason": "Domingo — loja fechada (domingo regular)",
+      "affects": ["orders", "deliveries", "pickups"]
+    }
+  ],
+  "date_overrides": [
+    {
+      "date": "2026-04-03",
+      "label": "Sexta-feira Santa (feriado)",
+      "note": "Confirmar funcionamento com a equipe. Horario pode variar ou loja pode estar fechada.",
+      "operational_status": "uncertain"
+    },
+    {
+      "date": "2026-04-04",
+      "label": "Sabado de Aleluia — vespera de Pascoa",
+      "note": "Possivel alta demanda. Horario normal previsto (9h-18h) mas confirmar capacidade.",
+      "operational_status": "high_demand"
+    },
+    {
+      "date": "2026-04-06",
+      "label": "Segunda apos Pascoa",
+      "note": "Horario normal de segunda (12h-18h).",
+      "operational_status": "normal"
+    }
+  ],
   "slot_capacities": []
 }

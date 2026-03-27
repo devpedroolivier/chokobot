@@ -19,7 +19,12 @@
       "name": "Pao de Queijo",
       "price_brl": 5.5,
       "unit": "unidade",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "pao de queijo",
+        "pqj",
+        "queijinho"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -34,7 +39,11 @@
         "Peito de peru e queijo fresco",
         "Queijo fresco com tomate e oregano"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "pao de queijo recheado",
+        "pqj recheado"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -43,7 +52,12 @@
       "price_brl": 14.0,
       "unit": "unidade",
       "description": "Recheado com mucarela, requeijao e tomate confit.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "pao de queijo tomate confit",
+        "pqj tomate confit",
+        "pao queijo confit"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -56,7 +70,11 @@
         "Peito de peru e mucarela",
         "Peito de peru e queijo fresco"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "bauru",
+        "sanduba bauru"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -70,7 +88,13 @@
         "Quatro queijos",
         "Chocolate"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "croissant",
+        "croasant",
+        "croassant",
+        "pao frances recheado"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -84,35 +108,59 @@
         "Salame com pate de azeitona",
         "Frango com mucarela"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "lanchinho fit",
+        "lanche fit",
+        "fit"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "salgados_e_lanches",
       "name": "Pao de Forma com Manteiga",
       "price_brl": 6.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "pao de forma",
+        "pao com manteiga",
+        "pao forma manteiga"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "salgados_e_lanches",
       "name": "Ovos com Bacon",
       "price_brl": 25.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ovos com bacon",
+        "ovo com bacon",
+        "ovos bacon"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "salgados_e_lanches",
       "name": "Mistinho com Omelete",
       "price_brl": 17.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "mistinho",
+        "mistinho com omelete",
+        "misto omelete"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "salgados_e_lanches",
       "name": "Omelete Recheado",
       "price_brl": 21.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "omelete",
+        "omelete recheado"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -120,14 +168,23 @@
       "name": "Lanche 3 Queijos com Tomate Confit",
       "price_brl": 25.0,
       "description": "Recheado com mucarela, requeijao, parmesao e tomate confit.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "lanche 3 queijos",
+        "tres queijos",
+        "3 queijos confit"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "salgados_e_lanches",
       "name": "Croque Madame",
       "price_brl": 25.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "croque madame",
+        "croque"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -135,7 +192,12 @@
       "name": "Toast de Parma com Tomate Confit",
       "price_brl": 26.0,
       "description": "Requeijao cremoso e azeite no pao italiano artesanal.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "toast parma",
+        "toast de parma",
+        "parma confit"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -143,7 +205,12 @@
       "name": "ChokoBenta",
       "price_brl": 22.0,
       "description": "Bolo de chocolate com brigadeiro caseiro, cobertura de nha benta de ninho e confeitos belga.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "chokobenta",
+        "choko benta",
+        "benta"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -151,7 +218,12 @@
       "name": "Bolo Gelado",
       "price_brl": 8.0,
       "unit": "unidade",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "bolo gelado",
+        "gelado",
+        "fatia gelada"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -160,7 +232,12 @@
       "variant": "fatia",
       "price_brl": 14.5,
       "unit": "unidade",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "bolo gourmet",
+        "gourmet fatia",
+        "fatia gourmet"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -168,7 +245,12 @@
       "name": "Explosao de Sabor",
       "price_brl": 25.0,
       "description": "Bolinho de chocolate morno com sorvete, esfera de chocolate, calda de chocolate e morangos picados.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "explosao de sabor",
+        "explosao sabor",
+        "explosao"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -176,14 +258,24 @@
       "name": "Ice Mousse Cake",
       "price_brl": 25.0,
       "description": "Bolinho de chocolate morno com calda de chocolate e sorvete.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice mousse cake",
+        "ice mousse",
+        "mousse cake"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "sobremesas",
       "name": "Cheesecake no Pote",
       "price_brl": 18.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cheesecake no pote",
+        "cheesecake pote",
+        "cheesecake"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -191,7 +283,11 @@
       "name": "Torre Ice Mousse Cake",
       "price_brl": 30.0,
       "description": "2 bolinhos de chocolate morno recheados com doce de leite ou nutella, acompanhados por sorvete.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "torre ice mousse",
+        "torre mousse"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -200,17 +296,20 @@
       "variant": "fatia",
       "price_brl": 14.5,
       "unit": "unidade",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "torta fatia",
+        "fatia de torta"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "sobremesas",
       "name": "Vulcaozinho de Cenoura com Calda de Chocolate",
       "aliases": [
-        "Petit",
-        "Bolo Petit",
-        "Petit de Cenoura",
-        "Bolo Petit Cenoura"
+        "vulcaozinho",
+        "vulcao cenoura",
+        "vulcaozinho de cenoura"
       ],
       "price_brl": 16.5,
       "source_pdf": "Cafeteria_20mb.pdf"
@@ -220,42 +319,71 @@
       "section": "cafes_quentes",
       "name": "Cappuccino com Canela",
       "price_brl": 8.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cappuccino canela",
+        "cappuccino com canela",
+        "capuccino canela"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "cafes_quentes",
       "name": "Cappuccino Italiano",
       "price_brl": 8.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cappuccino italiano",
+        "capuccino italiano",
+        "italiano"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "cafes_quentes",
       "name": "Achocolatado",
       "price_brl": 8.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "achocolatado",
+        "chocolate quente simples"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "cafes_quentes",
       "name": "Cafe Curto",
       "price_brl": 5.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cafe curto",
+        "cafe expresso",
+        "expresso",
+        "cafe preto"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "cafes_quentes",
       "name": "Cafe Longo",
       "price_brl": 6.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cafe longo",
+        "cafe americano",
+        "americano"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "cafes_quentes",
       "name": "Cafe com Leite",
       "price_brl": 8.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cafe com leite",
+        "cafe e leite"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -263,7 +391,12 @@
       "name": "Mocaccino",
       "price_brl": 8.5,
       "description": "Cafe com chocolate.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "mocaccino",
+        "mochaccino",
+        "mocachino"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -275,42 +408,68 @@
         "Doce de leite",
         "Nutella"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "adicional cappuccino",
+        "borda cappuccino",
+        "adicional borda"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "bebidas_geladas",
       "name": "Ice Pistache",
       "price_brl": 39.9,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice pistache",
+        "gelado pistache"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "bebidas_geladas",
       "name": "Ice Cappuccino",
       "price_brl": 25.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice cappuccino",
+        "cappuccino gelado",
+        "ice capuccino"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "bebidas_geladas",
       "name": "Ice Chocolate",
       "price_brl": 25.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice chocolate",
+        "chocolate gelado"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "bebidas_geladas",
       "name": "Ice Negresco",
       "price_brl": 27.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice negresco",
+        "negresco gelado"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "bebidas_geladas",
       "name": "Ice Ovomaltine",
       "price_brl": 27.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice ovomaltine",
+        "ovomaltine gelado"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -318,7 +477,11 @@
       "name": "Ice Tea",
       "price_brl": 4.5,
       "size": "300ml",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "ice tea",
+        "cha gelado"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -326,7 +489,12 @@
       "name": "Soda Italiana",
       "price_brl": 13.5,
       "availability_note": "Consultar sabores.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "soda italiana",
+        "soda",
+        "refri italiano"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -334,7 +502,12 @@
       "name": "Suco de Laranja",
       "price_brl": 8.0,
       "size": "300ml",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "suco de laranja",
+        "suco laranja",
+        "laranja natural"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -342,25 +515,31 @@
       "name": "Suco Tropical de Abacaxi",
       "price_brl": 15.0,
       "description": "Sorvete de creme, abacaxi e agua.",
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "suco abacaxi",
+        "abacaxi natural"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "outras_bebidas",
-      "name": "Agua",
+      "name": "Agua sem gas",
       "variant": "sem gas",
       "size": "500ml",
       "price_brl": 3.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "description": "Agua mineral sem gas"
     },
     {
       "catalog": "cafeteria",
       "section": "outras_bebidas",
-      "name": "Agua",
+      "name": "Agua com gas",
       "variant": "com gas",
       "size": "500ml",
       "price_brl": 4.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "description": "Agua mineral com gas"
     },
     {
       "catalog": "cafeteria",
@@ -368,7 +547,12 @@
       "name": "Refrigerante Lata",
       "size": "350ml",
       "price_brl": 6.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "refrigerante lata",
+        "refri lata",
+        "coca lata"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -376,7 +560,12 @@
       "name": "Suco Del Valle",
       "size": "290ml",
       "price_brl": 8.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "del valle",
+        "suco del valle",
+        "caixinha suco"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -384,7 +573,12 @@
       "name": "Coca Cola KS",
       "size": "290ml",
       "price_brl": 5.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "coca cola ks",
+        "coca ks",
+        "coca 600ml"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -392,7 +586,12 @@
       "name": "Cerveja Heineken",
       "size": "330ml",
       "price_brl": 14.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cerveja",
+        "heineken",
+        "cerveja heineken"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -400,7 +599,12 @@
       "name": "Monster Energy",
       "size": "473ml",
       "price_brl": 17.0,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "monster",
+        "energetico",
+        "monster energy"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -408,42 +612,69 @@
       "name": "Agua Sprite Lemon Fresh",
       "size": "510ml",
       "price_brl": 5.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "sprite lemon",
+        "agua sprite",
+        "sprite"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "delicias_de_inverno",
       "name": "Cappuccino Lotus",
       "price_brl": 21.9,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cappuccino lotus",
+        "capuccino lotus",
+        "lotus quente"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "delicias_de_inverno",
       "name": "Chokolate Quente Nutella e Morango",
       "price_brl": 16.9,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "chocolate quente nutella",
+        "chokolate nutella morango",
+        "choco nutella"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "delicias_de_inverno",
       "name": "Chocolate Quente Lotus",
       "price_brl": 23.9,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "chocolate quente lotus",
+        "choco quente lotus"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "delicias_de_inverno",
       "name": "Chocolate Quente Pistache",
       "price_brl": 23.9,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "chocolate quente pistache",
+        "choco quente pistache"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "delicias_de_inverno",
       "name": "Cappuccino Pistache",
       "price_brl": 21.9,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cappuccino pistache",
+        "capuccino pistache"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -457,7 +688,11 @@
         "Sensacao",
         "Tradicional"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "bombom",
+        "bombons"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -471,7 +706,11 @@
         "Preto e Branco",
         "Tradicional"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "bombom fino",
+        "bombom especial"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -483,7 +722,11 @@
         "Camafeu",
         "Doce de Leite"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cake",
+        "bolinho"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -498,7 +741,11 @@
         "Sensacao",
         "Tradicional"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "chokobom",
+        "choko bom"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -515,21 +762,34 @@
         "Tradicional",
         "Prestigio"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cone tradicional",
+        "cone de sorvete"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "doceria",
       "name": "Cone Cookies com Nutella",
       "price_brl": 16.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "cone nutella",
+        "cone cookies nutella"
+      ]
     },
     {
       "catalog": "cafeteria",
       "section": "doceria",
       "name": "Pote com 5 Docinhos",
       "price_brl": 8.5,
-      "source_pdf": "Cafeteria_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "pote de docinhos",
+        "5 docinhos",
+        "potinho doces"
+      ]
     },
     {
       "catalog": "cafeteria",
@@ -548,16 +808,12 @@
         "Sensacao",
         "Tradicional"
       ],
-      "source_pdf": "Cafeteria_20mb.pdf"
-    },
-    {
-      "catalog": "pascoa",
-      "section": "lancamentos_premium",
-      "name": "Ovo Supremo",
-      "price_brl": 179.9,
-      "weight_approx": "630g",
-      "notes": "Colecao premium lancamentos.",
-      "source_pdf": "Pascoa_20mb.pdf"
+      "source_pdf": "Cafeteria_20mb.pdf",
+      "aliases": [
+        "trufa",
+        "trufas",
+        "trufinha"
+      ]
     },
     {
       "catalog": "pascoa",

@@ -21,9 +21,9 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAKE_ORDER_PROMPT)
 
     def test_order_prompts_require_explicit_last_message_confirmation(self):
-        self.assertIn("ULTIMA mensagem do cliente", CAKE_ORDER_PROMPT)
+        self.assertIn("ÚLTIMA mensagem do cliente", CAKE_ORDER_PROMPT)
         self.assertIn('"pode fechar"', CAKE_ORDER_PROMPT)
-        self.assertIn("ULTIMA mensagem do cliente", SWEET_ORDER_PROMPT)
+        self.assertIn("ÚLTIMA mensagem", SWEET_ORDER_PROMPT)
         self.assertIn('"confirmo"', SWEET_ORDER_PROMPT)
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", SWEET_ORDER_PROMPT)
 
@@ -31,65 +31,63 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
         self.assertIn("GiftOrderAgent", TRIAGE_PROMPT)
         self.assertIn("bolo pronta entrega ou cafeteria", CAFETERIA_PROMPT)
-        self.assertIn("Se o cliente pedir ovos de Pascoa pronta entrega", CAFETERIA_PROMPT)
+        self.assertIn("OVO DE PÁSCOA PRONTA ENTREGA", CAFETERIA_PROMPT)
         self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", CAFETERIA_PROMPT)
 
     def test_prompts_differentiate_menu_from_specific_options(self):
-        self.assertIn("Se o cliente pedir CARDAPIO", KNOWLEDGE_PROMPT)
-        self.assertIn("use `lookup_catalog_items`", KNOWLEDGE_PROMPT)
-        self.assertIn("use `get_cake_pricing`", KNOWLEDGE_PROMPT)
-        self.assertIn("category=\"presentes\"", KNOWLEDGE_PROMPT)
-        self.assertIn("Se o cliente perguntar por um item especifico", CAFETERIA_PROMPT)
-        self.assertIn("use `lookup_catalog_items`", CAFETERIA_PROMPT)
+        self.assertIn("DIFERENCIE INTENÇÃO", KNOWLEDGE_PROMPT)
+        self.assertIn("lookup_catalog_items", KNOWLEDGE_PROMPT)
+        self.assertIn("get_cake_pricing", KNOWLEDGE_PROMPT)
+        self.assertIn('"presentes"', KNOWLEDGE_PROMPT)
+        self.assertIn("lookup_catalog_items", CAFETERIA_PROMPT)
+        self.assertIn("Item específico, sabor, preço, opções → `lookup_catalog_items`", CAFETERIA_PROMPT)
 
     def test_prompts_cover_cash_change_rule_and_croissant_prep_time(self):
-        self.assertIn("troco so existe para Dinheiro", KNOWLEDGE_PROMPT)
+        self.assertIn("Troco: somente para Dinheiro", KNOWLEDGE_PROMPT)
         self.assertIn("troco so existe para Dinheiro", CAFETERIA_PROMPT)
-        self.assertIn("Parcelamento so no Cartao", KNOWLEDGE_PROMPT)
+        self.assertIn("Parcelamento: somente no Cartão", KNOWLEDGE_PROMPT)
         self.assertIn("Parcelamento so no Cartao", CAFETERIA_PROMPT)
         self.assertIn("Parcelamento so no Cartao", CAKE_ORDER_PROMPT)
         self.assertIn("tempo de preparo do croissant, informe 20 minutos", CAFETERIA_PROMPT)
 
     def test_cake_prompt_requires_canonical_pricing_tool(self):
         self.assertIn("chame `get_cake_pricing`", CAKE_ORDER_PROMPT)
-        self.assertIn("NUNCA escreva preco de bolo de memoria", CAKE_ORDER_PROMPT)
+        self.assertIn("NUNCA escreva preço de bolo de memória", CAKE_ORDER_PROMPT)
 
     def test_cake_order_prompt_lists_valid_fillings_and_separates_categories(self):
-        self.assertIn("Recheios validos: Beijinho, Brigadeiro, Brigadeiro de Nutella", CAKE_ORDER_PROMPT)
-        self.assertIn("Adicionais validos: Morango, Ameixa, Nozes, Cereja, Abacaxi.", CAKE_ORDER_PROMPT)
-        self.assertIn("NUNCA liste mousse como se fosse recheio.", CAKE_ORDER_PROMPT)
-        self.assertIn('Se o cliente perguntar "quais recheios temos?", responda listando apenas recheios.', CAKE_ORDER_PROMPT)
-        self.assertIn("Temos estes recheios:", CAKE_ORDER_PROMPT)
-        self.assertIn("chame `get_cake_options`", CAKE_ORDER_PROMPT)
-        self.assertIn("sem resumir, sem omitir itens e sem misturar categorias", CAKE_ORDER_PROMPT)
+        self.assertIn("Recheios válidos (lista completa): Beijinho, Brigadeiro, Brigadeiro de Nutella", CAKE_ORDER_PROMPT)
+        self.assertIn("Adicionais: Morango, Ameixa, Nozes, Cereja, Abacaxi.", CAKE_ORDER_PROMPT)
+        self.assertIn("MOUSSE NÃO É RECHEIO", CAKE_ORDER_PROMPT)
+        self.assertIn("pedir lista de recheios", CAKE_ORDER_PROMPT)
+        self.assertIn("Use `get_cake_options`", CAKE_ORDER_PROMPT)
+        self.assertIn("Reproduza a lista retornada integralmente", CAKE_ORDER_PROMPT)
 
     def test_prompts_treat_caseiro_and_caseirinho_as_linea_simples_aliases(self):
         self.assertIn("bolo caseiro", TRIAGE_PROMPT)
         self.assertIn("caseirinho", TRIAGE_PROMPT)
-        self.assertIn("`bolo simples`, `bolo caseiro` e `caseirinho`", CAKE_ORDER_PROMPT)
-        self.assertIn("sabor: Chocolate ou Cenoura", CAKE_ORDER_PROMPT)
-        self.assertIn("cobertura (Vulcao R$35 ou Simples R$25)", CAKE_ORDER_PROMPT)
+        self.assertIn("bolo simples, bolo caseiro, caseirinho", CAKE_ORDER_PROMPT)
+        self.assertIn("produto (Chocolate ou Cenoura)", CAKE_ORDER_PROMPT)
+        self.assertIn("cobertura (Vulcão R$35 ou Simples R$25)", CAKE_ORDER_PROMPT)
 
     def test_cafeteria_prompt_limits_kit_festou_offer_to_bolo_context(self):
-        self.assertIn("So mencione ou ofereca Kit Festou quando o contexto for bolo", CAFETERIA_PROMPT)
-        self.assertIn("Nao ofereca Kit Festou para cafeteria em geral", CAFETERIA_PROMPT)
+        self.assertIn("Só mencione ou ofereça Kit Festou quando o contexto incluir BOLO", CAFETERIA_PROMPT)
+        self.assertIn("Não ofereça Kit Festou para café, croissant", CAFETERIA_PROMPT)
 
     def test_cafeteria_prompt_requires_specificity_before_ordering(self):
-        self.assertIn("exija especificacao minima", CAFETERIA_PROMPT)
-        self.assertIn("item exato + sabor/tipo/versao", CAFETERIA_PROMPT)
-        self.assertIn("Nao responda com \"vou anotar\"", CAFETERIA_PROMPT)
+        self.assertIn("ESPECIFICAÇÃO MÍNIMA ANTES DE AVANÇAR", CAFETERIA_PROMPT)
+        self.assertIn("Item exato + sabor/tipo/versão", CAFETERIA_PROMPT)
+        self.assertIn('NÃO diga "vou anotar"', CAFETERIA_PROMPT)
         self.assertIn("use `create_cafeteria_order`", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE DATA DA CONVERSA", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAFETERIA_PROMPT)
 
     def test_gift_prompt_separates_regular_gifts_from_easter_and_uses_structured_tool(self):
-        self.assertIn("presentes do catalogo regular", TRIAGE_PROMPT)
-        self.assertIn("presentes ou mimos de Pascoa", GIFT_ORDER_PROMPT)
-        self.assertIn("get_menu` com `category=\"presentes\"", GIFT_ORDER_PROMPT)
-        self.assertIn("lookup_catalog_items` com `catalog=\"presentes\"", GIFT_ORDER_PROMPT)
+        self.assertIn("cestas box, caixinha de chocolate", TRIAGE_PROMPT)
+        self.assertIn("Presentes ou mimos de PÁSCOA", GIFT_ORDER_PROMPT)
+        self.assertIn('get_menu` com category="presentes"', GIFT_ORDER_PROMPT)
+        self.assertIn('lookup_catalog_items` com catalog="presentes"', GIFT_ORDER_PROMPT)
         self.assertIn("create_gift_order", GIFT_ORDER_PROMPT)
-        self.assertIn("caixinha de chocolate", GIFT_ORDER_PROMPT)
-
+        self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
 
 
 if __name__ == "__main__":

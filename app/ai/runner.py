@@ -25,6 +25,7 @@ from app.ai.policies import (
     requests_easter_catalog as _requests_easter_catalog,
     requests_easter_ready_delivery_handoff as _requests_easter_ready_delivery_handoff,
     requests_post_purchase_topic as _requests_post_purchase_topic,
+    requests_regular_gift_topic as _requests_regular_gift_topic,
     should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
     requests_opt_out as _requests_opt_out,
@@ -662,6 +663,19 @@ async def process_message_with_ai(
             phone_hash=telefone[-4:] if telefone else "anon",
         )
         return EASTER_CATALOG_MESSAGE
+
+    # Interceptor para presentes (QW1)
+    if _requests_regular_gift_topic(text) and session.get("current_agent") == "TriageAgent":
+        session["current_agent"] = "GiftOrderAgent"
+        refresh_system_prompt(session, AGENTS_MAP["GiftOrderAgent"], now, runtime)
+        save_session(telefone, session)
+        _maybe_log_event(
+            telefone,
+            "ai_gift_interceptor_handoff",
+            from_agent="TriageAgent",
+            to_agent="GiftOrderAgent",
+            phone_hash=telefone[-4:] if telefone else "anon",
+        )
 
     forced_same_day_cafeteria = False
     if _should_force_same_day_cafeteria_handoff(session, text, now):
