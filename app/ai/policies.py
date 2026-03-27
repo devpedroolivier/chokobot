@@ -447,6 +447,11 @@ def requests_catalog_photo(text: str) -> bool:
         r"\bquero\s+ver\b.*\b(cardapio|catalogo|menu)\b",
         r"\blink\b.*\b(cardapio|catalogo|menu|pascoa)\b",
         r"\b(cardapio|catalogo|menu)\b.*\b(foto|fotos|imagem|imagens|link)\b",
+        r"\b(quero|quer)\s+(o\s+)?(cardapio|catalogo|menu)\b",
+        r"\b(qual|tem)\s+(o\s+)?(cardapio|catalogo|menu)\b",
+        r"\bme\s+mostra\s+(o\s+)?(cardapio|catalogo|menu)\b",
+        r"^(cardapio|catalogo|menu)\b",
+        r"\b(cardapio|catalogo|menu)\s+d[eao]s?\s+\w+",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 
