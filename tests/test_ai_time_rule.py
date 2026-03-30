@@ -258,6 +258,79 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
             any("Você gostaria de pedir um croissant agora?" in (message.get("content") or "") for message in session_messages)
         )
 
+    async def test_process_message_retries_when_model_offers_discount(self):
+        telefone = "5516997370268"
+        runner.CONVERSATIONS[telefone] = {"messages": [], "current_agent": "SweetOrderAgent"}
+        create_mock = AsyncMock(
+            side_effect=[
+                _response(_message("Para esse pedido, podemos oferecer um desconto especial de 10%.")),
+                _response(_message("No bot nao consigo aplicar desconto. Se quiser, te conecto com atendente humano para avaliar.")),
+            ]
+        )
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "Quero 80 docinhos para sábado",
+                "Alessandra",
+                99,
+            )
+
+        self.assertEqual(
+            reply,
+            "No bot nao consigo aplicar desconto. Se quiser, te conecto com atendente humano para avaliar.",
+        )
+        self.assertEqual(create_mock.await_count, 2)
+        retry_messages = create_mock.await_args_list[1].kwargs["messages"]
+        self.assertEqual(retry_messages[-1]["role"], "system")
+        self.assertIn("bot NAO pode oferecer, aplicar, prometer ou calcular desconto", retry_messages[-1]["content"])
+        session_messages = runner.CONVERSATIONS[telefone]["messages"]
+        self.assertFalse(
+            any(
+                message.get("role") == "assistant"
+                and "desconto especial de 10%" in (message.get("content") or "")
+                for message in session_messages
+            )
+        )
+
+    async def test_process_message_retries_when_model_denies_truffle_without_catalog(self):
+        telefone = "5516997370268"
+        runner.CONVERSATIONS[telefone] = {"messages": [], "current_agent": "SweetOrderAgent"}
+        create_mock = AsyncMock(
+            side_effect=[
+                _response(_message("Atualmente, nao temos trufas no nosso cardapio.")),
+                _response(_message("Temos trufas sim! Posso te passar os sabores e valores atualizados.")),
+            ]
+        )
+        fake_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+        )
+
+        with patch.object(runner, "client", fake_client):
+            reply = await runner.process_message_with_ai(
+                telefone,
+                "Trufas tradicionais",
+                "Alessandra",
+                99,
+            )
+
+        self.assertEqual(reply, "Temos trufas sim! Posso te passar os sabores e valores atualizados.")
+        self.assertEqual(create_mock.await_count, 2)
+        retry_messages = create_mock.await_args_list[1].kwargs["messages"]
+        self.assertEqual(retry_messages[-1]["role"], "system")
+        self.assertIn("nao negue trufas sem verificar catalogo canonico", retry_messages[-1]["content"])
+        session_messages = runner.CONVERSATIONS[telefone]["messages"]
+        self.assertFalse(
+            any(
+                message.get("role") == "assistant"
+                and "nao temos trufas" in (message.get("content") or "").casefold()
+                for message in session_messages
+            )
+        )
+
     async def test_process_message_clears_session_when_escalated(self):
         create_mock = AsyncMock(
             return_value=_response(

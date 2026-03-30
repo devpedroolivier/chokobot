@@ -3,7 +3,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.ai.policies import (
+    build_discount_guard_retry_instruction,
     build_cafeteria_total_guard_retry_instruction,
+    build_truffle_availability_retry_instruction,
     caseirinho_clarification_message,
     build_cafeteria_specificity_retry_instruction,
     cafeteria_order_needs_specificity,
@@ -19,8 +21,11 @@ from app.ai.policies import (
     requests_post_purchase_topic,
     requests_delivery_fee_info,
     requests_regular_gift_topic,
+    requests_sweet_order_topic,
     response_conflicts_with_cafeteria_specificity,
     response_conflicts_with_cafeteria_total_claim,
+    response_conflicts_with_discount_offer,
+    response_conflicts_with_truffle_availability_denial,
     should_force_basic_context_switch,
     should_force_gift_context_handoff,
     should_force_same_day_cafeteria_handoff,
@@ -235,6 +240,51 @@ class AIPoliciesTests(unittest.TestCase):
                 "Quanto custa bombom?",
             ),
             "SweetOrderAgent",
+        )
+        self.assertEqual(
+            should_force_basic_context_switch(
+                {"current_agent": "TriageAgent"},
+                "Vcs trabalham com trufas?",
+            ),
+            "SweetOrderAgent",
+        )
+
+    def test_requests_sweet_order_topic_detects_truffles(self):
+        self.assertTrue(requests_sweet_order_topic("Trufas"))
+        self.assertTrue(requests_sweet_order_topic("Vcs trabalham com trufas tradicionais?"))
+        self.assertTrue(requests_sweet_order_topic("Quero 20 trufas para sábado"))
+
+    def test_discount_guard_blocks_offering_and_allows_denial(self):
+        self.assertTrue(response_conflicts_with_discount_offer("Para esse pedido, podemos oferecer um desconto especial de 10%."))
+        self.assertTrue(response_conflicts_with_discount_offer("Total com desconto: R$162,00."))
+        self.assertFalse(response_conflicts_with_discount_offer("No bot nao consigo aplicar desconto; somente atendente humano pode avaliar."))
+        self.assertIn(
+            "nao pode oferecer, aplicar, prometer ou calcular desconto",
+            build_discount_guard_retry_instruction("Tem como fazer desconto?").lower(),
+        )
+
+    def test_truffle_guard_blocks_catalog_denial_without_check(self):
+        self.assertTrue(
+            response_conflicts_with_truffle_availability_denial(
+                "Nao temos trufas no cardapio atualmente.",
+                user_text="Trufas tradicionais",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_truffle_availability_denial(
+                "Temos trufas sim! Posso te passar os sabores e valores.",
+                user_text="Trufas tradicionais",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_truffle_availability_denial(
+                "Nao temos trufas no cardapio atualmente.",
+                user_text="Quero bolo B4",
+            )
+        )
+        self.assertIn(
+            "nao negue trufas sem verificar catalogo canonico",
+            build_truffle_availability_retry_instruction("Trufas tradicionais").lower(),
         )
 
     def test_requests_cake_order_topic_ignores_cafeteria_and_easter_cases(self):

@@ -508,11 +508,19 @@ def requests_sweet_order_topic(text: str) -> bool:
         return False
     if requests_regular_gift_topic(text) or requests_easter_gift_topic(text):
         return False
-    if not re.search(r"\b(brigadeir[oa]s?|bombo(m|ns?)|beijinhos?|doces?|docinhos?|camafeus?)\b", normalized):
+    has_sweet_anchor = bool(
+        re.search(
+        r"\b(brigadeir[oa]s?|bombo(m|ns?)|beijinhos?|doces?|docinhos?|camafeus?|trufas?|chokobons?)\b",
+        normalized,
+        )
+    )
+    if not has_sweet_anchor:
         return False
+    if re.search(r"\btrufas?\b", normalized):
+        return True
     if re.search(r"\b(encomenda|pedido|quantidade|caixa|duzia|doces? avulsos|doces? em quantidade)\b", normalized):
         return True
-    if re.search(r"\b\d+\b.*\b(brigadeir[oa]s?|bombo(m|ns?)|doces?)\b", normalized):
+    if re.search(r"\b\d+\b.*\b(brigadeir[oa]s?|bombo(m|ns?)|doces?|trufas?)\b", normalized):
         return True
     if re.search(r"\b(quero|queria|tem|quanto|preco|valor|cardapio|menu)\b", normalized):
         return True
@@ -771,6 +779,75 @@ def build_cafeteria_total_guard_retry_instruction(user_text: str) -> str:
         "Se ja houver dados suficientes (itens, quantidade, recebimento e pagamento), use create_cafeteria_order "
         "para gerar o resumo de rascunho com subtotal/taxa/valor. "
         "Se faltar detalhe, pergunte apenas os campos faltantes sem inventar preco. "
+        f"Mensagem atual do cliente: '{user_text}'."
+    )
+
+
+def _is_discount_denial_response(normalized_reply: str) -> bool:
+    if not normalized_reply:
+        return False
+    if not re.search(r"\b(desconto|descontinho|cupom)\b", normalized_reply):
+        return False
+    denial_patterns = (
+        r"\b(nao|sem)\b.{0,20}\b(desconto|descontinho|cupom)\b",
+        r"\b(desconto|descontinho|cupom)\b.{0,25}\b(nao|indisponivel|somente atendente|apenas atendente)\b",
+        r"\bnao\b.{0,20}\b(consigo|posso|aplico|libero|concedo)\b.{0,20}\b(desconto|cupom)\b",
+    )
+    return any(re.search(pattern, normalized_reply) for pattern in denial_patterns)
+
+
+def response_conflicts_with_discount_offer(reply: str | None) -> bool:
+    normalized = normalize_intent_text(reply or "")
+    if not normalized:
+        return False
+    if _is_discount_denial_response(normalized):
+        return False
+
+    offer_patterns = (
+        r"\b(oferec\w*|aplic\w*|conced\w*|dar|liber\w*|pass\w*)\b.{0,30}\b(desconto|descontinho|cupom)\b",
+        r"\b(desconto|descontinho)\b.{0,20}\b(especial|de\s+\d+%|de\s+\d+\s*por\s*cento|aplicad\w*)\b",
+        r"\btotal\b.{0,20}\bcom desconto\b",
+        r"\bcupom\b.{0,20}\b(aplicad\w*|ativo|valido)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in offer_patterns)
+
+
+def build_discount_guard_retry_instruction(user_text: str) -> str:
+    return (
+        "CORRECAO DE SISTEMA: o bot NAO pode oferecer, aplicar, prometer ou calcular desconto em nenhum produto. "
+        "Desconto e negociacao comercial sao exclusivos do atendente humano. "
+        "Reescreva a resposta sem desconto. Se o cliente pedir desconto, responda que apenas a equipe humana pode avaliar "
+        "e ofereca transferencia para atendimento humano. "
+        f"Mensagem atual do cliente: '{user_text}'."
+    )
+
+
+def _mentions_truffle_interest(user_text: str) -> bool:
+    normalized = normalize_intent_text(user_text)
+    if not normalized:
+        return False
+    return bool(re.search(r"\btrufas?\b", normalized))
+
+
+def response_conflicts_with_truffle_availability_denial(reply: str | None, *, user_text: str) -> bool:
+    if not _mentions_truffle_interest(user_text):
+        return False
+    normalized = normalize_intent_text(reply or "")
+    if not normalized:
+        return False
+    denial_patterns = (
+        r"\bnao\b.{0,20}\b(temos|trabalhamos|vendemos|fazemos)\b.{0,30}\btrufas?\b",
+        r"\btrufas?\b.{0,30}\bnao\b.{0,20}\b(temos|trabalhamos|vendemos|fazemos)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in denial_patterns)
+
+
+def build_truffle_availability_retry_instruction(user_text: str) -> str:
+    return (
+        "CORRECAO DE SISTEMA: nao negue trufas sem verificar catalogo canonico. "
+        "Trufas fazem parte do cardapio de doces e a resposta deve vir de ferramenta. "
+        "Use get_menu(category='encomendas') ou lookup_catalog_items para confirmar nomes e valores. "
+        "Se algum detalhe nao estiver estruturado, diga que vai confirmar com a equipe e ofereca atendimento humano, sem inventar. "
         f"Mensagem atual do cliente: '{user_text}'."
     )
 

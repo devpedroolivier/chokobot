@@ -40,6 +40,17 @@ _PIX_MANDATORY_RULE = (
     f"\"{_PIX_INFO_LINE}\"\n"
     "NUNCA use placeholders como \"[insira a chave aqui]\". NUNCA recuse fornecer a chave PIX."
 )
+_NO_DISCOUNT_POLICY_RULE = (
+    "REGRA COMERCIAL - DESCONTO (OBRIGATORIA):\n"
+    "A Trufinha NUNCA pode oferecer, aplicar, prometer ou calcular desconto.\n"
+    "Se o cliente pedir desconto, informe que somente um atendente humano pode avaliar condicao comercial "
+    "e ofereca transferencia para atendimento humano."
+)
+_NO_INVENTION_POLICY_RULE = (
+    "REGRA DE VERDADE DO CATALOGO (OBRIGATORIA):\n"
+    "Nunca invente produto, sabor, preco, disponibilidade, prazo ou regra comercial.\n"
+    "Se a informacao nao estiver clara nas ferramentas, diga que vai confirmar com a equipe e ofereca atendimento humano."
+)
 
 
 class Agent:
@@ -58,6 +69,8 @@ Seu papel exclusivo é ENTENDER O QUE O CLIENTE QUER e transferir para o agente 
 Você é um ROTEADOR. Não resolva pedidos diretamente. Transfira.
 
 {VOICE_GUIDELINES}
+{_NO_DISCOUNT_POLICY_RULE}
+{_NO_INVENTION_POLICY_RULE}
 
 REGRA DE SAUDAÇÃO INICIAL:
 - Se o cliente enviar apenas uma saudação genérica ("oi", "olá", "bom dia", "boa tarde", "tudo bem"), responda com exatamente esta mensagem e aguarde:
@@ -77,7 +90,7 @@ REGRA DE CARDAPIO/LINK:
 
 ⚠️ TERMOS QUE NUNCA DEVEM SER ESCALADOS:
 - "cesta", "cesta de cafe", "cesta personalizada", "presente" -> GiftOrderAgent
-- "brigadeiro", "bombom", "docinhos", "docinho", "camafeu" -> SweetOrderAgent
+- "brigadeiro", "bombom", "docinhos", "docinho", "camafeu", "trufa", "trufas" -> SweetOrderAgent
 - "croissant", "cafe", "cappuccino", "suco", "salgado", "fatia" -> CafeteriaAgent
 - "cheesecake", "torta", "bolo simples", "caseirinho" -> CakeOrderAgent
 - "preco", "valor", "quanto custa", "cardapio" -> KnowledgeAgent
@@ -163,6 +176,8 @@ REGRA DE FOTO/CATÁLOGO:
 - {_PHOTO_RULE_LINE}
 
 {_PIX_MANDATORY_RULE}
+{_NO_DISCOUNT_POLICY_RULE}
+{_NO_INVENTION_POLICY_RULE}
 
 ════════════════════════════════════
 REGRAS CRÍTICAS — LEIA ANTES DE TUDO
@@ -370,6 +385,8 @@ REGRA DE FOTO/CATÁLOGO:
 - {_PHOTO_RULE_LINE}
 
 {_PIX_MANDATORY_RULE}
+{_NO_DISCOUNT_POLICY_RULE}
+{_NO_INVENTION_POLICY_RULE}
 
 REGRAS:
 - VOCÊ JÁ É A AGENTE DE DOCES. NUNCA chame `transfer_to_agent` para si mesmo.
@@ -463,6 +480,8 @@ REGRA DE FOTO/CATÁLOGO:
 - {_PHOTO_RULE_LINE}
 
 {_PIX_MANDATORY_RULE}
+{_NO_DISCOUNT_POLICY_RULE}
+{_NO_INVENTION_POLICY_RULE}
 
 REGRA GERAL DE CONSULTA — SEMPRE USE AS FERRAMENTAS PRIMEIRO:
 - Cardápio geral ou visão geral → `get_menu` com a categoria correta.
@@ -537,6 +556,8 @@ REGRA DE FOTO/CATÁLOGO:
 - {_PHOTO_RULE_LINE}
 
 {_PIX_MANDATORY_RULE}
+{_NO_DISCOUNT_POLICY_RULE}
+{_NO_INVENTION_POLICY_RULE}
 
 REGRAS:
 - VOCÊ JÁ É A AGENTE DE PRESENTES. NUNCA chame `transfer_to_agent` para si mesma.
@@ -612,6 +633,8 @@ REGRA DE FOTO/CATÁLOGO:
 - {_PHOTO_RULE_LINE}
 
 {_PIX_MANDATORY_RULE}
+{_NO_DISCOUNT_POLICY_RULE}
+{_NO_INVENTION_POLICY_RULE}
 
 REGRAS DE CONSULTA:
 - Cardápio geral pronta entrega → `get_menu` com category="pronta_entrega"

@@ -12,7 +12,9 @@ except ModuleNotFoundError:
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.policies import (
+    build_discount_guard_retry_instruction as _build_discount_guard_retry_instruction,
     build_cafeteria_total_guard_retry_instruction as _build_cafeteria_total_guard_retry_instruction,
+    build_truffle_availability_retry_instruction as _build_truffle_availability_retry_instruction,
     caseirinho_clarification_message as _caseirinho_clarification_message,
     build_conversation_correction_instruction,
     build_cafeteria_specificity_retry_instruction as _build_cafeteria_specificity_retry_instruction,
@@ -41,6 +43,8 @@ from app.ai.policies import (
     is_generic_greeting as _is_generic_greeting,
     requests_opt_out as _requests_opt_out,
     response_conflicts_with_cafeteria_total_claim as _response_conflicts_with_cafeteria_total_claim,
+    response_conflicts_with_discount_offer as _response_conflicts_with_discount_offer,
+    response_conflicts_with_truffle_availability_denial as _response_conflicts_with_truffle_availability_denial,
     response_conflicts_with_cutoff as _response_conflicts_with_cutoff,
     should_force_same_day_cafeteria_handoff as _should_force_same_day_cafeteria_handoff,
 )
@@ -132,7 +136,7 @@ def _infer_catalog_context(session: dict, text: str) -> str | None:
         return "cafeteria"
 
     if _requests_sweet_order_topic(text) or re.search(
-        r"\b(doces?|docinhos?|brigadeir[oa]s?|bombo(m|ns?)|beijinhos?|camafeus?)\b",
+        r"\b(doces?|docinhos?|brigadeir[oa]s?|bombo(m|ns?)|beijinhos?|camafeus?|trufas?|chokobons?)\b",
         normalized,
     ):
         return "doces"
@@ -1019,6 +1023,8 @@ async def process_message_with_ai(
     time_conflict_retry_used = False
     cafeteria_specificity_retry_used = False
     cafeteria_total_guard_retry_used = False
+    discount_guard_retry_used = False
+    truffle_availability_retry_used = False
     transient_system_note = None
 
     if active_client is None:
@@ -1127,6 +1133,49 @@ async def process_message_with_ai(
             _maybe_log_event(
                 telefone,
                 "ai_cafeteria_total_guard_retry",
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
+            continue
+
+        if (
+            not msg.tool_calls
+            and not discount_guard_retry_used
+            and _response_conflicts_with_discount_offer(msg.content)
+        ):
+            discount_guard_retry_used = True
+            transient_system_note = _build_discount_guard_retry_instruction(text)
+            _maybe_increment_counter(
+                telefone,
+                "ai_discount_guard_retries_total",
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
+                "ai_discount_guard_retry",
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
+            continue
+
+        if (
+            not msg.tool_calls
+            and not truffle_availability_retry_used
+            and _response_conflicts_with_truffle_availability_denial(
+                msg.content,
+                user_text=text,
+            )
+        ):
+            truffle_availability_retry_used = True
+            transient_system_note = _build_truffle_availability_retry_instruction(text)
+            _maybe_increment_counter(
+                telefone,
+                "ai_truffle_guard_retries_total",
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
+                "ai_truffle_guard_retry",
                 agent=session["current_agent"],
                 phone_hash=telefone[-4:] if telefone else "anon",
             )
