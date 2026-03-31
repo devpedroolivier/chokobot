@@ -81,6 +81,7 @@ _MONTH_ALIASES = {
 }
 
 _DEFAULT_OPERATIONAL_CALENDAR = {
+    "weekly_windows": {},
     "blocked_dates": [],
     "date_overrides": [],
     "slot_capacities": [],
@@ -120,6 +121,9 @@ def _load_operational_calendar_cached(path_str: str, modified_ns: int) -> dict:
     normalized = dict(_DEFAULT_OPERATIONAL_CALENDAR)
     for key in normalized:
         value = payload.get(key)
+        if key == "weekly_windows":
+            normalized[key] = value if isinstance(value, dict) else {}
+            continue
         normalized[key] = value if isinstance(value, list) else []
     return normalized
 

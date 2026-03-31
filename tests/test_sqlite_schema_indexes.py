@@ -38,6 +38,7 @@ class SQLiteSchemaIndexesTests(unittest.TestCase):
                     os.environ["DB_PATH"] = previous_db_path
 
         self.assertIn("ix_clientes_telefone", clientes_indexes)
+        self.assertIn("ux_clientes_telefone", clientes_indexes)
         self.assertIn("ix_clientes_criado_em", clientes_indexes)
         self.assertIn("ix_entregas_encomenda_id", entregas_indexes)
         self.assertIn("ix_pedidos_cafeteria_cliente_id", cafeteria_indexes)

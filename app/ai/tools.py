@@ -1406,6 +1406,35 @@ def _sync_ai_process(
     )
 
 
+def _persist_order_with_optional_bundle(
+    *,
+    order_gateway,
+    phone: str,
+    dados: dict,
+    nome_cliente: str,
+    cliente_id: int,
+    delivery_data: dict | None = None,
+    process_data: dict | None = None,
+    sweet_items: list[dict] | None = None,
+) -> int:
+    if hasattr(order_gateway, "create_order_bundle"):
+        return order_gateway.create_order_bundle(
+            phone=phone,
+            dados=dados,
+            nome_cliente=nome_cliente,
+            cliente_id=cliente_id,
+            delivery_data=delivery_data,
+            process_data=process_data,
+            sweet_items=sweet_items,
+        )
+    return order_gateway.create_order(
+        phone=phone,
+        dados=dados,
+        nome_cliente=nome_cliente,
+        cliente_id=cliente_id,
+    )
+
+
 def _prepare_cake_order_data(order_details: "CakeOrderSchema") -> tuple[dict | None, str | None]:
     dados = order_details.model_dump()
     dados["linha"] = _linha_canonica(dados.get("linha"))
@@ -1853,41 +1882,54 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
         return error
     assert dados is not None
 
-    # --- Salvar pedido ---
-    encomenda_id = order_gateway.create_order(
+    delivery_payload = (
+        {
+            "tipo": "entrega",
+            "data_agendada": dados["data_entrega"],
+            "status": "pendente",
+            "endereco": dados.get("endereco"),
+        }
+        if dados["modo_recebimento"] == "entrega"
+        else {
+            "tipo": "retirada",
+            "data_agendada": dados["data_entrega"],
+            "status": "Retirar na loja",
+        }
+    )
+    process_payload = {
+        "process_type": "ai_cake_order",
+        "stage": "pedido_confirmado",
+        "status": "converted",
+        "source": "ai_cake_order",
+        "draft_payload": _build_cake_process_payload(dados),
+    }
+    encomenda_id = _persist_order_with_optional_bundle(
+        order_gateway=order_gateway,
         phone=telefone,
         dados=dados,
         nome_cliente=nome_cliente,
         cliente_id=cliente_id,
+        delivery_data=delivery_payload,
+        process_data=process_payload,
     )
+    if encomenda_id <= 0:
+        return "Erro interno ao salvar pedido. Tente novamente em instantes."
 
-    # --- Salvar entrega ---
-    if dados["modo_recebimento"] == "entrega":
+    if not hasattr(order_gateway, "create_order_bundle"):
         delivery_gateway.create_delivery(
             encomenda_id=encomenda_id,
-            tipo="entrega",
-            data_agendada=dados["data_entrega"],
-            status="pendente",
-            endereco=dados.get("endereco"),
+            **delivery_payload,
         )
-    else:
-        delivery_gateway.create_delivery(
-            encomenda_id=encomenda_id,
-            tipo="retirada",
-            data_agendada=dados["data_entrega"],
-            status="Retirar na loja",
+        _sync_ai_process(
+            phone=telefone,
+            customer_id=cliente_id,
+            process_type="ai_cake_order",
+            stage="pedido_confirmado",
+            status="converted",
+            source="ai_cake_order",
+            draft_payload=_build_cake_process_payload(dados),
+            order_id=encomenda_id,
         )
-
-    _sync_ai_process(
-        phone=telefone,
-        customer_id=cliente_id,
-        process_type="ai_cake_order",
-        stage="pedido_confirmado",
-        status="converted",
-        source="ai_cake_order",
-        draft_payload=_build_cake_process_payload(dados),
-        order_id=encomenda_id,
-    )
 
     preco_txt = f" | Valor: R${dados['valor_total']:.2f}" if dados.get("valor_total") else ""
     kit_flag = "sim" if bool(dados.get("kit_festou")) else "nao"
@@ -1896,7 +1938,6 @@ def create_cake_order(telefone: str, nome_cliente: str, cliente_id: int, order_d
         f"Protocolo: CHK-{int(encomenda_id):06d}\n"
         f"Kit Festou incluido: {kit_flag}"
     )
-
 
 def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_details: SweetOrderSchema) -> str:
     """Valida, calcula preço e salva o pedido de doces avulsos no banco de dados."""
@@ -1915,52 +1956,26 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
     desc_itens = prepared["desc_itens"]
     order_data = prepared["order_data"]
 
-    encomenda_id = order_gateway.create_order(
-        phone=telefone,
-        dados=order_data,
-        nome_cliente=nome_cliente,
-        cliente_id=cliente_id,
+    delivery_payload = (
+        {
+            "tipo": "entrega",
+            "data_agendada": data_iso,
+            "status": "pendente",
+            "endereco": dados.get("endereco"),
+        }
+        if dados["modo_recebimento"] == "entrega"
+        else {
+            "tipo": "retirada",
+            "data_agendada": data_iso,
+            "status": "Retirar na loja",
+        }
     )
-
-    # --- Salvar itens na tabela encomenda_doces ---
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        for it in itens_validados:
-            cur.execute(
-                "INSERT INTO encomenda_doces (encomenda_id, nome, qtd, preco, unit) VALUES (?, ?, ?, ?, ?)",
-                (encomenda_id, it["nome"], it["qtd"], it["preco"], it["unit"]),
-            )
-        conn.commit()
-        conn.close()
-    except Exception as exc:
-        print(f"⚠️ Erro ao salvar itens de doces: {exc}")
-
-    # --- Salvar entrega ---
-    if dados["modo_recebimento"] == "entrega":
-        delivery_gateway.create_delivery(
-            encomenda_id=encomenda_id,
-            tipo="entrega",
-            data_agendada=data_iso,
-            status="pendente",
-            endereco=dados.get("endereco"),
-        )
-    else:
-        delivery_gateway.create_delivery(
-            encomenda_id=encomenda_id,
-            tipo="retirada",
-            data_agendada=data_iso,
-            status="Retirar na loja",
-        )
-
-    _sync_ai_process(
-        phone=telefone,
-        customer_id=cliente_id,
-        process_type="ai_sweet_order",
-        stage="pedido_confirmado",
-        status="converted",
-        source="ai_sweet_order",
-        draft_payload=_build_sweet_process_payload(
+    process_payload = {
+        "process_type": "ai_sweet_order",
+        "stage": "pedido_confirmado",
+        "status": "converted",
+        "source": "ai_sweet_order",
+        "draft_payload": _build_sweet_process_payload(
             data_entrega=data_iso,
             horario_retirada=dados.get("horario_retirada"),
             modo_recebimento=dados["modo_recebimento"],
@@ -1969,8 +1984,55 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
             itens_validados=itens_validados,
             valor_total=valor_final,
         ),
-        order_id=encomenda_id,
+    }
+    sweet_items = [
+        {
+            "nome": it["nome"],
+            "qtd": it["qtd"],
+            "preco": it["preco"],
+            "unit": it["unit"],
+        }
+        for it in itens_validados
+    ]
+    encomenda_id = _persist_order_with_optional_bundle(
+        order_gateway=order_gateway,
+        phone=telefone,
+        dados=order_data,
+        nome_cliente=nome_cliente,
+        cliente_id=cliente_id,
+        delivery_data=delivery_payload,
+        process_data=process_payload,
+        sweet_items=sweet_items,
     )
+    if encomenda_id <= 0:
+        return "Erro interno ao salvar pedido de doces. Tente novamente em instantes."
+
+    if not hasattr(order_gateway, "create_order_bundle"):
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            for item in sweet_items:
+                cur.execute(
+                    "INSERT INTO encomenda_doces (encomenda_id, nome, qtd, preco, unit) VALUES (?, ?, ?, ?, ?)",
+                    (encomenda_id, item["nome"], item["qtd"], item["preco"], item["unit"]),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        delivery_gateway.create_delivery(
+            encomenda_id=encomenda_id,
+            **delivery_payload,
+        )
+        _sync_ai_process(
+            phone=telefone,
+            customer_id=cliente_id,
+            process_type="ai_sweet_order",
+            stage="pedido_confirmado",
+            status="converted",
+            source="ai_sweet_order",
+            draft_payload=process_payload["draft_payload"],
+            order_id=encomenda_id,
+        )
 
     return (
         f"Pedido de doces salvo com sucesso! ID: {encomenda_id}\n"
@@ -1981,7 +2043,6 @@ def create_sweet_order(telefone: str, nome_cliente: str, cliente_id: int, order_
         + f"Protocolo: CHK-{int(encomenda_id):06d}\n"
         + "Kit Festou incluido: nao"
     )
-
 
 def create_cafeteria_order(
     telefone: str,
@@ -2061,39 +2122,55 @@ def create_gift_order(
         "taxa_entrega": dados.get("taxa_entrega", 0.0),
     }
 
-    encomenda_id = order_gateway.create_order(
+    delivery_payload = (
+        {
+            "tipo": "cesta_box",
+            "endereco": dados.get("endereco"),
+            "data_agendada": dados["data_entrega"],
+            "status": "agendada",
+        }
+        if dados["modo_recebimento"] == "entrega"
+        else {
+            "tipo": "retirada",
+            "data_agendada": dados["data_entrega"],
+            "status": "Retirar na loja",
+        }
+    )
+    process_payload = {
+        "process_type": "cesta_box_order",
+        "stage": "pedido_confirmado",
+        "status": "converted",
+        "source": "ai_gift_order",
+        "draft_payload": _build_gift_process_payload(dados),
+    }
+    encomenda_id = _persist_order_with_optional_bundle(
+        order_gateway=order_gateway,
         phone=telefone,
         dados=order_data,
         nome_cliente=nome_cliente,
         cliente_id=cliente_id,
+        delivery_data=delivery_payload,
+        process_data=process_payload,
     )
+    if encomenda_id <= 0:
+        return "Erro interno ao salvar pedido de presente. Tente novamente em instantes."
 
-    if dados["modo_recebimento"] == "entrega":
+    if not hasattr(order_gateway, "create_order_bundle"):
         delivery_gateway.create_delivery(
             encomenda_id=encomenda_id,
-            tipo="cesta_box",
-            endereco=dados.get("endereco"),
-            data_agendada=dados["data_entrega"],
-            status="agendada",
+            **delivery_payload,
         )
-    else:
-        delivery_gateway.create_delivery(
-            encomenda_id=encomenda_id,
-            tipo="retirada",
-            data_agendada=dados["data_entrega"],
-            status="Retirar na loja",
+        _sync_ai_process(
+            phone=telefone,
+            customer_id=cliente_id,
+            process_type="cesta_box_order",
+            stage="pedido_confirmado",
+            status="converted",
+            source="ai_gift_order",
+            draft_payload=process_payload["draft_payload"],
+            order_id=encomenda_id,
         )
 
-    _sync_ai_process(
-        phone=telefone,
-        customer_id=cliente_id,
-        process_type="cesta_box_order",
-        stage="pedido_confirmado",
-        status="converted",
-        source="ai_gift_order",
-        draft_payload=_build_gift_process_payload(dados),
-        order_id=encomenda_id,
-    )
     fee_line = (
         f"Taxa entrega: {_format_currency_brl(float(dados.get('taxa_entrega') or 0))}\n"
         if float(dados.get("taxa_entrega") or 0) > 0
@@ -2107,7 +2184,6 @@ def create_gift_order(
         f"Protocolo: CHK-{int(encomenda_id):06d}\n"
         "Kit Festou incluido: nao"
     )
-
 
 def save_cake_order_draft_process(
     telefone: str,

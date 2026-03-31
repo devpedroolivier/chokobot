@@ -1191,20 +1191,40 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             dados.update(pedido)
             dados = _prepara_dados_para_salvar(dados)
             print(f"💾 Salvando encomenda normalizada ({dados.get('linha', 'n/d')}) — Cliente: {nome_cliente}")
-            encomenda_id = order_gateway.create_order(
-                phone=telefone,
-                dados=dados,
-                nome_cliente=nome_cliente,
-                cliente_id=cliente_id,
-            )
+            delivery_payload = {
+                "tipo": "retirada",
+                "data_agendada": dados.get("data_entrega"),
+                "status": "Retirar na loja",
+            }
 
+            if hasattr(order_gateway, "create_order_bundle"):
+                encomenda_id = order_gateway.create_order_bundle(
+                    phone=telefone,
+                    dados=dados,
+                    nome_cliente=nome_cliente,
+                    cliente_id=cliente_id,
+                    delivery_data=delivery_payload,
+                )
+            else:
+                encomenda_id = order_gateway.create_order(
+                    phone=telefone,
+                    dados=dados,
+                    nome_cliente=nome_cliente,
+                    cliente_id=cliente_id,
+                )
 
-            delivery_gateway.create_delivery(
-                encomenda_id=encomenda_id,
-                tipo="retirada",
-                data_agendada=dados.get("data_entrega"),
-                status="Retirar na loja",
-            )
+            if encomenda_id <= 0:
+                await responder_usuario(
+                    telefone,
+                    "⚠️ Nao consegui confirmar seu pedido agora. Pode tentar novamente em instantes?",
+                )
+                return
+
+            if not hasattr(order_gateway, "create_order_bundle"):
+                delivery_gateway.create_delivery(
+                    encomenda_id=encomenda_id,
+                    **delivery_payload,
+                )
 
             await responder_usuario(
                 telefone,

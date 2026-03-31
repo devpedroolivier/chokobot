@@ -188,6 +188,25 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertEqual(result, {"status": "ignored", "detail": "test_phone"})
         mocked_process.assert_not_awaited()
 
+    def test_webhook_returns_500_on_processing_failure(self):
+        request = FakeRequest(
+            {"id": "msg-error-1", "phone": "5511999999999", "message": "Oi"},
+            headers={"X-Webhook-Secret": "super-secret"},
+        )
+
+        with patch.dict(os.environ, {"WEBHOOK_SECRET": "super-secret"}, clear=False):
+            with patch.object(
+                webhook_module,
+                "dispatch_inbound_message",
+                AsyncMock(side_effect=RuntimeError("boom")),
+            ):
+                with patch.object(webhook_module, "responder_usuario", AsyncMock(return_value=True)):
+                    with self.assertRaises(HTTPException) as ctx:
+                        asyncio.run(webhook_module.receber_webhook(request))
+
+        self.assertEqual(ctx.exception.status_code, 500)
+        self.assertEqual(ctx.exception.detail, "processing_error")
+
     def test_webhook_cleans_phone_lock_after_processing(self):
         request = FakeRequest(
             {"id": "msg-lock-cleanup-1", "phone": "5511999999999", "message": "Oi"},

@@ -115,30 +115,59 @@ class ProcessDeliveryFlow:
                 pedido["referencia"] = ref
                 pedido["modo_recebimento"] = "entrega"
 
-                encomenda_id = order_gateway.create_order(
-                    phone=telefone,
-                    dados=pedido,
-                    nome_cliente=nome,
-                    cliente_id=estado.get("cliente_id"),
-                )
+                delivery_payload = {
+                    "tipo": "entrega",
+                    "endereco": endereco_final,
+                    "data_agendada": dados.get("data"),
+                    "status": "pendente",
+                }
+                process_payload = {
+                    "process_type": "delivery_order",
+                    "stage": "pedido_confirmado",
+                    "status": "converted",
+                    "source": "legacy_delivery",
+                    "draft_payload": pedido,
+                }
 
-                delivery_gateway.create_delivery(
-                    encomenda_id=encomenda_id,
-                    tipo="entrega",
-                    endereco=endereco_final,
-                    data_agendada=dados.get("data"),
-                    status="pendente",
-                )
-                process_repository.upsert_process(
-                    phone=telefone,
-                    customer_id=estado.get("cliente_id"),
-                    process_type="delivery_order",
-                    stage="pedido_confirmado",
-                    status="converted",
-                    source="legacy_delivery",
-                    draft_payload=pedido,
-                    order_id=encomenda_id,
-                )
+                if hasattr(order_gateway, "create_order_bundle"):
+                    encomenda_id = order_gateway.create_order_bundle(
+                        phone=telefone,
+                        dados=pedido,
+                        nome_cliente=nome,
+                        cliente_id=estado.get("cliente_id"),
+                        delivery_data=delivery_payload,
+                        process_data=process_payload,
+                    )
+                else:
+                    encomenda_id = order_gateway.create_order(
+                        phone=telefone,
+                        dados=pedido,
+                        nome_cliente=nome,
+                        cliente_id=estado.get("cliente_id"),
+                    )
+
+                if encomenda_id <= 0:
+                    await responder_fn(
+                        telefone,
+                        "⚠️ Nao consegui confirmar seu pedido agora. Pode tentar novamente em instantes?",
+                    )
+                    return None
+
+                if not hasattr(order_gateway, "create_order_bundle"):
+                    delivery_gateway.create_delivery(
+                        encomenda_id=encomenda_id,
+                        **delivery_payload,
+                    )
+                    process_repository.upsert_process(
+                        phone=telefone,
+                        customer_id=estado.get("cliente_id"),
+                        process_type="delivery_order",
+                        stage="pedido_confirmado",
+                        status="converted",
+                        source="legacy_delivery",
+                        draft_payload=pedido,
+                        order_id=encomenda_id,
+                    )
 
                 await responder_fn(
                     telefone,

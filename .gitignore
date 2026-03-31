@@ -13,6 +13,19 @@ build/
 dist/
 *.egg-info/
 git_auto_push.py
-dados/chokobot.db
-dados/*.db
-dados/*.jsonl
+
+# Runtime and local data artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqbpro
+*.jsonl
+*.bak
+
+# Project runtime data folder
+dados/*
+!dados/.gitkeep
+!dados/README.md

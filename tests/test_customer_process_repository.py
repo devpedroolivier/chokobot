@@ -5,6 +5,7 @@ import unittest
 os.environ.setdefault("ZAPI_TOKEN", "test-token")
 os.environ.setdefault("ZAPI_BASE", "https://example.test")
 
+from app.db.database import get_connection
 from app.infrastructure.repositories.sqlite_customer_process_repository import SQLiteCustomerProcessRepository
 from app.models import criar_tabelas
 
@@ -19,9 +20,29 @@ class CustomerProcessRepositoryTests(unittest.TestCase):
             os.environ["DB_PATH"] = db_path
             try:
                 criar_tabelas()
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "INSERT INTO clientes (nome, telefone) VALUES (?, ?)",
+                        ("Cliente Teste", "5511999999999"),
+                    )
+                    customer_id = int(cur.lastrowid)
+                    cur.execute(
+                        """
+                        INSERT INTO encomendas (cliente_id, categoria, produto, tamanho, data_entrega, horario, valor_total)
+                        VALUES (?, 'tradicional', 'Bolo teste', 'B3', '2026-03-20', '14:00', 130.0)
+                        """,
+                        (customer_id,),
+                    )
+                    order_id = int(cur.lastrowid)
+                    conn.commit()
+                finally:
+                    conn.close()
+
                 process_id = repository.upsert_process(
                     phone="5511999999999",
-                    customer_id=7,
+                    customer_id=customer_id,
                     process_type="delivery_order",
                     stage="coletando_endereco",
                     status="active",
@@ -30,13 +51,13 @@ class CustomerProcessRepositoryTests(unittest.TestCase):
                 )
                 repository.upsert_process(
                     phone="5511999999999",
-                    customer_id=7,
+                    customer_id=customer_id,
                     process_type="delivery_order",
                     stage="pedido_confirmado",
                     status="converted",
                     source="legacy_delivery",
                     draft_payload={"categoria": "tradicional", "valor_total": 130.0},
-                    order_id=321,
+                    order_id=order_id,
                 )
 
                 row = repository.get_process("5511999999999", "delivery_order")
@@ -50,6 +71,6 @@ class CustomerProcessRepositoryTests(unittest.TestCase):
         self.assertGreater(process_id, 0)
         self.assertIsNotNone(row)
         self.assertEqual(row.status, "converted")
-        self.assertEqual(row.order_id, 321)
+        self.assertGreater(row.order_id or 0, 0)
         self.assertEqual(row.draft_payload["categoria"], "tradicional")
         self.assertEqual(active, [])

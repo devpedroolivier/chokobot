@@ -77,6 +77,8 @@ class AppSettings:
     test_phones: tuple[str, ...]
     admin_phones: tuple[str, ...]
     automation_disabled_phones: tuple[str, ...]
+    phone_opt_out_auto_resume_minutes: float
+    phone_opt_out_reactivation_delay_seconds: float
     panel_auth_enabled: bool
     panel_auth_username: str
     panel_auth_password: str
@@ -143,6 +145,14 @@ def get_settings() -> AppSettings:
         test_phones=_env_csv("TEST_PHONES"),
         admin_phones=_env_csv("ADMIN_PHONES"),
         automation_disabled_phones=_env_csv("AUTOMATION_DISABLED_PHONES"),
+        phone_opt_out_auto_resume_minutes=max(
+            0.0,
+            _env_float("PHONE_OPT_OUT_AUTO_RESUME_MINUTES", 30.0),
+        ),
+        phone_opt_out_reactivation_delay_seconds=max(
+            0.0,
+            _env_float("PHONE_OPT_OUT_REACTIVATION_DELAY_SECONDS", 1.5),
+        ),
         panel_auth_enabled=_env_bool("PANEL_AUTH_ENABLED", False),
         panel_auth_username=_env_str("PANEL_AUTH_USERNAME"),
         panel_auth_password=_env_str("PANEL_AUTH_PASSWORD"),

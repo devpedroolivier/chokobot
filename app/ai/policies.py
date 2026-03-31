@@ -783,6 +783,67 @@ def build_cafeteria_total_guard_retry_instruction(user_text: str) -> str:
     )
 
 
+def response_conflicts_with_cafeteria_combo_truth(
+    reply: str | None,
+    *,
+    user_text: str,
+    current_agent: str | None = None,
+) -> bool:
+    if current_agent != "CafeteriaAgent":
+        return False
+
+    normalized_user = normalize_intent_text(user_text)
+    if not re.search(r"\b(combo|choko combo|relampago|croissant|croassant|croasant)\b", normalized_user):
+        return False
+
+    normalized_reply = normalize_intent_text(reply or "")
+    if not normalized_reply:
+        return False
+
+    # Perguntas de esclarecimento sao validas antes de consultar o catalogo.
+    clarification_patterns = (
+        r"\bqual sabor\b",
+        r"\bquais sabores\b",
+        r"\bqual bebida\b",
+        r"\bquais bebidas\b",
+        r"\bquantos\b",
+        r"\bquantas\b",
+        r"\bqual opcao\b",
+        r"\bquais opcoes\b",
+    )
+    if any(re.search(pattern, normalized_reply) for pattern in clarification_patterns):
+        return False
+
+    # Tambem permitimos resposta segura de escalacao/confirmacao humana.
+    safe_fallback_patterns = (
+        r"\b(confirmar com a equipe|vou confirmar com a equipe)\b",
+        r"\b(atendimento humano|encaminhar para humano|transferir para humano)\b",
+    )
+    if any(re.search(pattern, normalized_reply) for pattern in safe_fallback_patterns):
+        return False
+
+    has_combo_or_croissant_claim = bool(re.search(r"\b(combo|croissant|croassant|croasant)\b", normalized_reply))
+    has_assertive_content = bool(
+        re.search(
+            r"\b(inclui|vem com|acompanha|nao inclui|nao vem|disponivel|indisponivel|nao temos|temos)\b",
+            normalized_reply,
+        )
+    )
+    has_price = bool(re.search(r"r\$\s*\d", normalized_reply))
+
+    return has_combo_or_croissant_claim and (has_assertive_content or has_price)
+
+
+def build_cafeteria_combo_truth_retry_instruction(user_text: str) -> str:
+    return (
+        "CORRECAO DE SISTEMA: para combo/croissant, nao descreva composicao, disponibilidade ou preco de memoria. "
+        "Consulte primeiro o catalogo oficial com lookup_catalog_items (catalog='cafeteria') e use apenas o retorno estruturado. "
+        "Se faltar detalhe de pedido, pergunte somente os campos faltantes. "
+        "Se algo nao existir no catalogo, diga que vai confirmar com a equipe e ofereca atendimento humano. "
+        f"Mensagem atual do cliente: '{user_text}'."
+    )
+
+
 def _is_discount_denial_response(normalized_reply: str) -> bool:
     if not normalized_reply:
         return False

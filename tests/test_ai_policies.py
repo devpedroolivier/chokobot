@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.ai.policies import (
+    build_cafeteria_combo_truth_retry_instruction,
     build_discount_guard_retry_instruction,
     build_cafeteria_total_guard_retry_instruction,
     build_truffle_availability_retry_instruction,
@@ -23,6 +24,7 @@ from app.ai.policies import (
     requests_regular_gift_topic,
     requests_sweet_order_topic,
     response_conflicts_with_cafeteria_specificity,
+    response_conflicts_with_cafeteria_combo_truth,
     response_conflicts_with_cafeteria_total_claim,
     response_conflicts_with_discount_offer,
     response_conflicts_with_truffle_availability_denial,
@@ -136,6 +138,33 @@ class AIPoliciesTests(unittest.TestCase):
         self.assertIn(
             "nao pode calcular subtotal/total de memoria",
             build_cafeteria_total_guard_retry_instruction("Quero croissant e coca").lower(),
+        )
+
+    def test_cafeteria_combo_truth_conflict_blocks_memory_based_combo_claims(self):
+        self.assertTrue(
+            response_conflicts_with_cafeteria_combo_truth(
+                "O combo vem com croissant de frango, suco e fatia de bolo por R$23,99.",
+                user_text="O que vem no combo de croissant?",
+                current_agent="CafeteriaAgent",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_cafeteria_combo_truth(
+                "Perfeito! Qual bebida voce prefere no combo e quantas unidades?",
+                user_text="Quero combo de croissant",
+                current_agent="CafeteriaAgent",
+            )
+        )
+        self.assertFalse(
+            response_conflicts_with_cafeteria_combo_truth(
+                "O combo vem com croissant de frango por R$23,99.",
+                user_text="Quero bolo B4",
+                current_agent="CakeOrderAgent",
+            )
+        )
+        self.assertIn(
+            "nao descreva composicao, disponibilidade ou preco de memoria",
+            build_cafeteria_combo_truth_retry_instruction("Quero combo de croissant").lower(),
         )
 
     def test_gift_topic_detection_separates_regular_catalog_from_easter(self):

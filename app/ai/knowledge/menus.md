@@ -235,8 +235,8 @@
 - Nao responder sobre produtos de Pascoa — apenas enviar o link acima.
 
 ## Entregas e Pagamento
-- **Horario de funcionamento:** segunda (12h-18h), terca-sabado (9h-18h), domingo (fechado)
-- **Nao fazemos pedidos, retiradas ou encomendas para domingo**
+- **Horario de funcionamento:** consulte sempre o calendario operacional ativo (`operational_calendar.json`)
+- **Domingo:** por padrao nao fazemos pedidos/retiradas/encomendas; excecoes sazonais sao definidas no calendario operacional
 - **Modo de recebimento:** retirada na loja ou entrega
 - **Horário limite para entregas:** até 17:30
 - **Taxa de entrega padrao:** geralmente R$10,00, salvo regra especifica

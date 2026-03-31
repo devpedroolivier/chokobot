@@ -21,6 +21,7 @@ from app.ai import runner
 from app.ai.order_support import MockOrderSupportAdapter, OrderRecord, OrderSupportService
 from app.ai.runner import POST_PURCHASE_MESSAGES
 from app.observability import clear_metrics
+from app.services.estados import is_phone_opted_out
 from app.welcome_message import HUMAN_HANDOFF_MESSAGE, OPT_OUT_MESSAGE
 
 
@@ -404,6 +405,7 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         mocked_escalate.assert_not_called()
         fake_client.chat.completions.create.assert_not_awaited()
         self.assertEqual(runner.CONVERSATIONS["5516991212121"]["messages"], [])
+        self.assertTrue(is_phone_opted_out("5516991212121"))
 
     async def test_process_message_switches_from_sweet_to_cake_when_topic_changes(self):
         telefone = "5516995656565"

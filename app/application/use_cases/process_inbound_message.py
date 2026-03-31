@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Awaitable, Callable
 
@@ -10,18 +11,23 @@ from app.application.use_cases.manage_human_handoff import build_reactivation_me
 from app.config import get_store_closed_notice, is_store_closed
 from app.observability import log_event, should_track_phone
 from app.security import get_admin_phones, hash_phone, is_phone_automation_disabled, preview_text
+from app.settings import get_settings
 from app.services.estados import (
     append_conversation_message,
     estados_atendimento,
+    get_phone_opted_out_updated_at,
     get_recent_message,
     is_bot_ativo,
+    is_phone_opted_out,
     mark_processed_message_if_new,
+    set_phone_opted_out,
     set_bot_ativo,
     set_recent_message,
 )
 from app.utils.mensagens import responder_usuario, responder_usuario_com_contexto
 from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 from app.utils.payload import normalize_incoming
+from app.welcome_message import OPT_OUT_MESSAGE
 
 
 REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot", "ativar chat", "ativar bot"]
@@ -121,6 +127,58 @@ async def process_inbound_message(
 
     if not should_track_phone(telefone):
         log_event("handler_test_phone_ignored", phone_hash=hash_phone(telefone))
+        return
+
+    if is_phone_opted_out(telefone):
+        now_for_opt_out = now_in_bot_timezone()
+        opt_out_updated_at = get_phone_opted_out_updated_at(telefone)
+        auto_resume_minutes = get_settings().phone_opt_out_auto_resume_minutes
+        auto_reactivated = False
+        if auto_resume_minutes > 0 and opt_out_updated_at is not None:
+            elapsed_seconds = (now_for_opt_out - normalize_to_bot_timezone(opt_out_updated_at)).total_seconds()
+            if elapsed_seconds >= auto_resume_minutes * 60:
+                set_phone_opted_out(telefone, False)
+                log_event(
+                    "handler_phone_opt_out_auto_reactivated",
+                    phone_hash=hash_phone(telefone),
+                    threshold_minutes=auto_resume_minutes,
+                    elapsed_minutes=round(elapsed_seconds / 60, 2),
+                )
+                auto_reactivated = True
+        if not auto_reactivated:
+            if texto in REATIVAR_BOT_OPCOES:
+                set_phone_opted_out(telefone, False)
+                reactivation_delay = get_settings().phone_opt_out_reactivation_delay_seconds
+                if reactivation_delay > 0:
+                    log_event(
+                        "handler_phone_opt_out_reactivation_delay",
+                        phone_hash=hash_phone(telefone),
+                        delay_seconds=reactivation_delay,
+                    )
+                    await asyncio.sleep(reactivation_delay)
+                await _send_message(
+                    responder_usuario_fn,
+                    telefone,
+                    build_reactivation_message(),
+                    role="bot",
+                    actor_label="Bot",
+                )
+                log_event("handler_phone_opt_out_reactivated", phone_hash=hash_phone(telefone))
+                return
+
+            log_event("handler_phone_opt_out_active", phone_hash=hash_phone(telefone), text=preview_text(texto))
+            return
+
+    if texto in {"desativar chat", "desativar bot", "desligar chat", "desligar bot", "pausar chat", "pausar bot"}:
+        set_phone_opted_out(telefone, True)
+        await _send_message(
+            responder_usuario_fn,
+            telefone,
+            OPT_OUT_MESSAGE,
+            role="bot",
+            actor_label="Bot",
+        )
+        log_event("handler_phone_opt_out_activated", phone_hash=hash_phone(telefone))
         return
 
     agora = now_in_bot_timezone()

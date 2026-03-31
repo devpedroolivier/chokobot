@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
-from typing import Optional
 import sqlite3
 
 from app.db.database import get_connection
@@ -71,6 +71,140 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
             "troco_para": troco_para,
         }
 
+    @staticmethod
+    def _insert_order(conn: sqlite3.Connection, payload: dict) -> int:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO encomendas (
+                cliente_id,
+                categoria,
+                produto,
+                tamanho,
+                massa,
+                recheio,
+                mousse,
+                adicional,
+                kit_festou,
+                quantidade,
+                data_entrega,
+                horario,
+                valor_total,
+                serve_pessoas
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.get("cliente_id"),
+                payload.get("categoria"),
+                payload.get("produto"),
+                payload.get("tamanho"),
+                payload.get("massa"),
+                payload.get("recheio"),
+                payload.get("mousse"),
+                payload.get("adicional"),
+                payload.get("kit_festou"),
+                payload.get("quantidade"),
+                payload.get("data_entrega"),
+                payload.get("horario_retirada"),
+                payload.get("valor_total"),
+                payload.get("serve_pessoas"),
+            ),
+        )
+        order_id = int(cur.lastrowid or 0)
+        if order_id <= 0:
+            raise RuntimeError("invalid_order_id")
+        return order_id
+
+    @staticmethod
+    def _insert_delivery(conn: sqlite3.Connection, *, order_id: int, delivery_data: dict) -> None:
+        if not delivery_data:
+            return
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO entregas (encomenda_id, tipo, endereco, data_agendada, status, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                order_id,
+                delivery_data.get("tipo", "entrega"),
+                delivery_data.get("endereco"),
+                delivery_data.get("data_agendada"),
+                delivery_data.get("status", "pendente"),
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+
+    @staticmethod
+    def _insert_sweet_items(conn: sqlite3.Connection, *, order_id: int, sweet_items: list[dict]) -> None:
+        if not sweet_items:
+            return
+        cur = conn.cursor()
+        for item in sweet_items:
+            cur.execute(
+                "INSERT INTO encomenda_doces (encomenda_id, nome, qtd, preco, unit) VALUES (?, ?, ?, ?, ?)",
+                (
+                    order_id,
+                    item.get("nome"),
+                    item.get("qtd"),
+                    item.get("preco"),
+                    item.get("unit"),
+                ),
+            )
+
+    @staticmethod
+    def _upsert_process(
+        conn: sqlite3.Connection,
+        *,
+        phone: str,
+        customer_id: int | None,
+        order_id: int,
+        process_data: dict,
+    ) -> None:
+        if not process_data:
+            return
+        process_type = str(process_data.get("process_type") or "").strip()
+        stage = str(process_data.get("stage") or "").strip()
+        if not process_type or not stage:
+            raise ValueError("invalid_process_data")
+
+        draft_payload = process_data.get("draft_payload") or {}
+        payload_json = json.dumps(draft_payload, ensure_ascii=False, sort_keys=True)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO customer_processes (
+                phone,
+                customer_id,
+                process_type,
+                stage,
+                status,
+                source,
+                draft_payload,
+                order_id,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(phone, process_type) DO UPDATE SET
+                customer_id = excluded.customer_id,
+                stage = excluded.stage,
+                status = excluded.status,
+                source = COALESCE(excluded.source, customer_processes.source),
+                draft_payload = excluded.draft_payload,
+                order_id = excluded.order_id,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                phone,
+                customer_id,
+                process_type,
+                stage,
+                process_data.get("status", "active"),
+                process_data.get("source"),
+                payload_json,
+                order_id,
+            ),
+        )
+
     def save_cafeteria_items(
         self,
         *,
@@ -115,6 +249,24 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
         nome_cliente: str,
         cliente_id: int | None = None,
     ) -> int:
+        return self.save_order_bundle(
+            phone=phone,
+            dados=dados,
+            nome_cliente=nome_cliente,
+            cliente_id=cliente_id,
+        )
+
+    def save_order_bundle(
+        self,
+        *,
+        phone: str,
+        dados: dict,
+        nome_cliente: str,
+        cliente_id: int | None = None,
+        delivery_data: dict | None = None,
+        process_data: dict | None = None,
+        sweet_items: list[dict] | None = None,
+    ) -> int:
         conn = get_connection()
         conn.row_factory = sqlite3.Row
         try:
@@ -126,57 +278,29 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
             )
 
             payload = self._order_payload(dados, resolved_cliente_id)
-            cur = conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO encomendas (
-                    cliente_id,
-                    categoria,
-                    produto,
-                    tamanho,
-                    massa,
-                    recheio,
-                    mousse,
-                    adicional,
-                    kit_festou,
-                    quantidade,
-                    data_entrega,
-                    horario,
-                    valor_total,
-                    serve_pessoas
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    resolved_cliente_id,
-                    payload.get("categoria"),
-                    payload.get("produto"),
-                    payload.get("tamanho"),
-                    payload.get("massa"),
-                    payload.get("recheio"),
-                    payload.get("mousse"),
-                    payload.get("adicional"),
-                    payload.get("kit_festou"),
-                    payload.get("quantidade"),
-                    payload.get("data_entrega"),
-                    payload.get("horario_retirada"),
-                    payload.get("valor_total"),
-                    payload.get("serve_pessoas"),
-                ),
+            order_id = self._insert_order(conn, payload)
+            self._insert_sweet_items(conn, order_id=order_id, sweet_items=sweet_items or [])
+            self._insert_delivery(conn, order_id=order_id, delivery_data=delivery_data or {})
+            self._upsert_process(
+                conn,
+                phone=phone,
+                customer_id=resolved_cliente_id,
+                order_id=order_id,
+                process_data=process_data or {},
             )
-            encomenda_id = cur.lastrowid
             conn.commit()
             log_event(
-                "order_saved",
-                order_id=encomenda_id,
+                "order_bundle_saved",
+                order_id=order_id,
                 phone=phone,
                 nome_cliente=nome_cliente,
                 categoria=payload.get("categoria", "n/d"),
                 valor_total=float(payload.get("valor_total") or 0),
             )
-            return encomenda_id
+            return order_id
         except Exception as exc:
             conn.rollback()
-            log_event("order_save_failed", error_type=type(exc).__name__, phone=phone)
+            log_event("order_bundle_save_failed", error_type=type(exc).__name__, phone=phone)
             return -1
         finally:
             conn.close()

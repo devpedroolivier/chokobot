@@ -20,6 +20,18 @@ def set_bot_ativo(value: bool) -> None:
     _store.set_bot_ativo(value)
 
 
+def is_phone_opted_out(phone: str | None) -> bool:
+    return _store.is_phone_opted_out(phone)
+
+
+def set_phone_opted_out(phone: str | None, value: bool) -> None:
+    _store.set_phone_opted_out(phone, value)
+
+
+def get_phone_opted_out_updated_at(phone: str | None):
+    return _store.get_phone_opted_out_updated_at(phone)
+
+
 def has_processed_message(message_id: str) -> bool:
     return _store.has_processed_message(message_id)
 

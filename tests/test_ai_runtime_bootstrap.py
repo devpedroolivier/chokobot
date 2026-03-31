@@ -317,7 +317,11 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 message.get("role") == "system"
-                and "nao pode calcular subtotal/total de memoria" in message.get("content", "").lower()
+                and (
+                    "nao pode calcular subtotal/total de memoria" in message.get("content", "").lower()
+                    or "nao descreva composicao, disponibilidade ou preco de memoria"
+                    in message.get("content", "").lower()
+                )
                 for message in second_messages
             )
         )

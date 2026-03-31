@@ -146,8 +146,11 @@ async def receber_webhook(request: Request):
         traceback.print_exc()
         phone = norm.get("phone")
         if phone:
-            await responder_usuario(
-                phone,
-                "⚠️ Tive um problema interno ao processar sua mensagem. Pode repetir em instantes?"
-            )
-        return {"status": "error"}
+            try:
+                await responder_usuario(
+                    phone,
+                    "⚠️ Tive um problema interno ao processar sua mensagem. Pode repetir em instantes?"
+                )
+            except Exception as notify_exc:
+                log_event("webhook_error_notification_failed", error_type=type(notify_exc).__name__)
+        raise HTTPException(status_code=500, detail="processing_error") from exc

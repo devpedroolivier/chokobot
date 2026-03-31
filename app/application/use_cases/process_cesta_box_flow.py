@@ -162,33 +162,66 @@ async def salvar_pedido_cesta(
             "pagamento": dados.get("pagamento", {}),
         }
 
-        encomenda_id = order_gateway.create_order(
-            phone=telefone,
-            dados=pedido_final,
-            nome_cliente=nome_cliente,
-            cliente_id=cliente_id,
+        delivery_payload = (
+            {
+                "tipo": "cesta_box",
+                "endereco": dados.get("endereco"),
+                "data_agendada": dados.get("data_entrega"),
+                "status": "agendada",
+            }
+            if dados.get("modo_recebimento") == "entrega"
+            else None
         )
+        process_payload = {
+            "process_type": "cesta_box_order",
+            "stage": "pedido_confirmado",
+            "status": "converted",
+            "source": "cesta_box",
+            "draft_payload": _build_cesta_process_payload(dados),
+        }
 
-        if dados.get("modo_recebimento") == "entrega":
-            delivery_gateway.create_delivery(
-                encomenda_id=encomenda_id,
-                tipo="cesta_box",
-                endereco=dados.get("endereco"),
-                data_agendada=dados.get("data_entrega"),
-                status="agendada",
+        if hasattr(order_gateway, "create_order_bundle"):
+            encomenda_id = order_gateway.create_order_bundle(
+                phone=telefone,
+                dados=pedido_final,
+                nome_cliente=nome_cliente,
+                cliente_id=cliente_id,
+                delivery_data=delivery_payload,
+                process_data=process_payload,
+            )
+        else:
+            encomenda_id = order_gateway.create_order(
+                phone=telefone,
+                dados=pedido_final,
+                nome_cliente=nome_cliente,
+                cliente_id=cliente_id,
+            )
+
+        if encomenda_id <= 0:
+            await responder_usuario_fn(
+                telefone,
+                "⚠️ Nao consegui confirmar o pedido agora. Pode tentar novamente em instantes?",
+            )
+            return
+
+        if not hasattr(order_gateway, "create_order_bundle"):
+            if delivery_payload:
+                delivery_gateway.create_delivery(
+                    encomenda_id=encomenda_id,
+                    **delivery_payload,
+                )
+            _sync_cesta_process(
+                process_repository,
+                phone=telefone,
+                customer_id=cliente_id,
+                stage="pedido_confirmado",
+                dados=dados,
+                status="converted",
+                order_id=encomenda_id,
             )
 
         total = dados.get("cesta_preco", 0.0) + dados.get("taxa_entrega", 0.0)
         log_event("cesta_box_order_saved", telefone=telefone, encomenda_id=encomenda_id)
-        _sync_cesta_process(
-            process_repository,
-            phone=telefone,
-            customer_id=cliente_id,
-            stage="pedido_confirmado",
-            dados=dados,
-            status="converted",
-            order_id=encomenda_id,
-        )
         await responder_usuario_fn(
             telefone,
             f"✅ *Pedido confirmado com sucesso!* ✅\n"

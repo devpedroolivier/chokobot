@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 
 from app.ai.agents import AGENTS_MAP, TriageAgent
 from app.ai.policies import (
+    build_cafeteria_combo_truth_retry_instruction as _build_cafeteria_combo_truth_retry_instruction,
     build_discount_guard_retry_instruction as _build_discount_guard_retry_instruction,
     build_cafeteria_total_guard_retry_instruction as _build_cafeteria_total_guard_retry_instruction,
     build_truffle_availability_retry_instruction as _build_truffle_availability_retry_instruction,
@@ -42,6 +43,7 @@ from app.ai.policies import (
     requests_human_handoff as _requests_human_handoff,
     is_generic_greeting as _is_generic_greeting,
     requests_opt_out as _requests_opt_out,
+    response_conflicts_with_cafeteria_combo_truth as _response_conflicts_with_cafeteria_combo_truth,
     response_conflicts_with_cafeteria_total_claim as _response_conflicts_with_cafeteria_total_claim,
     response_conflicts_with_discount_offer as _response_conflicts_with_discount_offer,
     response_conflicts_with_truffle_availability_denial as _response_conflicts_with_truffle_availability_denial,
@@ -69,7 +71,7 @@ from app.ai.tools import (
 )
 from app.ai.order_support import DEFAULT_ORDER_SUPPORT, OrderSupportService
 from app.observability import increment_counter, log_event, normalize_reason_label, observe_duration, should_track_phone
-from app.services.estados import ai_sessions
+from app.services.estados import ai_sessions, set_phone_opted_out
 from app.services.commercial_rules import DELIVERY_CUTOFF_LABEL, DELIVERY_FEE_CAFETERIA_LABEL, DELIVERY_FEE_STANDARD_LABEL
 from app.settings import get_settings
 
@@ -681,6 +683,17 @@ def _latest_draft_tool_result(session: dict) -> str | None:
             return content
     return None
 
+
+def _latest_tool_name(session: dict) -> str | None:
+    for message in reversed(session.get("messages", [])):
+        role = message.get("role")
+        if role == "tool":
+            return str(message.get("name") or "").strip() or None
+        if role in {"assistant", "user"}:
+            break
+    return None
+
+
 # Mapeamento de funções reais para as definições de Tools da OpenAI
 def get_openai_tools(agent, runtime: AIRuntime | None = None):
     runtime = runtime or get_default_ai_runtime()
@@ -823,6 +836,7 @@ async def process_message_with_ai(
         session.pop("service_date_context", None)
         session.pop("conversation_correction_context", None)
         session.pop("greeting_sent", None)
+        set_phone_opted_out(telefone, True)
         save_session(telefone, session)
         _maybe_increment_counter(telefone, "ai_opt_out_requests_total", agent=previous_agent)
         _maybe_log_event(
@@ -1022,6 +1036,7 @@ async def process_message_with_ai(
     iteration_count = 0
     time_conflict_retry_used = False
     cafeteria_specificity_retry_used = False
+    cafeteria_combo_truth_retry_used = False
     cafeteria_total_guard_retry_used = False
     discount_guard_retry_used = False
     truffle_availability_retry_used = False
@@ -1110,6 +1125,31 @@ async def process_message_with_ai(
             _maybe_log_event(
                 telefone,
                 "ai_cafeteria_specificity_retry",
+                agent=session["current_agent"],
+                phone_hash=telefone[-4:] if telefone else "anon",
+            )
+            continue
+
+        if (
+            not msg.tool_calls
+            and not cafeteria_combo_truth_retry_used
+            and _latest_tool_name(session) not in {"lookup_catalog_items", "get_menu", "create_cafeteria_order"}
+            and _response_conflicts_with_cafeteria_combo_truth(
+                msg.content,
+                user_text=text,
+                current_agent=current_agent_name,
+            )
+        ):
+            cafeteria_combo_truth_retry_used = True
+            transient_system_note = _build_cafeteria_combo_truth_retry_instruction(text)
+            _maybe_increment_counter(
+                telefone,
+                "ai_cafeteria_combo_truth_retries_total",
+                agent=session["current_agent"],
+            )
+            _maybe_log_event(
+                telefone,
+                "ai_cafeteria_combo_truth_retry",
                 agent=session["current_agent"],
                 phone_hash=telefone[-4:] if telefone else "anon",
             )

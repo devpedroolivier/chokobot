@@ -45,6 +45,18 @@ class SQLiteCustomerProcessRepository(CustomerProcessRepository):
         conn = get_connection()
         try:
             cursor = conn.cursor()
+            resolved_customer_id = customer_id
+            if resolved_customer_id is not None:
+                cursor.execute("SELECT 1 FROM clientes WHERE id = ?", (resolved_customer_id,))
+                if cursor.fetchone() is None:
+                    resolved_customer_id = None
+
+            resolved_order_id = order_id
+            if resolved_order_id is not None:
+                cursor.execute("SELECT 1 FROM encomendas WHERE id = ?", (resolved_order_id,))
+                if cursor.fetchone() is None:
+                    resolved_order_id = None
+
             payload_json = json.dumps(draft_payload or {}, ensure_ascii=False, sort_keys=True)
             cursor.execute(
                 """
@@ -70,13 +82,13 @@ class SQLiteCustomerProcessRepository(CustomerProcessRepository):
                 """,
                 (
                     phone,
-                    customer_id,
+                    resolved_customer_id,
                     process_type,
                     stage,
                     status,
                     source,
                     payload_json,
-                    order_id,
+                    resolved_order_id,
                 ),
             )
             conn.commit()

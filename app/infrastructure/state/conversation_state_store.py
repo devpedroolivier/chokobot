@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections.abc import MutableMapping, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -256,12 +256,48 @@ class ConversationStateStore:
         self.conversation_threads = StateMap("conversation_thread", backend)
         self.processed_messages = StateMap("processed_message", backend)
         self.recent_messages = StateMap("recent_message", backend)
+        self.phone_opt_out = StateMap("phone_opt_out", backend)
 
     def is_bot_ativo(self) -> bool:
         return self.backend.get_flag("bot_ativo", True)
 
     def set_bot_ativo(self, value: bool) -> None:
         self.backend.set_flag("bot_ativo", value)
+
+    def is_phone_opted_out(self, phone: str | None) -> bool:
+        normalized = str(phone or "").strip()
+        if not normalized:
+            return False
+        return self.phone_opt_out.get(normalized) is not None
+
+    def set_phone_opted_out(self, phone: str | None, value: bool) -> None:
+        normalized = str(phone or "").strip()
+        if not normalized:
+            return
+        if value:
+            self.phone_opt_out[normalized] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            self._trim_namespace(self.phone_opt_out, limit=10000, sort_key="updated_at")
+            return
+        self.phone_opt_out.pop(normalized, None)
+
+    def get_phone_opted_out_updated_at(self, phone: str | None) -> datetime | None:
+        normalized = str(phone or "").strip()
+        if not normalized:
+            return None
+        payload = self.phone_opt_out.get(normalized)
+        if payload is None:
+            return None
+        raw_value = str(payload.get("updated_at") or "").strip()
+        if not raw_value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw_value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            # Legacy values were persisted as UTC-naive timestamps.
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
 
     def has_processed_message(self, message_id: str) -> bool:
         if not message_id:
@@ -372,7 +408,13 @@ class ConversationStateStore:
         self._trim_namespace(self.conversation_threads, limit=5000, sort_key="updated_at")
 
     def clear_runtime_state(self) -> None:
-        for state_map in (self.ai_sessions, self.conversation_threads, self.processed_messages, self.recent_messages):
+        for state_map in (
+            self.ai_sessions,
+            self.conversation_threads,
+            self.processed_messages,
+            self.recent_messages,
+            self.phone_opt_out,
+        ):
             state_map.clear()
 
     @staticmethod

@@ -28,13 +28,15 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", SWEET_ORDER_PROMPT)
 
     def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
-        self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", TRIAGE_PROMPT)
-        self.assertIn("domingo de Pascoa (05/04/2026)", TRIAGE_PROMPT)
+        self.assertIn("domingo", TRIAGE_PROMPT.lower())
+        self.assertIn("Excecao operacional cadastrada", TRIAGE_PROMPT)
+        self.assertIn("das 8h as 12h", TRIAGE_PROMPT)
         self.assertIn("GiftOrderAgent", TRIAGE_PROMPT)
         self.assertIn("bolo pronta entrega ou cafeteria", CAFETERIA_PROMPT)
         self.assertIn("OVO DE PÁSCOA PRONTA ENTREGA", CAFETERIA_PROMPT)
-        self.assertIn("Nao fazemos pedidos, retiradas ou encomendas para domingo.", CAFETERIA_PROMPT)
-        self.assertIn("domingo de Pascoa (05/04/2026)", CAFETERIA_PROMPT)
+        self.assertIn("domingo", CAFETERIA_PROMPT.lower())
+        self.assertIn("Excecao operacional cadastrada", CAFETERIA_PROMPT)
+        self.assertIn("das 8h as 12h", CAFETERIA_PROMPT)
 
     def test_prompts_differentiate_menu_from_specific_options(self):
         self.assertIn("DIFERENCIE INTENÇÃO", KNOWLEDGE_PROMPT)
@@ -89,9 +91,8 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("use `create_cafeteria_order`", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE DATA DA CONVERSA", CAFETERIA_PROMPT)
         self.assertIn("MEMORIA DE CORRECOES DA CONVERSA", CAFETERIA_PROMPT)
-        self.assertIn("Choko Combo (Combo do Dia)", CAFETERIA_PROMPT)
-        self.assertIn("R$23,99", CAFETERIA_PROMPT)
-        self.assertIn("Suco natural ou Refri 220ml", CAFETERIA_PROMPT)
+        self.assertIn('"Quero combo de croissant" ou "choko combo"', CAFETERIA_PROMPT)
+        self.assertIn("consulte `lookup_catalog_items`", CAFETERIA_PROMPT)
 
     def test_sprint4_prompt_rules_cover_product_first_routing_upsell_and_structured_confirmation(self):
         self.assertIn('NUNCA comece com a pergunta binaria "pronta entrega ou encomenda?"', TRIAGE_PROMPT)
