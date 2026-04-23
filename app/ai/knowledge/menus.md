@@ -174,6 +174,15 @@
   - B7 (ate 80 pessoas): R$380
 - **Adicionais:** Morango, Ameixa, Nozes, Cereja, Abacaxi
 
+### Regra de tamanho por numero de pessoas (obrigatoria)
+- **Ate 8 pessoas:** P4 (mesversario), Linha Simples ou B3.
+- **9 a 20 pessoas:** P6 (mesversario/gourmet redondo), Gourmet Ingles (~10) ou B3/B4.
+- **21 a 30 pessoas:** priorize B4 (retangular).
+- **Mais de 30 pessoas:** priorize RETANGULARES — B6 (ate 50p) ou B7 (ate 80p).
+- **Acima de 80 pessoas:** combinar dois B7 ou escalar para humano.
+- **Limite rigido dos redondos:** bolos redondos **P4 e P6 sao limitados a ate 20 pessoas**. Nunca ofereca P4/P6 para mais de 20 pessoas.
+- Antes de sugerir tamanho, a IA deve conhecer a **ocasiao** (aniversario, casamento, cha de bebe, cha revelacao, mesversario, corporativo) e o **numero de pessoas**.
+
 ### 2. Linha Gourmet
 #### Ingles (serve cerca de 10 pessoas)
 - Belga: R$130

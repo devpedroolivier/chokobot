@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminSession, getBackendAuthorizationHeader } from "@/lib/admin-session";
 
-const ALLOWED_STATUSES = new Set(["pendente", "em_preparo", "agendada", "retirada", "entregue"]);
-
 function resolveBackendBaseUrl(): string | null {
   return process.env.PANEL_BACKEND_URL || process.env.NEXT_PUBLIC_PANEL_BACKEND_URL || null;
 }
@@ -14,34 +12,24 @@ export async function POST(
 ) {
   const session = await getAdminSession();
   if (!session) {
-    return NextResponse.json(
-      { status: "error", detail: "admin_session_required" },
-      { status: 401 },
-    );
+    return NextResponse.json({ status: "error", detail: "admin_session_required" }, { status: 401 });
   }
 
   const { id } = await context.params;
   const baseUrl = resolveBackendBaseUrl();
   const authHeader = await getBackendAuthorizationHeader();
-
   if (!baseUrl || !authHeader) {
-    return NextResponse.json(
-      { status: "error", detail: "frontend_proxy_not_configured" },
-      { status: 503 },
-    );
+    return NextResponse.json({ status: "error", detail: "frontend_proxy_not_configured" }, { status: 503 });
   }
 
   const body = await request.json().catch(() => ({}));
   const status = String(body.status || "").trim();
-  if (!ALLOWED_STATUSES.has(status)) {
-    return NextResponse.json(
-      { status: "error", detail: "invalid_status" },
-      { status: 400 },
-    );
+  if (!status) {
+    return NextResponse.json({ status: "error", detail: "status_required" }, { status: 400 });
   }
 
-  const formBody = new URLSearchParams({ status });
-  const response = await fetch(`${baseUrl}/painel/encomendas/${id}/status`, {
+  const form = new URLSearchParams({ status }).toString();
+  const response = await fetch(`${baseUrl}/painel/encomendas/${encodeURIComponent(id)}/status`, {
     method: "POST",
     headers: {
       Authorization: authHeader,
@@ -50,9 +38,9 @@ export async function POST(
         ? { "X-Request-ID": request.headers.get("x-request-id") as string }
         : {}),
     },
-    body: formBody.toString(),
+    body: form,
   });
 
-  const payload = await response.json().catch(() => ({ status: "error", detail: "invalid_backend_response" }));
+  const payload = await response.json().catch(() => ({ ok: false }));
   return NextResponse.json(payload, { status: response.status });
 }

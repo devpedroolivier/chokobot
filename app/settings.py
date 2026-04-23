@@ -84,6 +84,7 @@ class AppSettings:
     panel_auth_password: str
     admin_frontend_url: str
     ai_save_learning_enabled: bool
+    bot_auto_replies_enabled: bool
     http_timeout_connect: int
     http_timeout_read: int
     http_max_retries: int
@@ -93,6 +94,14 @@ class AppSettings:
     knowledge_failure_alert_threshold: int
     knowledge_failure_alert_window_minutes: int
     knowledge_failure_alert_webhook: str
+    ai_auto_schedule_enabled: bool
+    ai_auto_off_weekday: int
+    ai_auto_off_hour: int
+    ai_auto_off_minute: int
+    ai_auto_on_weekday: int
+    ai_auto_on_hour: int
+    ai_auto_on_minute: int
+    panel_attendants: tuple[str, ...]
 
     @property
     def zapi_endpoint_text(self) -> str:
@@ -158,6 +167,7 @@ def get_settings() -> AppSettings:
         panel_auth_password=_env_str("PANEL_AUTH_PASSWORD"),
         admin_frontend_url=_env_str("ADMIN_FRONTEND_URL"),
         ai_save_learning_enabled=_env_bool("AI_SAVE_LEARNING_ENABLED", False),
+        bot_auto_replies_enabled=_env_bool("BOT_AUTO_REPLIES_ENABLED", True),
         http_timeout_connect=max(1, _env_int("HTTP_TIMEOUT_CONNECT", 5)),
         http_timeout_read=max(1, _env_int("HTTP_TIMEOUT_READ", 20)),
         http_max_retries=max(1, _env_int("HTTP_MAX_RETRIES", 3)),
@@ -167,4 +177,12 @@ def get_settings() -> AppSettings:
         knowledge_failure_alert_threshold=max(1, _env_int("KNOWLEDGE_FAILURE_ALERT_THRESHOLD", 5)),
         knowledge_failure_alert_window_minutes=max(1, _env_int("KNOWLEDGE_FAILURE_ALERT_WINDOW_MINUTES", 60)),
         knowledge_failure_alert_webhook=_env_str("KNOWLEDGE_FAILURE_ALERT_WEBHOOK"),
+        ai_auto_schedule_enabled=_env_bool("AI_AUTO_SCHEDULE_ENABLED", True),
+        ai_auto_off_weekday=max(0, min(6, _env_int("AI_AUTO_OFF_WEEKDAY", 4))),
+        ai_auto_off_hour=max(0, min(23, _env_int("AI_AUTO_OFF_HOUR", 19))),
+        ai_auto_off_minute=max(0, min(59, _env_int("AI_AUTO_OFF_MINUTE", 0))),
+        ai_auto_on_weekday=max(0, min(6, _env_int("AI_AUTO_ON_WEEKDAY", 0))),
+        ai_auto_on_hour=max(0, min(23, _env_int("AI_AUTO_ON_HOUR", 6))),
+        ai_auto_on_minute=max(0, min(59, _env_int("AI_AUTO_ON_MINUTE", 0))),
+        panel_attendants=_env_csv("PANEL_ATTENDANTS") or ("Lu",),
     )

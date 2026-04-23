@@ -65,5 +65,6 @@ export function useLivePanelSnapshot(initialSnapshot: PanelSnapshot, initialWarn
     snapshot,
     warning,
     isRefreshing,
+    refreshSnapshot,
   };
 }

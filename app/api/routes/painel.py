@@ -21,6 +21,7 @@ from app.application.use_cases.panel_dashboard import (
     build_process_cards as _build_process_cards_impl,
     build_process_sections as _build_process_sections_impl,
     build_sync_overview as _build_sync_overview_impl,
+    build_today_summary,
     build_whatsapp_cards as _build_whatsapp_cards_impl,
     normalize_status as _normalize_status_impl,
     parse_order_date as _parse_order_date_impl,
@@ -33,6 +34,8 @@ from app.infrastructure.web.templates import templates
 from app.infrastructure.web.admin_frontend import resolve_admin_frontend_url
 from app.security import require_panel_auth
 from app.services.estados import append_conversation_message, estados_atendimento
+from app.services.store_schedule import build_store_pulse
+from app.settings import get_settings
 from app.utils.mensagens import responder_usuario_com_contexto
 
 router = APIRouter(dependencies=[Depends(require_panel_auth)])
@@ -123,6 +126,8 @@ def build_panel_snapshot_payload(
     process_sections: list[dict],
     whatsapp_cards: list[dict],
     sync_overview: dict,
+    store_pulse: dict | None = None,
+    today_summary: dict | None = None,
 ) -> dict:
     return _sanitize_snapshot_payload(
         {
@@ -130,6 +135,9 @@ def build_panel_snapshot_payload(
             "process_sections": process_sections,
             "whatsapp_cards": whatsapp_cards,
             "sync_overview": sync_overview,
+            "store_pulse": store_pulse if store_pulse is not None else build_store_pulse(),
+            "today_summary": today_summary if today_summary is not None else build_today_summary(dashboard),
+            "attendants": list(get_settings().panel_attendants),
         }
     )
 
@@ -289,6 +297,16 @@ async def atualizar_automacao_conversa(
             "auto_resume_hint": "A IA volta automaticamente apos inatividade ou quando o cliente pedir retorno ao bot.",
         }
     )
+
+
+@router.get("/painel/api/clientes/{phone}/encomendas")
+def listar_encomendas_cliente(
+    phone: str,
+    repository: OrderRepository = Depends(get_order_repository),
+    limit: int = 10,
+):
+    orders = repository.list_by_phone(phone, limit=limit)
+    return JSONResponse({"items": orders, "total": len(orders)})
 
 
 @router.post("/painel/encomendas/{id}/status")

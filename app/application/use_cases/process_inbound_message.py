@@ -24,6 +24,7 @@ from app.services.estados import (
     set_bot_ativo,
     set_recent_message,
 )
+from app.services.store_schedule import ai_auto_schedule_state
 from app.utils.mensagens import responder_usuario, responder_usuario_com_contexto
 from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 from app.utils.payload import normalize_incoming
@@ -108,8 +109,58 @@ async def process_inbound_message(
             log_event("admin_bot_enabled", phone_hash=hash_phone(telefone))
             return
 
+    if not get_settings().bot_auto_replies_enabled:
+        if not telefone or not texto:
+            return
+        if not should_track_phone(telefone):
+            log_event("handler_test_phone_ignored", phone_hash=hash_phone(telefone))
+            return
+        agora = now_in_bot_timezone()
+        if msg_id and not mark_processed_message_if_new(
+            msg_id, agora, ttl_seconds=MESSAGE_IDEMPOTENCY_TTL_SECONDS
+        ):
+            return
+        append_conversation_message(
+            telefone,
+            role="cliente",
+            actor_label=nome_cliente or "Cliente",
+            content=texto,
+            seen_at=agora,
+        )
+        save_customer_fn(telefone, nome_cliente)
+        log_event(
+            "handler_auto_replies_disabled",
+            phone_hash=hash_phone(telefone),
+            text=preview_text(texto),
+        )
+        return
+
     if not is_bot_ativo():
         log_event("handler_bot_disabled", phone_hash=hash_phone(telefone), text=preview_text(texto))
+        return
+
+    ai_window = ai_auto_schedule_state()
+    if not ai_window["active"]:
+        if telefone and texto:
+            agora_window = now_in_bot_timezone()
+            if msg_id and not mark_processed_message_if_new(
+                msg_id, agora_window, ttl_seconds=MESSAGE_IDEMPOTENCY_TTL_SECONDS
+            ):
+                return
+            append_conversation_message(
+                telefone,
+                role="cliente",
+                actor_label=nome_cliente or "Cliente",
+                content=texto,
+                seen_at=agora_window,
+            )
+            save_customer_fn(telefone, nome_cliente)
+        log_event(
+            "handler_ai_schedule_off",
+            phone_hash=hash_phone(telefone),
+            off_label=ai_window.get("off_label"),
+            on_label=ai_window.get("on_label"),
+        )
         return
 
     if not telefone or not texto:

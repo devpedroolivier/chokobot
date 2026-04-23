@@ -197,6 +197,42 @@ class PanelWhatsAppCardsTests(unittest.TestCase):
         self.assertEqual(cards[0]["messages"][0]["content"], "Mensagem 0")
         self.assertEqual(cards[0]["messages"][-1]["content"], "Mensagem 7")
 
+    def test_conversation_only_card_appears_for_fresh_phone(self):
+        """Phone sem process/estados mas com mensagem no thread deve aparecer."""
+        telefone = "5511444444444"
+        append_conversation_message(
+            telefone,
+            role="cliente",
+            actor_label="Desconhecido",
+            content="Oi, vi o perfil",
+            seen_at=datetime(2026, 3, 24, 16, 45, 0),
+        )
+
+        class _ProcessRepository:
+            def list_active_processes(self):
+                return []
+
+        class _CustomerRepository:
+            def get_customers_by_phones(self, phones):
+                return {}
+
+            def get_customer_by_phone(self, phone: str):
+                return None
+
+        cards = build_whatsapp_cards(
+            _ProcessRepository(),
+            _CustomerRepository(),
+            now=datetime(2026, 3, 24, 17, 0, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card["phone"], telefone)
+        self.assertEqual(card["stage_label"], "Conversa aberta")
+        self.assertEqual(card["cliente_nome"], telefone)
+        self.assertIn("Oi, vi o perfil", card["last_message"])
+        self.assertFalse(card["is_human_handoff"])
+
 
 if __name__ == "__main__":
     unittest.main()

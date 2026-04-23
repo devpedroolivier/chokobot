@@ -655,16 +655,138 @@ def validate_service_schedule(value: str | None, horario: str | None) -> str | N
     )
 
 
+def _minute_of_week(weekday: int, hour: int, minute: int) -> int:
+    return (weekday % 7) * 24 * 60 + (hour % 24) * 60 + (minute % 60)
+
+
+def ai_auto_schedule_state(now: datetime | None = None) -> dict:
+    """Estado da janela automática da Trufinha.
+
+    A IA fica inativa entre (off_weekday, off_hour:off_minute) e
+    (on_weekday, on_hour:on_minute). Com os defaults (sex 19h → seg 06h)
+    a janela de inatividade cobre sexta à noite, sábado, domingo e a
+    madrugada de segunda.
+    """
+    settings = get_settings()
+    reference = now if isinstance(now, datetime) else now_in_bot_timezone()
+
+    off_m = _minute_of_week(
+        settings.ai_auto_off_weekday,
+        settings.ai_auto_off_hour,
+        settings.ai_auto_off_minute,
+    )
+    on_m = _minute_of_week(
+        settings.ai_auto_on_weekday,
+        settings.ai_auto_on_hour,
+        settings.ai_auto_on_minute,
+    )
+    now_m = _minute_of_week(reference.weekday(), reference.hour, reference.minute)
+
+    if off_m == on_m:
+        inactive = False
+    elif off_m < on_m:
+        inactive = off_m <= now_m < on_m
+    else:
+        inactive = now_m >= off_m or now_m < on_m
+
+    if not settings.ai_auto_schedule_enabled:
+        active = True
+        inactive = False
+    else:
+        active = not inactive
+
+    off_label = (
+        f"{_DAY_TITLE_LABELS[settings.ai_auto_off_weekday]} "
+        f"{settings.ai_auto_off_hour:02d}:{settings.ai_auto_off_minute:02d}"
+    )
+    on_label = (
+        f"{_DAY_TITLE_LABELS[settings.ai_auto_on_weekday]} "
+        f"{settings.ai_auto_on_hour:02d}:{settings.ai_auto_on_minute:02d}"
+    )
+
+    return {
+        "enabled": settings.ai_auto_schedule_enabled,
+        "active": active,
+        "inactive_window": not active if settings.ai_auto_schedule_enabled else False,
+        "off_label": off_label,
+        "on_label": on_label,
+        "reason": "ai_schedule_off" if settings.ai_auto_schedule_enabled and inactive else None,
+    }
+
+
+def is_ai_within_schedule(now: datetime | None = None) -> bool:
+    return ai_auto_schedule_state(now).get("active", True)
+
+
+def build_store_pulse(now: datetime | None = None) -> dict:
+    """Estado operacional agregado para o painel: aberto, horário, cutoffs."""
+    from app.config import is_store_closed
+    from app.services.commercial_rules import DELIVERY_CUTOFF, SAME_DAY_CAKE_ORDER_CUTOFF
+
+    current = now if isinstance(now, datetime) else now_in_bot_timezone()
+    today = current.date()
+    window = store_window_for_date(today)
+    manual_closed = is_store_closed()
+
+    is_open = False
+    hours_label: str | None = None
+    closed_reason: str | None = None
+
+    if manual_closed:
+        closed_reason = "manual"
+    elif window is None:
+        closed_reason = "day_off"
+    else:
+        opening, closing = window
+        hours_label = f"{opening}–{closing}"
+        current_hhmm = current.strftime("%H:%M")
+        if opening <= current_hhmm <= closing:
+            is_open = True
+        else:
+            closed_reason = "outside_hours"
+
+    def _cutoff(label: str, hour: int, minute: int) -> dict:
+        cutoff_dt = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        diff_minutes = int((cutoff_dt - current).total_seconds() // 60)
+        return {
+            "label": label,
+            "time_label": f"{hour:02d}:{minute:02d}",
+            "remaining_minutes": diff_minutes,
+            "passed": diff_minutes < 0,
+        }
+
+    cutoffs = [
+        _cutoff("Bolo do dia", *SAME_DAY_CAKE_ORDER_CUTOFF),
+        _cutoff("Entregas", *DELIVERY_CUTOFF),
+    ]
+    ai_window = ai_auto_schedule_state(current)
+    return {
+        "is_open": is_open,
+        "closed_reason": closed_reason,
+        "hours_label": hours_label,
+        "cutoffs": cutoffs,
+        "ai_schedule": {
+            "enabled": ai_window["enabled"],
+            "active": ai_window["active"],
+            "off_label": ai_window["off_label"],
+            "on_label": ai_window["on_label"],
+        },
+    }
+
+
 __all__ = [
     "GIFT_CATALOG_SUMMARY",
     "READY_DELIVERY_SUMMARY",
     "STORE_HOURS_SUMMARY",
     "SUNDAY_UNAVAILABLE_MESSAGE",
+    "ai_auto_schedule_state",
     "build_calendar_reference_context",
     "build_operational_calendar_context",
+    "build_store_pulse",
     "easter_date_message",
     "format_service_date",
     "format_service_date_with_weekday",
+    "is_ai_within_schedule",
     "is_sunday_service_date",
     "load_operational_calendar",
     "operational_day_override",

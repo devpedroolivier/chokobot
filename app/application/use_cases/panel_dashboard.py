@@ -14,6 +14,7 @@ from app.domain.repositories.order_repository import OrderPanelItem
 from app.observability import should_track_phone, snapshot_metrics
 from app.services.estados import (
     ai_sessions,
+    conversation_threads,
     estados_atendimento,
     estados_cafeteria,
     estados_cestas_box,
@@ -63,6 +64,7 @@ _WHATSAPP_STAGE_META = {
     "estados_cestas_box": ("Cesta box", "stage-gift"),
     "estados_entrega": ("Entrega / endereço", "stage-delivery"),
     "estados_atendimento": ("Aguardando humano", "stage-human"),
+    "conversation_only": ("Conversa aberta", "stage-cafe"),
 }
 _PROCESS_STAGE_META = {
     "handoff_humano": {
@@ -704,6 +706,7 @@ def build_whatsapp_cards(
         | set(estados_cestas_box)
         | set(estados_entrega)
         | set(estados_atendimento)
+        | set(conversation_threads)
     )
     loaded_customers = _preload_customers_by_phone(
         customer_repository,
@@ -718,9 +721,13 @@ def build_whatsapp_cards(
         process = active_processes.get(phone)
         session = ai_sessions.get(phone)
         recent = recent_messages.get(phone) if phone in recent_messages else None
+        thread_entries = get_conversation_messages(phone)
+        last_thread_entry = thread_entries[-1] if thread_entries else None
         last_seen = _parse_runtime_timestamp((recent or {}).get("hora"))
         if last_seen is None and process is not None:
             last_seen = _parse_process_timestamp(process.updated_at)
+        if last_seen is None and last_thread_entry is not None:
+            last_seen = _parse_runtime_timestamp(str(last_thread_entry.get("timestamp") or ""))
         if last_seen is not None and last_seen.tzinfo is None:
             last_seen = last_seen.replace(tzinfo=reference.tzinfo)
         if process is None and last_seen and (reference - last_seen) > timedelta(hours=24):
@@ -741,6 +748,8 @@ def build_whatsapp_cards(
             source_key = "estados_cafeteria"
         elif session and session.get("current_agent") in {"CakeOrderAgent", "SweetOrderAgent", "CafeteriaAgent"}:
             source_key = str(session.get("current_agent"))
+        elif phone in conversation_threads:
+            source_key = "conversation_only"
 
         if source_key is None:
             continue
@@ -769,7 +778,9 @@ def build_whatsapp_cards(
                 or process_message
                 or "Sem mensagem recente"
             )
-            is_human_handoff = process.process_type == "human_handoff" or process.stage == "handoff_humano"
+            is_human_handoff = (
+                process.process_type == "human_handoff" or process.stage == "handoff_humano"
+            ) and process.status != "resolved"
         else:
             owner_label = (
                 _PROCESS_OWNER_META["humano"]["label"]
@@ -781,7 +792,13 @@ def build_whatsapp_cards(
                 if source_key == "estados_atendimento"
                 else _PROCESS_OWNER_META["bot"]["class"]
             )
-            last_message = (recent or {}).get("texto") or _latest_user_message(session) or "Sem mensagem recente"
+            thread_last_content = str((last_thread_entry or {}).get("content") or "").strip()
+            last_message = (
+                (recent or {}).get("texto")
+                or _latest_user_message(session)
+                or thread_last_content
+                or "Sem mensagem recente"
+            )
             is_human_handoff = source_key == "estados_atendimento"
             business_state_slug = "handoff" if is_human_handoff else "runtime_only"
             business_state_label = "Handoff humano" if is_human_handoff else "Fluxo em andamento"
@@ -1128,6 +1145,32 @@ def build_dashboard_context(items: list[OrderPanelItem], *, today: date | None =
         "historical_open_orders": historical_open_orders,
         "kanban_columns": kanban_columns,
         "filters": filters,
+    }
+
+
+def build_today_summary(dashboard: dict) -> dict:
+    """Sumário enxuto de hoje para o header do painel."""
+    today_orders = [
+        order for order in dashboard.get("orders", [])
+        if order.get("schedule_bucket") == "today" and order.get("is_active")
+    ]
+    deliveries = [o for o in today_orders if o.get("tipo_slug") == "entrega"]
+    pickups = [o for o in today_orders if o.get("tipo_slug") == "retirada"]
+    revenue_total = sum(o.get("valor_total", 0) or 0 for o in today_orders)
+
+    upcoming = [o for o in today_orders if o.get("horario") and o.get("horario") != "Sem horário"]
+    upcoming.sort(key=lambda o: o.get("horario_sort", "99:99"))
+    next_order = upcoming[0] if upcoming else None
+
+    return {
+        "orders_count": len(today_orders),
+        "deliveries_count": len(deliveries),
+        "pickups_count": len(pickups),
+        "revenue": revenue_total,
+        "revenue_label": _format_currency(revenue_total),
+        "next_time_label": next_order["horario"] if next_order else None,
+        "next_tipo_label": next_order.get("tipo_label") if next_order else None,
+        "next_cliente_nome": next_order.get("cliente_nome") if next_order else None,
     }
 
 

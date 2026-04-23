@@ -168,9 +168,16 @@ class WhatsAppE2EPanelFlowTests(unittest.IsolatedAsyncioTestCase):
                 )
                 payload_after = json.loads(response_after.body)
 
-                self.assertFalse(
-                    any(card["phone"] == phone for card in payload_after["whatsapp_cards"])
+                # Depois da conversao o processo sai do board, mas a conversa
+                # segue visivel no inbox (origem conversation_only) para que o
+                # painel mantenha historico das mensagens trocadas.
+                whatsapp_cards_after = payload_after["whatsapp_cards"]
+                conversation_card = next(
+                    (card for card in whatsapp_cards_after if card["phone"] == phone),
+                    None,
                 )
+                self.assertIsNotNone(conversation_card)
+                self.assertEqual(conversation_card["stage_label"], "Conversa aberta")
                 self.assertFalse(
                     any(
                         card["phone"] == phone

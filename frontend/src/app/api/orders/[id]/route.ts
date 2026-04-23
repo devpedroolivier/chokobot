@@ -6,7 +6,7 @@ function resolveBackendBaseUrl(): string | null {
   return process.env.PANEL_BACKEND_URL || process.env.NEXT_PUBLIC_PANEL_BACKEND_URL || null;
 }
 
-export async function DELETE(
+export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -22,8 +22,8 @@ export async function DELETE(
     return NextResponse.json({ status: "error", detail: "frontend_proxy_not_configured" }, { status: 503 });
   }
 
-  const response = await fetch(`${baseUrl}/painel/api/encomendas/${id}`, {
-    method: "DELETE",
+  const response = await fetch(`${baseUrl}/painel/api/encomendas/${encodeURIComponent(id)}`, {
+    cache: "no-store",
     headers: {
       Authorization: authHeader,
       ...(request.headers.get("x-request-id")
@@ -32,6 +32,6 @@ export async function DELETE(
     },
   });
 
-  const payload = await response.json().catch(() => ({ status: "error", detail: "invalid_backend_response" }));
+  const payload = await response.json().catch(() => ({ item: null }));
   return NextResponse.json(payload, { status: response.status });
 }

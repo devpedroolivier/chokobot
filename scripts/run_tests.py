@@ -19,6 +19,7 @@ EXCLUDED_TEST_FILES = {
     "test_e2e.py",
 }
 DEFAULT_ENV = {
+    "BOT_AUTO_REPLIES_ENABLED": "1",
     "DB_PATH": str(TMP_DIR / "chokobot.db"),
     "OPENAI_API_KEY": "test-key",
     "OUTBOX_EVENTS_PATH": str(TMP_DIR / "domain_events.jsonl"),

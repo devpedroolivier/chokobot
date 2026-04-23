@@ -205,6 +205,36 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
+    def list_by_phone(self, phone: str, *, limit: int = 10) -> list[dict]:
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    e.id,
+                    e.categoria,
+                    e.produto,
+                    e.tamanho,
+                    e.data_entrega,
+                    e.horario,
+                    e.valor_total,
+                    e.criado_em,
+                    COALESCE(d.status, 'pendente') AS status,
+                    COALESCE(d.tipo, 'entrega') AS tipo
+                FROM encomendas e
+                INNER JOIN clientes c ON c.id = e.cliente_id
+                LEFT JOIN entregas d ON d.encomenda_id = e.id
+                WHERE c.telefone = ?
+                ORDER BY e.id DESC
+                LIMIT ?
+                """,
+                (phone, int(limit)),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
     def upsert_delivery_status(self, order_id: int, status: str) -> None:
         conn = get_connection()
         try:

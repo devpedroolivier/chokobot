@@ -7,6 +7,7 @@ from app.application.use_cases.process_inbound_message import process_inbound_me
 from app.services.estados import (
     clear_runtime_state,
     estados_atendimento,
+    get_conversation_messages,
     is_phone_opted_out,
     set_bot_ativo,
     set_phone_opted_out,
@@ -199,6 +200,40 @@ class ProcessInboundMessageTests(unittest.IsolatedAsyncioTestCase):
         gerar_resposta.assert_awaited_once_with(phone, "quero um bolo", "Cliente", 1)
         self.assertEqual(responder.await_count, 1)
         self.assertEqual(responder.await_args.args[1], "ok")
+
+
+    async def test_auto_replies_kill_switch_records_for_panel_without_replying(self):
+        phone = "5511988887777"
+        responder = AsyncMock(return_value=True)
+        gerar_resposta = AsyncMock(return_value="ia-resposta")
+        save_customer = AsyncMock(return_value=42)
+        save_customer.side_effect = lambda telefone, nome: 42
+
+        with patch.dict(
+            os.environ,
+            {"BOT_AUTO_REPLIES_ENABLED": "0", "STORE_CLOSED": "1"},
+            clear=False,
+        ):
+            await process_inbound_message(
+                {
+                    "phone": phone,
+                    "chatName": "Maria",
+                    "message": "oi, quero um bolo",
+                    "id": "msg-kill-switch",
+                    "type": "text",
+                },
+                responder_usuario_fn=responder,
+                gerar_resposta_ia_fn=gerar_resposta,
+                save_customer_fn=lambda telefone, nome: 42,
+            )
+
+        gerar_resposta.assert_not_awaited()
+        self.assertEqual(responder.await_count, 0)
+        mensagens = get_conversation_messages(phone)
+        self.assertTrue(
+            any(m.get("role") == "cliente" and "oi, quero um bolo" in (m.get("content") or "") for m in mensagens),
+            f"mensagem do cliente não foi gravada no painel: {mensagens}",
+        )
 
 
 if __name__ == "__main__":
