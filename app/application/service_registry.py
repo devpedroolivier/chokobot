@@ -47,6 +47,11 @@ def get_delivery_gateway() -> DeliveryGateway:
 
 @lru_cache
 def get_messaging_gateway() -> MessagingGateway:
+    if get_settings().messaging_provider == "evolution":
+        from app.infrastructure.gateways.evolution_messaging_gateway import EvolutionMessagingGateway
+
+        return EvolutionMessagingGateway()
+
     from app.infrastructure.gateways.zapi_messaging_gateway import ZapiMessagingGateway
 
     return ZapiMessagingGateway()

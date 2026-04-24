@@ -26,6 +26,10 @@ DEFAULT_ENV = {
     "OUTBOX_PATH": str(TMP_DIR / "outbox.jsonl"),
     "ZAPI_BASE": "https://example.test",
     "ZAPI_TOKEN": "test-token",
+    "MESSAGING_PROVIDER": "zapi",
+    "EVOLUTION_SERVER_URL": "http://evolution.test",
+    "EVOLUTION_API_KEY": "test-key",
+    "EVOLUTION_INSTANCE": "test",
 }
 
 

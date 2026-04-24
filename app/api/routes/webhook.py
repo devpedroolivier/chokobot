@@ -18,7 +18,7 @@ from app.security import (
 )
 from app.utils.mensagens import responder_usuario
 from app.utils.datetime_utils import now_in_bot_timezone
-from app.utils.payload import is_automated_order_message, is_group_message, normalize_incoming
+from app.utils.payload import is_automated_order_message, normalize_incoming
 
 router = APIRouter()
 
@@ -107,10 +107,10 @@ async def receber_webhook(request: Request):
         log_event("webhook_test_phone_ignored", phone_hash=hash_phone(phone))
         return {"status": "ignored", "detail": "test_phone"}
 
-    if body.get("fromMe") or body.get("type") == "DeliveryCallback":
+    if norm.get("from_me") or body.get("type") == "DeliveryCallback":
         _track_webhook_event(phone, status="ignored", reason="self_or_callback")
         return {"status": "ignored"}
-    if is_group_message(body):
+    if norm.get("is_group"):
         _track_webhook_event(phone, status="ignored", reason="group_message")
         return {"status": "ignored"}
     if is_automated_order_message(body):

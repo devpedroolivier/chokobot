@@ -51,6 +51,10 @@ DEFAULT_STORE_CLOSED_NOTICE = (
 class AppSettings:
     zapi_token: str
     zapi_base: str
+    messaging_provider: str
+    evolution_server_url: str
+    evolution_api_key: str
+    evolution_instance: str
     openai_api_key: str
     db_path: str
     database_url: str
@@ -115,6 +119,13 @@ class AppSettings:
             return ""
         return f"{self.zapi_base}/send-image"
 
+    @property
+    def evolution_endpoint_text(self) -> str:
+        if not self.evolution_server_url or not self.evolution_instance:
+            return ""
+        base = self.evolution_server_url.rstrip("/")
+        return f"{base}/message/sendText/{self.evolution_instance}"
+
 
 def get_settings() -> AppSettings:
     db_path = _env_str("DB_PATH", "dados/chokobot.db")
@@ -122,9 +133,15 @@ def get_settings() -> AppSettings:
     raw_notice = _env_str("STORE_CLOSED_NOTICE", DEFAULT_STORE_CLOSED_NOTICE) or DEFAULT_STORE_CLOSED_NOTICE
     store_closed_notice = raw_notice.replace("\\r\\n", "\n").replace("\\n", "\n")
 
+    provider = _env_str("MESSAGING_PROVIDER", "zapi").lower() or "zapi"
+
     return AppSettings(
         zapi_token=_env_str("ZAPI_TOKEN"),
         zapi_base=_env_str("ZAPI_BASE"),
+        messaging_provider=provider,
+        evolution_server_url=_env_str("EVOLUTION_SERVER_URL"),
+        evolution_api_key=_env_str("EVOLUTION_API_KEY"),
+        evolution_instance=_env_str("EVOLUTION_INSTANCE"),
         openai_api_key=_env_str("OPENAI_API_KEY"),
         db_path=db_path,
         database_url=database_url,
