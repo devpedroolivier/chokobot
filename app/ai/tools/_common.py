@@ -5,6 +5,7 @@ Funções aqui não devem depender de submódulos específicos de domínio
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from app.infrastructure.gateways.local_catalog_gateway import _normalize_text
@@ -202,9 +203,104 @@ def _today_service_date_str() -> str:
     return format_service_date(now_in_bot_timezone().date()) or ""
 
 
+# ============================================================
+#  Confirmation builders (compartilhados por todas as domains)
+# ============================================================
+
+def _build_service_line(dados: dict) -> str:
+    mode_label = "Retirada" if (dados.get("modo_recebimento") or "").strip().lower() == "retirada" else "Entrega"
+    date_label = _parse_order_date_label(dados.get("data_entrega"))
+    hour_label = _format_compact_hour(dados.get("horario_retirada"))
+    parts = [mode_label]
+    if date_label:
+        parts.append(date_label)
+    if hour_label:
+        parts.append(hour_label)
+    return " ".join(parts)
+
+
+def _build_payment_line(payment: dict | None) -> str:
+    payment_data = payment or {}
+    method = str(payment_data.get("forma") or "").strip() or "A confirmar"
+    installments = payment_data.get("parcelas")
+    change_for = payment_data.get("troco_para")
+
+    details = [method]
+    pix_key = _resolve_pix_key()
+    if method.casefold() == "pix" and pix_key:
+        details.append(f"chave {pix_key}")
+    if method.casefold().startswith("cartao") and installments:
+        details.append(f"{int(installments)}x")
+    if method.casefold() == "dinheiro" and change_for:
+        details.append(f"troco para {_format_currency_brl(float(change_for))}")
+    return "Forma de pagamento: " + " | ".join(details)
+
+
+def _build_draft_confirmation_message(
+    *,
+    title: str,
+    flavor_line: str,
+    service_line: str,
+    total_value: float,
+    payment_line: str,
+    endereco: str | None = None,
+    delivery_fee: float = 0.0,
+    kit_festou: bool = False,
+) -> str:
+    item_summary = title
+    if flavor_line:
+        item_summary = f"{title} | {flavor_line}"
+
+    mode_token = "Retirada"
+    date_line = service_line
+    if service_line and " " in service_line:
+        mode_token, date_line = service_line.split(" ", 1)
+
+    delivery_line = "Retirada na loja" if mode_token.casefold() == "retirada" else "Entrega"
+    if endereco and delivery_line.casefold() == "entrega":
+        delivery_line = f"Entrega: {endereco}"
+
+    date_label = date_line or "A confirmar"
+    hour_label = "A confirmar"
+    if date_line:
+        hour_match = re.search(r"\b(\d{1,2}h(?:\d{2})?|\d{1,2}:\d{2})\b", date_line)
+        if hour_match:
+            hour_label = hour_match.group(1)
+            date_label = date_line.replace(hour_match.group(1), "").strip() or "A confirmar"
+
+    total_label = _format_currency_brl(total_value)
+    if float(delivery_fee or 0) > 0:
+        total_label += f" (+ {_format_currency_brl(float(delivery_fee))} entrega)"
+
+    lines = [
+        "Resumo final do pedido (rascunho)",
+        "",
+        "Confirma seu pedido?",
+        f"📦 {item_summary}",
+        f"📅 Data: {date_label} | Horario: {hour_label}",
+        f"🚗 {delivery_line}",
+        f"💰 Total: {total_label}",
+        "💳 " + payment_line.replace("Forma de pagamento: ", "Pagamento: "),
+        f"🎁 Kit Festou: {'Sim (+R$35,00)' if kit_festou else 'Nao incluso'}",
+    ]
+    if float(delivery_fee or 0) > 0:
+        lines.append(f"Taxa entrega: {_format_currency_brl(float(delivery_fee))}")
+    lines.append(f"Valor: {_format_currency_brl(total_value)}")
+    lines.append("")
+    lines.append("Ainda nao foi salvo como pedido confirmado no sistema.")
+    lines.append(
+        'Se estiver tudo certo, me envie uma confirmacao final explicita para concluir '
+        '(ex.: "sim", "ok", "ta bom", "certo" ou "confirmado").'
+    )
+    return "\n".join(lines)
+
+
 # Re-exports — algumas tools podem precisar do helper bruto
 __all__ = [
     "_apply_card_installment_rule",
+    "_build_draft_confirmation_message",
+    "_build_payment_line",
+    "_build_service_line",
     "_format_compact_hour",
     "_format_currency_brl",
     "_is_missing_field",
