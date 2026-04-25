@@ -101,7 +101,7 @@ class DeliveryAndLineRulesTests(unittest.TestCase):
             pagamento={"forma": "PIX"},
         )
 
-        with patch("app.ai.tools._calcular_preco_pedido", return_value=(0.0, 0)):
+        with patch("app.ai.tools.cake._calcular_preco_pedido", return_value=(0.0, 0)):
             result = create_cake_order("5511999999999", "Cliente Teste", 1, order)
         self.assertIn("Valor total invalido", result)
 
