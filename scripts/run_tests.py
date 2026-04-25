@@ -20,6 +20,7 @@ EXCLUDED_TEST_FILES = {
 }
 DEFAULT_ENV = {
     "BOT_AUTO_REPLIES_ENABLED": "1",
+    "AI_AUTO_SCHEDULE_ENABLED": "0",
     "DB_PATH": str(TMP_DIR / "chokobot.db"),
     "OPENAI_API_KEY": "test-key",
     "OUTBOX_EVENTS_PATH": str(TMP_DIR / "domain_events.jsonl"),
