@@ -36,15 +36,12 @@ class _FakeAsyncClient:
 
 class EvolutionMessagingGatewayTests(unittest.IsolatedAsyncioTestCase):
     async def test_send_text_success_posts_number_and_text_with_apikey(self):
-        gateway = EvolutionMessagingGateway()
         fake_client = _FakeAsyncClient([_FakeResponse(200)])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             outbox_path = os.path.join(tmpdir, "outbox.jsonl")
-            with patch(
-                "app.infrastructure.gateways.evolution_messaging_gateway.OUTBOX_PATH",
-                outbox_path,
-            ):
+            with patch.dict(os.environ, {"OUTBOX_PATH": outbox_path}, clear=False):
+                gateway = EvolutionMessagingGateway()
                 with patch(
                     "app.infrastructure.gateways.evolution_messaging_gateway.httpx.AsyncClient",
                     return_value=fake_client,
@@ -59,16 +56,12 @@ class EvolutionMessagingGatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/message/sendText/test", call["url"])
 
     async def test_send_text_enqueues_on_non_retriable_http_error(self):
-        gateway = EvolutionMessagingGateway()
-
         with tempfile.TemporaryDirectory() as tmpdir:
             outbox_path = os.path.join(tmpdir, "outbox.jsonl")
             fake_client = _FakeAsyncClient([_FakeResponse(400)])
 
-            with patch(
-                "app.infrastructure.gateways.evolution_messaging_gateway.OUTBOX_PATH",
-                outbox_path,
-            ):
+            with patch.dict(os.environ, {"OUTBOX_PATH": outbox_path}, clear=False):
+                gateway = EvolutionMessagingGateway()
                 with patch(
                     "app.infrastructure.gateways.evolution_messaging_gateway.httpx.AsyncClient",
                     return_value=fake_client,

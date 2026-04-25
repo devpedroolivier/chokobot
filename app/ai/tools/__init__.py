@@ -205,31 +205,25 @@ COMBO_RELAMPAGO_OPTION_ALIASES = {
     "coca": "Refri 220ml",
     "coca cola": "Refri 220ml",
 }
-_PIX_KEY = (get_settings().pix_key or "").strip()
-
-
 # ============================================================
-#  Helpers
+#  Helpers genéricos (extraídos para app/ai/tools/_common.py)
 # ============================================================
-
-def _normalizar_data_iso(data_str: str) -> str:
-    """Converte DD/MM/YYYY → YYYY-MM-DD.  Se já estiver em ISO, retorna como está."""
-    try:
-        dt = datetime.strptime(data_str.strip(), "%d/%m/%Y")
-        return dt.strftime("%Y-%m-%d")
-    except ValueError:
-        return data_str
-
-
-def _match_closest(valor: str, validos: set[str]) -> str | None:
-    """Busca case-insensitive em um conjunto de valores válidos."""
-    if not valor:
-        return None
-    v = valor.strip()
-    for valid in validos:
-        if v.lower() == valid.lower():
-            return valid
-    return None
+from app.ai.tools._common import (
+    _apply_card_installment_rule,
+    _format_compact_hour,
+    _format_currency_brl,
+    _is_missing_field,
+    _join_option_values,
+    _match_catalog_value,
+    _match_closest,
+    _normalize_payment_data,
+    _normalizar_data_iso,
+    _parse_order_date_label,
+    _resolve_pix_key,
+    _today_service_date_str,
+    _validate_cash_change_requirement,
+    _validate_required_payment_data,
+)
 
 
 def _normalizar_massa(massa_raw: str | None) -> str | None:
@@ -239,31 +233,11 @@ def _normalizar_massa(massa_raw: str | None) -> str | None:
     return MASSA_SINONIMOS.get(key, massa_raw)
 
 
-def _is_missing_field(value) -> bool:
-    if value is None:
-        return True
-    if isinstance(value, str):
-        return not value.strip()
-    if isinstance(value, dict):
-        return not bool(value)
-    if isinstance(value, list):
-        return not bool(value)
-    return False
-
-
 def _canonical_cafeteria_name(name: str | None) -> str:
     raw = (name or "").strip()
     if raw == "Combo Relampago":
         return CHOCO_COMBO_CANONICAL_NAME
     return raw
-
-
-def _join_option_values(values: tuple[str, ...]) -> str:
-    if not values:
-        return ""
-    if len(values) == 1:
-        return values[0]
-    return ", ".join(values[:-1]) + f" e {values[-1]}"
 
 
 def _normalize_cake_option_category(category: str) -> str:
@@ -294,70 +268,6 @@ def _normalize_cake_option_type(option_type: str) -> str:
         "adicionais": "adicional",
     }
     return aliases.get(normalized, normalized)
-
-
-def _normalize_payment_data(pagamento: dict | None) -> dict:
-    payload = dict(pagamento or {})
-    forma = (payload.get("forma") or "").strip()
-    troco_para = payload.get("troco_para")
-    parcelas = payload.get("parcelas")
-
-    if forma != "Dinheiro":
-        payload["troco_para"] = None
-    elif troco_para in (None, ""):
-        payload["troco_para"] = None
-    else:
-        try:
-            payload["troco_para"] = float(troco_para)
-        except (TypeError, ValueError):
-            payload["troco_para"] = None
-
-    try:
-        parcelas_int = int(parcelas)
-    except (TypeError, ValueError):
-        parcelas_int = None
-
-    payload["parcelas"] = parcelas_int if parcelas_int and parcelas_int > 1 else None
-    return payload
-
-
-def _validate_cash_change_requirement(payment_data: dict | None) -> str | None:
-    payment = dict(payment_data or {})
-    method = str(payment.get("forma") or "").strip()
-    if method != "Dinheiro":
-        return None
-    if payment.get("troco_para") is None:
-        return (
-            "Pagamento em dinheiro: pergunte se o cliente precisa de troco. "
-            "Se nao precisar, envie troco_para=0; se precisar, informe o valor."
-        )
-    return None
-
-
-def _apply_card_installment_rule(pagamento: dict | None, total_value: float) -> dict:
-    payload = dict(pagamento or {})
-    forma = (payload.get("forma") or "").strip()
-    parcelas = payload.get("parcelas")
-
-    if forma != "Cartão (débito/crédito)":
-        payload["parcelas"] = None
-        return payload
-
-    if float(total_value or 0) <= CARD_INSTALLMENT_MIN_TOTAL:
-        payload["parcelas"] = None
-        return payload
-
-    try:
-        parcelas_int = int(parcelas)
-    except (TypeError, ValueError):
-        parcelas_int = None
-
-    if parcelas_int is None or parcelas_int <= 1:
-        payload["parcelas"] = None
-        return payload
-
-    payload["parcelas"] = min(parcelas_int, CARD_INSTALLMENT_MAX)
-    return payload
 
 
 def _normalize_gift_category(category: str | None) -> str:
@@ -397,45 +307,6 @@ def _canonical_cesta_box(raw_value: str | None) -> tuple[str | None, dict | None
     if not code:
         return None, None
     return code, CESTAS_BOX_CATALOGO.get(code)
-
-
-def _format_currency_brl(value: float | int) -> str:
-    return f"R${float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def _parse_order_date_label(raw_value: str | None) -> str:
-    value = (raw_value or "").strip()
-    if not value:
-        return ""
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
-        try:
-            parsed = datetime.strptime(value, fmt)
-            weekday_labels = {
-                0: "Segunda",
-                1: "Terca",
-                2: "Quarta",
-                3: "Quinta",
-                4: "Sexta",
-                5: "Sabado",
-                6: "Domingo",
-            }
-            return f"{parsed.day}/{parsed.month} {weekday_labels[parsed.weekday()]}"
-        except ValueError:
-            continue
-    return value
-
-
-def _format_compact_hour(raw_value: str | None) -> str:
-    value = (raw_value or "").strip()
-    if not value:
-        return ""
-    try:
-        parsed = datetime.strptime(value, "%H:%M")
-        if parsed.minute == 0:
-            return f"{parsed.hour}h"
-        return value
-    except ValueError:
-        return value
 
 
 @lru_cache(maxsize=1)
@@ -628,10 +499,6 @@ def _build_cafeteria_process_payload(
         "valor_total": valor_total,
         "taxa_entrega": taxa_entrega,
     }
-
-
-def _today_service_date_str() -> str:
-    return format_service_date(now_in_bot_timezone().date()) or ""
 
 
 def _cafeteria_item_merge_key(item: dict) -> tuple[str, str, str]:
@@ -882,34 +749,6 @@ def _prepare_gift_order_data(order_details: "GiftOrderSchema") -> tuple[dict | N
     return dados, None
 
 
-def _match_catalog_value(
-    raw_value: str | None,
-    valid_values: tuple[str, ...] | list[str],
-    *,
-    aliases: dict[str, str] | None = None,
-) -> str | None:
-    if not raw_value:
-        return None
-
-    normalized = _norm(raw_value)
-    if aliases and normalized in aliases:
-        alias_value = aliases[normalized]
-        for valid in valid_values:
-            if _norm(valid) == _norm(alias_value):
-                return valid
-        for valid in valid_values:
-            if _norm(alias_value) in _norm(valid):
-                return valid
-
-    for valid in valid_values:
-        valid_normalized = _norm(valid)
-        if normalized == valid_normalized:
-            return valid
-        if normalized in valid_normalized or valid_normalized in normalized:
-            return valid
-    return None
-
-
 def _normalize_cake_pricing_category(category: str) -> str:
     normalized = _normalize_cake_option_category(category)
     aliases = {
@@ -1143,14 +982,6 @@ def _validar_campos_bolo(dados: dict) -> list[str]:
     return erros
 
 
-def _validate_required_payment_data(pagamento: dict | None) -> str | None:
-    payment = dict(pagamento or {})
-    method = str(payment.get("forma") or "").strip()
-    if not method or method == "Pendente":
-        return "Forma de pagamento obrigatoria: PIX, Cartão (débito/crédito) ou Dinheiro."
-    return None
-
-
 def _validate_required_cake_fields(dados: dict) -> list[str]:
     categoria = (dados.get("categoria") or "").strip().lower()
     missing: list[str] = []
@@ -1315,8 +1146,9 @@ def _build_payment_line(payment: dict | None) -> str:
     change_for = payment_data.get("troco_para")
 
     details = [method]
-    if method.casefold() == "pix" and _PIX_KEY:
-        details.append(f"chave {_PIX_KEY}")
+    pix_key = _resolve_pix_key()
+    if method.casefold() == "pix" and pix_key:
+        details.append(f"chave {pix_key}")
     if method.casefold().startswith("cartao") and installments:
         details.append(f"{int(installments)}x")
     if method.casefold() == "dinheiro" and change_for:
@@ -1618,85 +1450,17 @@ def _prepare_sweet_order_data(order_details: "SweetOrderSchema") -> tuple[dict |
 
 
 # ============================================================
-#  Schemas
+#  Schemas (extraídas para app/ai/tools/_schemas.py)
 # ============================================================
-
-class PagamentoSchema(BaseModel):
-    forma: Literal["PIX", "Cartão (débito/crédito)", "Dinheiro", "Pendente"] = Field(
-        ..., description="Forma de pagamento escolhida"
-    )
-    troco_para: Optional[float] = Field(None, description="Valor para troco, se a forma for Dinheiro")
-    parcelas: Optional[int] = Field(
-        None,
-        description="Parcelas no Cartao. So permitido acima de R$100,00 e no maximo 2x",
-    )
-
-
-class CakeOrderSchema(BaseModel):
-    linha: str = Field(..., description="Linha do bolo. Ex: tradicional, gourmet, mesversario, babycake, torta, simples")
-    categoria: str = Field(..., description="Categoria derivada da linha. Ex: tradicional, ingles, redondo, torta, mesversario, simples")
-    produto: Optional[str] = Field(None, description="Nome do produto ou sabor. Na linha simples, use o sabor: Chocolate ou Cenoura")
-    cobertura: Optional[str] = Field(None, description="Cobertura da linha simples: Vulcao ou Simples")
-    tamanho: Optional[str] = Field(None, description="Tamanho: B3, B4, B6, B7, P4 ou P6")
-    massa: Optional[str] = Field(None, description="Massa: Branca, Chocolate ou Mesclada (so para tradicional)")
-    recheio: Optional[str] = Field(None, description="Recheio principal (so para tradicional/mesversario)")
-    mousse: Optional[str] = Field(None, description="Mousse (so para tradicional, exceto recheio Casadinho)")
-    adicional: Optional[str] = Field(None, description="Fruta ou nozes adicionais (so para tradicional)")
-    descricao: str = Field(..., description="Descricao completa do bolo para o painel")
-    kit_festou: bool = Field(False, description="Se adicionou kit festou (+R$35)")
-    quantidade: int = Field(1, description="Quantidade do item")
-    data_entrega: str = Field(..., description="Data de entrega no formato DD/MM/AAAA")
-    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
-    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
-    endereco: Optional[str] = Field(None, description="Endereco completo (obrigatorio se entrega)")
-    taxa_entrega: float = Field(0.0, description="Taxa de entrega")
-    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
-
-
-class SweetItemSchema(BaseModel):
-    nome: str = Field(..., description="Nome do doce. Ex: Brigadeiro Escama, Bombom Camafeu")
-    quantidade: int = Field(..., description="Quantidade do doce")
-
-
-class SweetOrderSchema(BaseModel):
-    itens: List[SweetItemSchema] = Field(..., description="Lista de doces com nome e quantidade")
-    data_entrega: str = Field(..., description="Data de entrega no formato DD/MM/AAAA")
-    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
-    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
-    endereco: Optional[str] = Field(None, description="Endereco completo (obrigatorio se entrega)")
-    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
-
-
-class CafeteriaOrderItemSchema(BaseModel):
-    nome: str = Field(..., description="Nome base do item da cafeteria. Ex: Croissant, Coca Cola KS, Agua")
-    variante: Optional[str] = Field(None, description="Sabor, versao ou opcao quando existir. Ex: Frango com requeijao, com gas")
-    quantidade: int = Field(..., description="Quantidade do item")
-    observacao: Optional[str] = Field(None, description="Observacao opcional do item")
-
-
-class CafeteriaOrderSchema(BaseModel):
-    itens: List[CafeteriaOrderItemSchema] = Field(..., description="Lista de itens da cafeteria com quantidade e variacoes")
-    data_entrega: Optional[str] = Field(None, description="Data do atendimento no formato DD/MM/AAAA quando o cliente informar")
-    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
-    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
-    endereco: Optional[str] = Field(None, description="Endereco completo se for entrega")
-    taxa_entrega: float = Field(0.0, description="Taxa de entrega, se aplicavel")
-    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
-
-
-class GiftOrderSchema(BaseModel):
-    categoria: Literal["cesta_box", "caixinha_chocolate", "flores"] = Field(
-        ...,
-        description="Categoria do presente regular. O fluxo automatico hoje so fecha cesta_box.",
-    )
-    produto: str = Field(..., description="Nome do presente ou da cesta box")
-    descricao: Optional[str] = Field(None, description="Descricao opcional do item")
-    data_entrega: str = Field(..., description="Data de entrega no formato DD/MM/AAAA")
-    horario_retirada: Optional[str] = Field(None, description="Horario de retirada/entrega HH:MM")
-    modo_recebimento: Literal["retirada", "entrega"] = Field(..., description="retirada ou entrega")
-    endereco: Optional[str] = Field(None, description="Endereco completo se for entrega")
-    taxa_entrega: float = Field(0.0, description="Taxa de entrega")
-    pagamento: PagamentoSchema = Field(..., description="Dados de pagamento")
+from app.ai.tools._schemas import (
+    CafeteriaOrderItemSchema,
+    CafeteriaOrderSchema,
+    CakeOrderSchema,
+    GiftOrderSchema,
+    PagamentoSchema,
+    SweetItemSchema,
+    SweetOrderSchema,
+)
 
 
 # ============================================================

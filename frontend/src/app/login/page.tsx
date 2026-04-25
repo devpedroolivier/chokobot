@@ -44,7 +44,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <section className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <article className="rounded-panel border border-line bg-paper/95 p-8 shadow-panel">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cocoa/70">
-            Chokodelícia Admin
+            Trufinha Admin
           </p>
           <h1 className="mt-3 text-4xl font-black tracking-tight text-ink sm:text-5xl">
             Painel moderno com sessão segura

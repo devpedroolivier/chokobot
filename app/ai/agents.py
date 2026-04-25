@@ -1,15 +1,18 @@
-from typing import List, Dict, Any, Callable
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List
+
 from app.ai.tools import (
-    get_menu,
-    lookup_catalog_items,
-    get_cake_pricing,
-    get_cake_options,
-    escalate_to_human,
     create_cafeteria_order,
     create_cake_order,
     create_gift_order,
     create_sweet_order,
+    escalate_to_human,
+    get_cake_options,
+    get_cake_pricing,
     get_learnings,
+    get_menu,
+    lookup_catalog_items,
     save_learning,
 )
 from app.services.commercial_rules import (
@@ -23,23 +26,9 @@ from app.services.commercial_rules import (
     SUNDAY_RULE_LINE,
 )
 from app.settings import get_settings
-from app.welcome_message import WELCOME_MESSAGE, VOICE_GUIDELINES
+from app.welcome_message import VOICE_GUIDELINES, WELCOME_MESSAGE
 
 
-_SETTINGS = get_settings()
-_PIX_KEY = _SETTINGS.pix_key
-_CATALOG_LINK = _SETTINGS.catalog_link
-_PIX_INFO_LINE = f"Chave PIX oficial: {_PIX_KEY}" if _PIX_KEY else "Chave PIX oficial: confirmar com a equipe."
-_PHOTO_RULE_LINE = (
-    "Se o cliente pedir foto/imagem, responda com o link do catálogo visual: "
-    f"{_CATALOG_LINK} e convide o cliente a escolher por lá."
-)
-_PIX_MANDATORY_RULE = (
-    "REGRA DE PIX - OBRIGATORIA:\n"
-    "Quando o cliente pedir chave PIX ou forma de pagamento PIX, responda EXATAMENTE com:\n"
-    f"\"{_PIX_INFO_LINE}\"\n"
-    "NUNCA use placeholders como \"[insira a chave aqui]\". NUNCA recuse fornecer a chave PIX."
-)
 _NO_DISCOUNT_POLICY_RULE = (
     "REGRA COMERCIAL - DESCONTO (OBRIGATORIA):\n"
     "A Trufinha NUNCA pode oferecer, aplicar, prometer ou calcular desconto.\n"
@@ -60,11 +49,45 @@ class Agent:
         self.tools = tools or []
 
 
-# ==========================================
-# AGENT PROMPTS & INSTRUCTIONS
-# ==========================================
+_LAZY_EXPORTS = (
+    "TRIAGE_PROMPT",
+    "CAKE_ORDER_PROMPT",
+    "SWEET_ORDER_PROMPT",
+    "KNOWLEDGE_PROMPT",
+    "GIFT_ORDER_PROMPT",
+    "CAFETERIA_PROMPT",
+    "TriageAgent",
+    "CakeOrderAgent",
+    "SweetOrderAgent",
+    "KnowledgeAgent",
+    "GiftOrderAgent",
+    "CafeteriaAgent",
+    "AGENTS_MAP",
+)
 
-TRIAGE_PROMPT = f"""Você é a Trufinha, a assistente virtual da Chokodelícia.
+_module_state: Dict[str, Any] | None = None
+
+
+def _build_module_state() -> Dict[str, Any]:
+    settings = get_settings()
+    pix_key = settings.pix_key
+    catalog_link = settings.catalog_link
+
+    pix_info_line = (
+        f"Chave PIX oficial: {pix_key}" if pix_key else "Chave PIX oficial: confirmar com a equipe."
+    )
+    photo_rule_line = (
+        "Se o cliente pedir foto/imagem, responda com o link do catálogo visual: "
+        f"{catalog_link} e convide o cliente a escolher por lá."
+    )
+    pix_mandatory_rule = (
+        "REGRA DE PIX - OBRIGATORIA:\n"
+        "Quando o cliente pedir chave PIX ou forma de pagamento PIX, responda EXATAMENTE com:\n"
+        f"\"{pix_info_line}\"\n"
+        "NUNCA use placeholders como \"[insira a chave aqui]\". NUNCA recuse fornecer a chave PIX."
+    )
+
+    triage_prompt = f"""Você é a Trufinha, a assistente virtual da Chokodelícia.
 Seu papel exclusivo é ENTENDER O QUE O CLIENTE QUER e transferir para o agente certo usando `transfer_to_agent`.
 Você é um ROTEADOR. Não resolva pedidos diretamente. Transfira.
 
@@ -166,16 +189,15 @@ OBRIGAÇÃO TÉCNICA: NUNCA diga "vou transferir" sem chamar a ferramenta `trans
 A ferramenta deve ser chamada, não apenas mencionada no texto.
 """
 
-
-CAKE_ORDER_PROMPT = f"""Você é a especialista em Bolos Sob Encomenda da Chokodelícia.
+    cake_order_prompt = f"""Você é a especialista em Bolos Sob Encomenda da Chokodelícia.
 Seu objetivo é coletar os dados do pedido passo a passo e salvar usando `create_cake_order`.
 
 {VOICE_GUIDELINES}
 
 REGRA DE FOTO/CATÁLOGO:
-- {_PHOTO_RULE_LINE}
+- {photo_rule_line}
 
-{_PIX_MANDATORY_RULE}
+{pix_mandatory_rule}
 {_NO_DISCOUNT_POLICY_RULE}
 {_NO_INVENTION_POLICY_RULE}
 
@@ -399,16 +421,15 @@ ofereça UMA VEZ:
 Se recusar, finalize sem insistir.
 """
 
-
-SWEET_ORDER_PROMPT = f"""Você é a especialista em Doces Sob Encomenda da Chokodelícia.
+    sweet_order_prompt = f"""Você é a especialista em Doces Sob Encomenda da Chokodelícia.
 Seu objetivo é atender pedidos de doces avulsos em quantidade e salvar usando `create_sweet_order`.
 
 {VOICE_GUIDELINES}
 
 REGRA DE FOTO/CATÁLOGO:
-- {_PHOTO_RULE_LINE}
+- {photo_rule_line}
 
-{_PIX_MANDATORY_RULE}
+{pix_mandatory_rule}
 {_NO_DISCOUNT_POLICY_RULE}
 {_NO_INVENTION_POLICY_RULE}
 
@@ -493,17 +514,16 @@ Somente ofereça Kit Festou após pedido salvo se houver contexto explícito de 
 Para doces avulsos sem bolo, não ofereça Kit Festou.
 """
 
-
-KNOWLEDGE_PROMPT = f"""Você é o Guia da Chokodelícia.
+    knowledge_prompt = f"""Você é o Guia da Chokodelícia.
 Seu objetivo é responder dúvidas sobre cardápio, preços, horários, entrega e funcionamento.
 Você tem ferramentas completas. Use-as ANTES de responder. Nunca invente.
 
 {VOICE_GUIDELINES}
 
 REGRA DE FOTO/CATÁLOGO:
-- {_PHOTO_RULE_LINE}
+- {photo_rule_line}
 
-{_PIX_MANDATORY_RULE}
+{pix_mandatory_rule}
 {_NO_DISCOUNT_POLICY_RULE}
 {_NO_INVENTION_POLICY_RULE}
 
@@ -534,7 +554,7 @@ PAGAMENTO E OPERACIONAL — VOCÊ PODE RESPONDER DIRETAMENTE:
 - Entrega: {DELIVERY_RULE_LINE}
 - {SUNDAY_RULE_LINE}
 - Se o cliente perguntar a chave PIX, responda com:
-  {_PIX_INFO_LINE}
+  {pix_info_line}
 
 PEDIDO E RESERVA PELO WHATSAPP:
 - Pedido e reserva podem ser feitos pelo WhatsApp.
@@ -542,7 +562,7 @@ PEDIDO E RESERVA PELO WHATSAPP:
   explique o fluxo curto: produto + data/horário + retirada/entrega + pagamento.
 
 REGRA DE FOTO/CATÁLOGO:
-- {_PHOTO_RULE_LINE}
+- {photo_rule_line}
 
 PRODUTO COM INFORMAÇÃO PARCIAL:
 Se você souber parte da informação mas não tudo (ex: existe cheesecake mas não sabe a gramagem exata):
@@ -569,17 +589,16 @@ USE `escalate_to_human` somente quando:
 - A situação exige confirmação operacional que só a equipe tem.
 """
 
-
-GIFT_ORDER_PROMPT = f"""Você é a especialista em Presentes Regulares da Chokodelícia.
+    gift_order_prompt = f"""Você é a especialista em Presentes Regulares da Chokodelícia.
 Seu objetivo é atender cestas box, caixinhas de chocolate, flores e cestas personalizadas.
 Quando houver pedido de cesta box do catálogo, salve com `create_gift_order`.
 
 {VOICE_GUIDELINES}
 
 REGRA DE FOTO/CATÁLOGO:
-- {_PHOTO_RULE_LINE}
+- {photo_rule_line}
 
-{_PIX_MANDATORY_RULE}
+{pix_mandatory_rule}
 {_NO_DISCOUNT_POLICY_RULE}
 {_NO_INVENTION_POLICY_RULE}
 
@@ -646,17 +665,16 @@ INFORMAÇÃO SOBRE ENTREGAS:
 - NUNCA diga que não fazemos entrega.
 """
 
-
-CAFETERIA_PROMPT = f"""Você é o Especialista de Cafeteria e Pronta Entrega da Chokodelícia.
+    cafeteria_prompt = f"""Você é o Especialista de Cafeteria e Pronta Entrega da Chokodelícia.
 Atenda doces avulsos, cafés, itens de vitrine, bolos de pronta entrega e Kit Festou.
 Use sempre o catálogo antes de responder. Fale APENAS de pronta entrega e cafeteria.
 
 {VOICE_GUIDELINES}
 
 REGRA DE FOTO/CATÁLOGO:
-- {_PHOTO_RULE_LINE}
+- {photo_rule_line}
 
-{_PIX_MANDATORY_RULE}
+{pix_mandatory_rule}
 {_NO_DISCOUNT_POLICY_RULE}
 {_NO_INVENTION_POLICY_RULE}
 
@@ -743,52 +761,98 @@ INFORMAÇÃO SOBRE ENTREGAS:
 - NUNCA diga que não fazemos entrega.
 """
 
+    triage_agent = Agent(
+        name="TriageAgent",
+        instructions=triage_prompt,
+        tools=[escalate_to_human, save_learning, get_learnings],
+    )
+    cake_order_agent = Agent(
+        name="CakeOrderAgent",
+        instructions=cake_order_prompt,
+        tools=[
+            get_menu,
+            get_cake_pricing,
+            get_cake_options,
+            create_cake_order,
+            escalate_to_human,
+            save_learning,
+            get_learnings,
+        ],
+    )
+    sweet_order_agent = Agent(
+        name="SweetOrderAgent",
+        instructions=sweet_order_prompt,
+        tools=[get_menu, create_sweet_order, escalate_to_human, save_learning, get_learnings],
+    )
+    knowledge_agent = Agent(
+        name="KnowledgeAgent",
+        instructions=knowledge_prompt,
+        tools=[
+            get_menu,
+            lookup_catalog_items,
+            get_cake_pricing,
+            escalate_to_human,
+            save_learning,
+            get_learnings,
+        ],
+    )
+    gift_order_agent = Agent(
+        name="GiftOrderAgent",
+        instructions=gift_order_prompt,
+        tools=[
+            get_menu,
+            lookup_catalog_items,
+            create_gift_order,
+            escalate_to_human,
+            save_learning,
+            get_learnings,
+        ],
+    )
+    cafeteria_agent = Agent(
+        name="CafeteriaAgent",
+        instructions=cafeteria_prompt,
+        tools=[
+            get_menu,
+            lookup_catalog_items,
+            create_cafeteria_order,
+            escalate_to_human,
+            save_learning,
+            get_learnings,
+        ],
+    )
 
-# ==========================================
-# DEFINIÇÃO DOS AGENTES
-# ==========================================
+    return {
+        "TRIAGE_PROMPT": triage_prompt,
+        "CAKE_ORDER_PROMPT": cake_order_prompt,
+        "SWEET_ORDER_PROMPT": sweet_order_prompt,
+        "KNOWLEDGE_PROMPT": knowledge_prompt,
+        "GIFT_ORDER_PROMPT": gift_order_prompt,
+        "CAFETERIA_PROMPT": cafeteria_prompt,
+        "TriageAgent": triage_agent,
+        "CakeOrderAgent": cake_order_agent,
+        "SweetOrderAgent": sweet_order_agent,
+        "KnowledgeAgent": knowledge_agent,
+        "GiftOrderAgent": gift_order_agent,
+        "CafeteriaAgent": cafeteria_agent,
+        "AGENTS_MAP": {
+            "TriageAgent": triage_agent,
+            "CakeOrderAgent": cake_order_agent,
+            "SweetOrderAgent": sweet_order_agent,
+            "KnowledgeAgent": knowledge_agent,
+            "GiftOrderAgent": gift_order_agent,
+            "CafeteriaAgent": cafeteria_agent,
+        },
+    }
 
-TriageAgent = Agent(
-    name="TriageAgent",
-    instructions=TRIAGE_PROMPT,
-    tools=[escalate_to_human, save_learning, get_learnings],
-)
 
-CakeOrderAgent = Agent(
-    name="CakeOrderAgent",
-    instructions=CAKE_ORDER_PROMPT,
-    tools=[get_menu, get_cake_pricing, get_cake_options, create_cake_order, escalate_to_human, save_learning, get_learnings],
-)
+def __getattr__(name: str) -> Any:
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module 'app.ai.agents' has no attribute {name!r}")
+    global _module_state
+    if _module_state is None:
+        _module_state = _build_module_state()
+    return _module_state[name]
 
-SweetOrderAgent = Agent(
-    name="SweetOrderAgent",
-    instructions=SWEET_ORDER_PROMPT,
-    tools=[get_menu, create_sweet_order, escalate_to_human, save_learning, get_learnings],
-)
 
-KnowledgeAgent = Agent(
-    name="KnowledgeAgent",
-    instructions=KNOWLEDGE_PROMPT,
-    tools=[get_menu, lookup_catalog_items, get_cake_pricing, escalate_to_human, save_learning, get_learnings],
-)
-
-GiftOrderAgent = Agent(
-    name="GiftOrderAgent",
-    instructions=GIFT_ORDER_PROMPT,
-    tools=[get_menu, lookup_catalog_items, create_gift_order, escalate_to_human, save_learning, get_learnings],
-)
-
-CafeteriaAgent = Agent(
-    name="CafeteriaAgent",
-    instructions=CAFETERIA_PROMPT,
-    tools=[get_menu, lookup_catalog_items, create_cafeteria_order, escalate_to_human, save_learning, get_learnings],
-)
-
-AGENTS_MAP = {
-    "TriageAgent": TriageAgent,
-    "CakeOrderAgent": CakeOrderAgent,
-    "SweetOrderAgent": SweetOrderAgent,
-    "KnowledgeAgent": KnowledgeAgent,
-    "GiftOrderAgent": GiftOrderAgent,
-    "CafeteriaAgent": CafeteriaAgent,
-}
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | set(_LAZY_EXPORTS))

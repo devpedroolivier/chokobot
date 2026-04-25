@@ -1,6 +1,14 @@
-# Chokobot
+# Trufinha
 
-Base FastAPI para operacao do Chokobot, com modo monolitico e modo `split` entre `edge` e `conversation`.
+Plataforma de atendimento automatizado via WhatsApp para confeitarias.
+Primeiro tenant em produção: **Chokodelícia**. Em evolução para SaaS
+multi-tenant — ver `docs/PIVOT_TODO.md` e `docs/MULTI_TENANT.md`.
+
+> Nota: o nome técnico do package Python e dos containers continua
+> sendo `chokobot` para reduzir blast radius. O rename técnico
+> acontece junto com o cutover Postgres (Fase B do PIVOT_TODO).
+
+Base FastAPI com modo monolítico e modo `split` entre `edge` e `conversation`.
 
 ## Requisitos
 - Python 3.11+

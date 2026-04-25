@@ -30,7 +30,7 @@ class EventBusTests(unittest.TestCase):
             outbox_path = os.path.join(tmpdir, "domain_events.jsonl")
             event = MessageReceivedEvent(payload={"phone": "5511999999999", "text": "oi"})
 
-            with patch("app.application.handlers.persist_domain_event.OUTBOX_EVENTS_PATH", outbox_path):
+            with patch.dict(os.environ, {"OUTBOX_EVENTS_PATH": outbox_path}, clear=False):
                 persist_domain_event(event)
 
             with open(outbox_path, "r", encoding="utf-8") as handle:
@@ -43,7 +43,7 @@ class EventBusTests(unittest.TestCase):
         get_event_bus.cache_clear()
         with tempfile.TemporaryDirectory() as tmpdir:
             outbox_path = os.path.join(tmpdir, "domain_events.jsonl")
-            with patch("app.application.handlers.persist_domain_event.OUTBOX_EVENTS_PATH", outbox_path):
+            with patch.dict(os.environ, {"OUTBOX_EVENTS_PATH": outbox_path}, clear=False):
                 get_event_bus().publish(AiReplyGeneratedEvent(telefone="5511", nome_cliente="Teste", reply="Resposta"))
 
             with open(outbox_path, "r", encoding="utf-8") as handle:
@@ -56,7 +56,7 @@ class EventBusTests(unittest.TestCase):
         get_event_bus.cache_clear()
         with tempfile.TemporaryDirectory() as tmpdir:
             outbox_path = os.path.join(tmpdir, "domain_events.jsonl")
-            with patch("app.application.handlers.persist_domain_event.OUTBOX_EVENTS_PATH", outbox_path):
+            with patch.dict(os.environ, {"OUTBOX_EVENTS_PATH": outbox_path}, clear=False):
                 get_event_bus().publish(
                     OrderClosedByBotEvent(
                         phone="5511",
@@ -90,7 +90,7 @@ class EventBusTests(unittest.TestCase):
             outbox_path = os.path.join(tmpdir, "domain_events.jsonl")
             use_case = PersistOrderPayload(repository=_FakeOrderWriteRepository())
 
-            with patch("app.application.handlers.persist_domain_event.OUTBOX_EVENTS_PATH", outbox_path):
+            with patch.dict(os.environ, {"OUTBOX_EVENTS_PATH": outbox_path}, clear=False):
                 order_id = use_case.execute(
                     phone="5511999999999",
                     nome_cliente="Cliente Teste",

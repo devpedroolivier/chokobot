@@ -10,24 +10,22 @@ from app.observability import increment_counter, log_event
 from app.security import hash_phone, preview_text
 from app.settings import get_settings
 
-_settings = get_settings()
-HTTP_TIMEOUT_CONNECT = _settings.http_timeout_connect
-HTTP_TIMEOUT_READ = _settings.http_timeout_read
-HTTP_MAX_RETRIES = _settings.http_max_retries
-HTTP_BACKOFF_FACTOR = _settings.http_backoff_factor
-OUTBOX_PATH = _settings.outbox_path
-ZAPI_ENDPOINT_TEXT = _settings.zapi_endpoint_text
-ZAPI_TOKEN = _settings.zapi_token
-
-
 class ZapiMessagingGateway:
     def __init__(self):
         self._locks_envio: dict[str, asyncio.Lock] = {}
+        settings = get_settings()
+        self._http_timeout_connect = settings.http_timeout_connect
+        self._http_timeout_read = settings.http_timeout_read
+        self._http_max_retries = settings.http_max_retries
+        self._http_backoff_factor = settings.http_backoff_factor
+        self._outbox_path = settings.outbox_path
+        self._endpoint_text = settings.zapi_endpoint_text
+        self._token = settings.zapi_token
 
     def _enqueue(self, phone: str, mensagem: str):
         try:
-            os.makedirs(os.path.dirname(OUTBOX_PATH), exist_ok=True)
-            with open(OUTBOX_PATH, "a", encoding="utf-8") as handle:
+            os.makedirs(os.path.dirname(self._outbox_path), exist_ok=True)
+            with open(self._outbox_path, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps({"phone": phone, "message": mensagem}, ensure_ascii=False) + "\n")
             increment_counter("outbox_events_total", status="queued")
             log_event("outbox_queued", phone_hash=hash_phone(phone), text=preview_text(mensagem, 80))
@@ -38,28 +36,28 @@ class ZapiMessagingGateway:
         lock = self._locks_envio.setdefault(phone, asyncio.Lock())
         async with lock:
             payload = {"phone": phone, "message": mensagem}
-            headers = {"Content-Type": "application/json", "Client-Token": ZAPI_TOKEN}
+            headers = {"Content-Type": "application/json", "Client-Token": self._token}
             timeout = httpx.Timeout(
-                connect=HTTP_TIMEOUT_CONNECT,
-                read=HTTP_TIMEOUT_READ,
-                write=HTTP_TIMEOUT_READ,
-                pool=HTTP_TIMEOUT_CONNECT,
+                connect=self._http_timeout_connect,
+                read=self._http_timeout_read,
+                write=self._http_timeout_read,
+                pool=self._http_timeout_connect,
             )
 
             last_exc = None
             async with httpx.AsyncClient(timeout=timeout) as client:
-                for attempt in range(1, HTTP_MAX_RETRIES + 1):
+                for attempt in range(1, self._http_max_retries + 1):
                     try:
                         log_event(
                             "provider_send_attempt",
                             provider="zapi",
                             attempt=attempt,
-                            max_attempts=HTTP_MAX_RETRIES,
+                            max_attempts=self._http_max_retries,
                             phone_hash=hash_phone(phone),
                             text=preview_text(mensagem, 120),
                         )
                         increment_counter("provider_send_attempts_total", provider="zapi")
-                        response = await client.post(ZAPI_ENDPOINT_TEXT, json=payload, headers=headers)
+                        response = await client.post(self._endpoint_text, json=payload, headers=headers)
                         status_code = response.status_code
 
                         if 200 <= status_code < 300:
@@ -103,8 +101,8 @@ class ZapiMessagingGateway:
                             error_type=type(exc).__name__,
                         )
 
-                    if attempt < HTTP_MAX_RETRIES:
-                        backoff = HTTP_BACKOFF_FACTOR * (2 ** (attempt - 1))
+                    if attempt < self._http_max_retries:
+                        backoff = self._http_backoff_factor * (2 ** (attempt - 1))
                         await asyncio.sleep(backoff)
 
             log_event(

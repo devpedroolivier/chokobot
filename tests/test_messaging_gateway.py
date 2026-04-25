@@ -32,13 +32,12 @@ class _FakeAsyncClient:
 
 class MessagingGatewayTests(unittest.IsolatedAsyncioTestCase):
     async def test_gateway_enqueues_and_returns_false_on_non_retriable_http_error(self):
-        gateway = ZapiMessagingGateway()
-
         with tempfile.TemporaryDirectory() as tmpdir:
             outbox_path = os.path.join(tmpdir, "outbox.jsonl")
             fake_client = _FakeAsyncClient([_FakeResponse(400)])
 
-            with patch("app.infrastructure.gateways.zapi_messaging_gateway.OUTBOX_PATH", outbox_path):
+            with patch.dict(os.environ, {"OUTBOX_PATH": outbox_path}, clear=False):
+                gateway = ZapiMessagingGateway()
                 with patch(
                     "app.infrastructure.gateways.zapi_messaging_gateway.httpx.AsyncClient",
                     return_value=fake_client,

@@ -9,8 +9,6 @@ from app.observability import increment_counter, log_event
 from app.settings import get_settings
 
 
-OUTBOX_EVENTS_PATH = get_settings().outbox_events_path
-
 _PHONE_KEYS = {"phone", "telefone"}
 _NAME_KEYS = {"nome", "nome_cliente", "chat_name"}
 _TEXT_KEYS = {"message", "mensagem", "text", "reply"}
@@ -54,8 +52,9 @@ def persist_domain_event(event) -> None:
     payload["event_type"] = type(event).__name__
     safe_payload = _sanitize_event_payload(payload)
 
-    os.makedirs(os.path.dirname(OUTBOX_EVENTS_PATH), exist_ok=True)
-    with open(OUTBOX_EVENTS_PATH, "a", encoding="utf-8") as handle:
+    outbox_events_path = get_settings().outbox_events_path
+    os.makedirs(os.path.dirname(outbox_events_path), exist_ok=True)
+    with open(outbox_events_path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(safe_payload, ensure_ascii=False) + "\n")
 
     increment_counter("domain_events_total", event_type=payload["event_type"])

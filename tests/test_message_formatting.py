@@ -66,7 +66,7 @@ class MessageFormattingTests(unittest.TestCase):
 
     def test_save_cake_order_draft_process_formata_resumo_final_claro(self):
         with patch("app.ai.tools._sync_ai_process", return_value=None):
-            with patch.object(ai_tools, "_PIX_KEY", "Pix 16847366000130"):
+            with patch.object(ai_tools, "_resolve_pix_key", return_value="Pix 16847366000130"):
                 result = ai_tools.save_cake_order_draft_process(
                     telefone="5511999999999",
                     nome_cliente="Ana",
@@ -98,7 +98,9 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn('ex.: "sim", "ok", "ta bom", "certo" ou "confirmado"', result)
 
     def test_save_cafeteria_order_draft_process_formata_resumo_com_subtotal(self):
-        with patch("app.ai.tools.now_in_bot_timezone", return_value=datetime(2026, 3, 25, 14, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))):
+        fake_now = datetime(2026, 3, 25, 14, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        with patch("app.ai.tools._common.now_in_bot_timezone", return_value=fake_now), \
+             patch("app.ai.tools.now_in_bot_timezone", return_value=fake_now):
             with patch("app.ai.tools._sync_ai_process", return_value=None):
                 result = ai_tools.save_cafeteria_order_draft_process(
                     telefone="5511999999999",

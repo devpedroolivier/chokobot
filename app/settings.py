@@ -1,42 +1,9 @@
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
+from typing import Annotated, Any
 
-from dotenv import load_dotenv
-
-
-load_dotenv()
-
-
-def _env_str(name: str, default: str = "") -> str:
-    return os.getenv(name, default).strip()
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(_env_str(name, str(default)))
-    except ValueError:
-        return default
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(_env_str(name, str(default)))
-    except ValueError:
-        return default
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    fallback = "1" if default else "0"
-    return _env_str(name, fallback).lower() in {"1", "true", "yes", "on"}
-
-
-def _env_csv(name: str) -> tuple[str, ...]:
-    raw = _env_str(name)
-    if not raw:
-        return ()
-    return tuple(item.strip() for item in raw.split(",") if item.strip())
+from pydantic import AfterValidator, BeforeValidator, Field, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 DEFAULT_STORE_CLOSED_NOTICE = (
@@ -46,66 +13,235 @@ DEFAULT_STORE_CLOSED_NOTICE = (
     "Retornaremos ao atendimento na segunda-feira, a partir do meio-dia."
 )
 
+_TRUTHY = {"1", "true", "yes", "on"}
 
-@dataclass(frozen=True)
-class AppSettings:
-    zapi_token: str
-    zapi_base: str
-    messaging_provider: str
-    evolution_server_url: str
-    evolution_api_key: str
-    evolution_instance: str
-    openai_api_key: str
-    db_path: str
-    database_url: str
-    redis_url: str
-    state_sqlite_path: str
-    state_backend_fallback_enabled: bool
-    outbox_path: str
-    outbox_events_path: str
-    ai_learnings_path: str
-    operational_calendar_path: str
-    tz: str
-    bot_timezone: str
-    cafeteria_url: str
-    doces_url: str
-    catalog_link: str
-    pix_key: str
-    store_closed_notice: str
-    conversation_service_url: str
-    conversation_service_timeout: float
-    webhook_secret: str
-    webhook_secret_header: str
-    webhook_verify_enabled: bool
-    webhook_replay_window_seconds: int
-    test_phones: tuple[str, ...]
-    admin_phones: tuple[str, ...]
-    automation_disabled_phones: tuple[str, ...]
-    phone_opt_out_auto_resume_minutes: float
-    phone_opt_out_reactivation_delay_seconds: float
-    panel_auth_enabled: bool
-    panel_auth_username: str
-    panel_auth_password: str
-    admin_frontend_url: str
-    ai_save_learning_enabled: bool
-    bot_auto_replies_enabled: bool
-    http_timeout_connect: int
-    http_timeout_read: int
-    http_max_retries: int
-    http_backoff_factor: float
-    order_support_db_path: str
-    order_support_invoice_email: str
-    knowledge_failure_alert_threshold: int
-    knowledge_failure_alert_window_minutes: int
-    knowledge_failure_alert_webhook: str
-    ai_auto_schedule_enabled: bool
-    ai_auto_off_weekday: int
-    ai_auto_off_hour: int
-    ai_auto_off_minute: int
-    ai_auto_on_weekday: int
-    ai_auto_on_hour: int
-    ai_auto_on_minute: int
-    panel_attendants: tuple[str, ...]
+
+def _strip(v: Any) -> Any:
+    if isinstance(v, str):
+        return v.strip()
+    return v
+
+
+def _csv_to_tuple(v: Any) -> Any:
+    if v is None:
+        return ()
+    if isinstance(v, str):
+        if not v.strip():
+            return ()
+        return tuple(item.strip() for item in v.split(",") if item.strip())
+    if isinstance(v, (list, tuple)):
+        return tuple(item for item in v if item)
+    return v
+
+
+def _truthy(v: Any) -> Any:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in _TRUTHY
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return v
+
+
+def _clamp_int(min_value: int, max_value: int | None = None):
+    def _clamp(v: int) -> int:
+        if max_value is not None:
+            return max(min_value, min(max_value, v))
+        return max(min_value, v)
+
+    return _clamp
+
+
+def _clamp_float_min(min_value: float):
+    def _clamp(v: float) -> float:
+        return max(min_value, v)
+
+    return _clamp
+
+
+def _expand_escapes(v: Any) -> Any:
+    if isinstance(v, str):
+        return v.replace("\\r\\n", "\n").replace("\\n", "\n")
+    return v
+
+
+def _lower(v: Any) -> Any:
+    if isinstance(v, str):
+        return v.lower()
+    return v
+
+
+StrippedStr = Annotated[str, BeforeValidator(_strip)]
+CsvTuple = Annotated[tuple[str, ...], NoDecode, BeforeValidator(_csv_to_tuple)]
+Truthy = Annotated[bool, BeforeValidator(_truthy)]
+
+
+class AppSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+        frozen=True,
+        populate_by_name=True,
+    )
+
+    # --- Messaging providers ---------------------------------------------
+    zapi_token: StrippedStr = Field(default="", alias="ZAPI_TOKEN")
+    zapi_base: StrippedStr = Field(default="", alias="ZAPI_BASE")
+    messaging_provider: Annotated[str, BeforeValidator(_strip), AfterValidator(_lower)] = Field(
+        default="zapi", alias="MESSAGING_PROVIDER"
+    )
+    evolution_server_url: StrippedStr = Field(default="", alias="EVOLUTION_SERVER_URL")
+    evolution_api_key: StrippedStr = Field(default="", alias="EVOLUTION_API_KEY")
+    evolution_instance: StrippedStr = Field(default="", alias="EVOLUTION_INSTANCE")
+
+    # --- AI ---------------------------------------------------------------
+    openai_api_key: StrippedStr = Field(default="", alias="OPENAI_API_KEY")
+
+    # --- Persistence ------------------------------------------------------
+    db_path: StrippedStr = Field(default="dados/chokobot.db", alias="DB_PATH")
+    database_url: StrippedStr = Field(default="", alias="DATABASE_URL")
+    redis_url: StrippedStr = Field(default="", alias="REDIS_URL")
+    state_sqlite_path: StrippedStr = Field(default="dados/state_store.db", alias="STATE_SQLITE_PATH")
+    state_backend_fallback_enabled: Truthy = Field(
+        default=True, alias="STATE_BACKEND_FALLBACK_ENABLED"
+    )
+    outbox_path: StrippedStr = Field(default="dados/outbox.jsonl", alias="OUTBOX_PATH")
+    outbox_events_path: StrippedStr = Field(
+        default="dados/domain_events.jsonl", alias="OUTBOX_EVENTS_PATH"
+    )
+    ai_learnings_path: StrippedStr = Field(
+        default="app/ai/knowledge/learnings.md", alias="AI_LEARNINGS_PATH"
+    )
+    operational_calendar_path: StrippedStr = Field(
+        default="app/ai/knowledge/operational_calendar.json",
+        alias="OPERATIONAL_CALENDAR_PATH",
+    )
+
+    # --- Timezone ---------------------------------------------------------
+    tz: StrippedStr = Field(default="America/Sao_Paulo", alias="TZ")
+    bot_timezone: StrippedStr = Field(default="America/Sao_Paulo", alias="BOT_TIMEZONE")
+
+    # --- Catalog links ----------------------------------------------------
+    cafeteria_url: StrippedStr = Field(default="http://bit.ly/44ZlKlZ", alias="CAFETERIA_URL")
+    doces_url: StrippedStr = Field(default="https://bit.ly/doceschoko", alias="DOCES_URL")
+    catalog_link: StrippedStr = Field(default="https://bit.ly/presenteschoko", alias="CATALOG_LINK")
+
+    # --- Payments / messages ---------------------------------------------
+    pix_key: StrippedStr = Field(default="", alias="PIX_KEY")
+    store_closed_notice: Annotated[str, BeforeValidator(_expand_escapes), BeforeValidator(_strip)] = (
+        Field(default=DEFAULT_STORE_CLOSED_NOTICE, alias="STORE_CLOSED_NOTICE")
+    )
+
+    # --- Conversation split deploy ---------------------------------------
+    conversation_service_url: StrippedStr = Field(default="", alias="CONVERSATION_SERVICE_URL")
+    conversation_service_timeout: float = Field(default=10.0, alias="CONVERSATION_SERVICE_TIMEOUT")
+
+    # --- Webhook security -------------------------------------------------
+    webhook_secret: StrippedStr = Field(default="", alias="WEBHOOK_SECRET")
+    webhook_secret_header: StrippedStr = Field(
+        default="X-Webhook-Secret", alias="WEBHOOK_SECRET_HEADER"
+    )
+    webhook_verify_enabled: Truthy = Field(default=False, alias="WEBHOOK_VERIFY_ENABLED")
+    webhook_replay_window_seconds: Annotated[int, AfterValidator(_clamp_int(1))] = Field(
+        default=300, alias="WEBHOOK_REPLAY_WINDOW_SECONDS"
+    )
+
+    # --- Phone management -------------------------------------------------
+    test_phones: CsvTuple = Field(default=(), alias="TEST_PHONES")
+    admin_phones: CsvTuple = Field(default=(), alias="ADMIN_PHONES")
+    automation_disabled_phones: CsvTuple = Field(default=(), alias="AUTOMATION_DISABLED_PHONES")
+    phone_opt_out_auto_resume_minutes: Annotated[float, AfterValidator(_clamp_float_min(0.0))] = (
+        Field(default=30.0, alias="PHONE_OPT_OUT_AUTO_RESUME_MINUTES")
+    )
+    phone_opt_out_reactivation_delay_seconds: Annotated[
+        float, AfterValidator(_clamp_float_min(0.0))
+    ] = Field(default=1.5, alias="PHONE_OPT_OUT_REACTIVATION_DELAY_SECONDS")
+
+    # --- Panel auth -------------------------------------------------------
+    panel_auth_enabled: Truthy = Field(default=False, alias="PANEL_AUTH_ENABLED")
+    panel_auth_username: StrippedStr = Field(default="", alias="PANEL_AUTH_USERNAME")
+    panel_auth_password: StrippedStr = Field(default="", alias="PANEL_AUTH_PASSWORD")
+    admin_frontend_url: StrippedStr = Field(default="", alias="ADMIN_FRONTEND_URL")
+
+    # --- AI behavior ------------------------------------------------------
+    ai_save_learning_enabled: Truthy = Field(default=False, alias="AI_SAVE_LEARNING_ENABLED")
+    bot_auto_replies_enabled: Truthy = Field(default=True, alias="BOT_AUTO_REPLIES_ENABLED")
+
+    # --- HTTP client ------------------------------------------------------
+    http_timeout_connect: Annotated[int, AfterValidator(_clamp_int(1))] = Field(
+        default=5, alias="HTTP_TIMEOUT_CONNECT"
+    )
+    http_timeout_read: Annotated[int, AfterValidator(_clamp_int(1))] = Field(
+        default=20, alias="HTTP_TIMEOUT_READ"
+    )
+    http_max_retries: Annotated[int, AfterValidator(_clamp_int(1))] = Field(
+        default=3, alias="HTTP_MAX_RETRIES"
+    )
+    http_backoff_factor: Annotated[float, AfterValidator(_clamp_float_min(0.0))] = Field(
+        default=1.0, alias="HTTP_BACKOFF_FACTOR"
+    )
+
+    # --- Order support ----------------------------------------------------
+    order_support_db_path: StrippedStr = Field(default="", alias="ORDER_SUPPORT_DB_PATH")
+    order_support_invoice_email: StrippedStr = Field(
+        default="financeiro@chokodelicia.com", alias="ORDER_SUPPORT_INVOICE_EMAIL"
+    )
+
+    # --- Knowledge alerts -------------------------------------------------
+    knowledge_failure_alert_threshold: Annotated[int, AfterValidator(_clamp_int(1))] = Field(
+        default=5, alias="KNOWLEDGE_FAILURE_ALERT_THRESHOLD"
+    )
+    knowledge_failure_alert_window_minutes: Annotated[int, AfterValidator(_clamp_int(1))] = Field(
+        default=60, alias="KNOWLEDGE_FAILURE_ALERT_WINDOW_MINUTES"
+    )
+    knowledge_failure_alert_webhook: StrippedStr = Field(
+        default="", alias="KNOWLEDGE_FAILURE_ALERT_WEBHOOK"
+    )
+
+    # --- AI auto schedule -------------------------------------------------
+    ai_auto_schedule_enabled: Truthy = Field(default=True, alias="AI_AUTO_SCHEDULE_ENABLED")
+    ai_auto_off_weekday: Annotated[int, AfterValidator(_clamp_int(0, 6))] = Field(
+        default=4, alias="AI_AUTO_OFF_WEEKDAY"
+    )
+    ai_auto_off_hour: Annotated[int, AfterValidator(_clamp_int(0, 23))] = Field(
+        default=19, alias="AI_AUTO_OFF_HOUR"
+    )
+    ai_auto_off_minute: Annotated[int, AfterValidator(_clamp_int(0, 59))] = Field(
+        default=0, alias="AI_AUTO_OFF_MINUTE"
+    )
+    ai_auto_on_weekday: Annotated[int, AfterValidator(_clamp_int(0, 6))] = Field(
+        default=0, alias="AI_AUTO_ON_WEEKDAY"
+    )
+    ai_auto_on_hour: Annotated[int, AfterValidator(_clamp_int(0, 23))] = Field(
+        default=6, alias="AI_AUTO_ON_HOUR"
+    )
+    ai_auto_on_minute: Annotated[int, AfterValidator(_clamp_int(0, 59))] = Field(
+        default=0, alias="AI_AUTO_ON_MINUTE"
+    )
+
+    # --- Panel ------------------------------------------------------------
+    panel_attendants: CsvTuple = Field(default=("Lu",), alias="PANEL_ATTENDANTS")
+
+    @model_validator(mode="after")
+    def _resolve_dependent_defaults(self) -> "AppSettings":
+        if not self.database_url:
+            object.__setattr__(self, "database_url", f"sqlite:///{self.db_path}")
+        if not self.tz:
+            object.__setattr__(self, "tz", "America/Sao_Paulo")
+        if not self.bot_timezone:
+            object.__setattr__(self, "bot_timezone", "America/Sao_Paulo")
+        if not self.messaging_provider:
+            object.__setattr__(self, "messaging_provider", "zapi")
+        if not self.store_closed_notice:
+            object.__setattr__(self, "store_closed_notice", DEFAULT_STORE_CLOSED_NOTICE)
+        if not self.order_support_db_path:
+            object.__setattr__(self, "order_support_db_path", self.db_path)
+        if not self.panel_attendants:
+            object.__setattr__(self, "panel_attendants", ("Lu",))
+        return self
 
     @property
     def zapi_endpoint_text(self) -> str:
@@ -128,78 +264,4 @@ class AppSettings:
 
 
 def get_settings() -> AppSettings:
-    db_path = _env_str("DB_PATH", "dados/chokobot.db")
-    database_url = _env_str("DATABASE_URL", f"sqlite:///{db_path}")
-    raw_notice = _env_str("STORE_CLOSED_NOTICE", DEFAULT_STORE_CLOSED_NOTICE) or DEFAULT_STORE_CLOSED_NOTICE
-    store_closed_notice = raw_notice.replace("\\r\\n", "\n").replace("\\n", "\n")
-
-    provider = _env_str("MESSAGING_PROVIDER", "zapi").lower() or "zapi"
-
-    return AppSettings(
-        zapi_token=_env_str("ZAPI_TOKEN"),
-        zapi_base=_env_str("ZAPI_BASE"),
-        messaging_provider=provider,
-        evolution_server_url=_env_str("EVOLUTION_SERVER_URL"),
-        evolution_api_key=_env_str("EVOLUTION_API_KEY"),
-        evolution_instance=_env_str("EVOLUTION_INSTANCE"),
-        openai_api_key=_env_str("OPENAI_API_KEY"),
-        db_path=db_path,
-        database_url=database_url,
-        redis_url=_env_str("REDIS_URL"),
-        state_sqlite_path=_env_str("STATE_SQLITE_PATH", "dados/state_store.db"),
-        state_backend_fallback_enabled=_env_bool("STATE_BACKEND_FALLBACK_ENABLED", True),
-        outbox_path=_env_str("OUTBOX_PATH", "dados/outbox.jsonl"),
-        outbox_events_path=_env_str("OUTBOX_EVENTS_PATH", "dados/domain_events.jsonl"),
-        ai_learnings_path=_env_str("AI_LEARNINGS_PATH", "app/ai/knowledge/learnings.md"),
-        operational_calendar_path=_env_str(
-            "OPERATIONAL_CALENDAR_PATH",
-            "app/ai/knowledge/operational_calendar.json",
-        ),
-        tz=_env_str("TZ", "America/Sao_Paulo") or "America/Sao_Paulo",
-        bot_timezone=_env_str("BOT_TIMEZONE") or "America/Sao_Paulo",
-        cafeteria_url=_env_str("CAFETERIA_URL", "http://bit.ly/44ZlKlZ"),
-        doces_url=_env_str("DOCES_URL", "https://bit.ly/doceschoko"),
-        catalog_link=_env_str("CATALOG_LINK", "https://bit.ly/presenteschoko"),
-        pix_key=_env_str("PIX_KEY"),
-        store_closed_notice=store_closed_notice,
-        conversation_service_url=_env_str("CONVERSATION_SERVICE_URL"),
-        conversation_service_timeout=_env_float("CONVERSATION_SERVICE_TIMEOUT", 10.0),
-        webhook_secret=_env_str("WEBHOOK_SECRET"),
-        webhook_secret_header=_env_str("WEBHOOK_SECRET_HEADER", "X-Webhook-Secret"),
-        webhook_verify_enabled=_env_bool("WEBHOOK_VERIFY_ENABLED", False),
-        webhook_replay_window_seconds=max(1, _env_int("WEBHOOK_REPLAY_WINDOW_SECONDS", 300)),
-        test_phones=_env_csv("TEST_PHONES"),
-        admin_phones=_env_csv("ADMIN_PHONES"),
-        automation_disabled_phones=_env_csv("AUTOMATION_DISABLED_PHONES"),
-        phone_opt_out_auto_resume_minutes=max(
-            0.0,
-            _env_float("PHONE_OPT_OUT_AUTO_RESUME_MINUTES", 30.0),
-        ),
-        phone_opt_out_reactivation_delay_seconds=max(
-            0.0,
-            _env_float("PHONE_OPT_OUT_REACTIVATION_DELAY_SECONDS", 1.5),
-        ),
-        panel_auth_enabled=_env_bool("PANEL_AUTH_ENABLED", False),
-        panel_auth_username=_env_str("PANEL_AUTH_USERNAME"),
-        panel_auth_password=_env_str("PANEL_AUTH_PASSWORD"),
-        admin_frontend_url=_env_str("ADMIN_FRONTEND_URL"),
-        ai_save_learning_enabled=_env_bool("AI_SAVE_LEARNING_ENABLED", False),
-        bot_auto_replies_enabled=_env_bool("BOT_AUTO_REPLIES_ENABLED", True),
-        http_timeout_connect=max(1, _env_int("HTTP_TIMEOUT_CONNECT", 5)),
-        http_timeout_read=max(1, _env_int("HTTP_TIMEOUT_READ", 20)),
-        http_max_retries=max(1, _env_int("HTTP_MAX_RETRIES", 3)),
-        http_backoff_factor=max(0.0, _env_float("HTTP_BACKOFF_FACTOR", 1.0)),
-        order_support_db_path=_env_str("ORDER_SUPPORT_DB_PATH", db_path),
-        order_support_invoice_email=_env_str("ORDER_SUPPORT_INVOICE_EMAIL", "financeiro@chokodelicia.com"),
-        knowledge_failure_alert_threshold=max(1, _env_int("KNOWLEDGE_FAILURE_ALERT_THRESHOLD", 5)),
-        knowledge_failure_alert_window_minutes=max(1, _env_int("KNOWLEDGE_FAILURE_ALERT_WINDOW_MINUTES", 60)),
-        knowledge_failure_alert_webhook=_env_str("KNOWLEDGE_FAILURE_ALERT_WEBHOOK"),
-        ai_auto_schedule_enabled=_env_bool("AI_AUTO_SCHEDULE_ENABLED", True),
-        ai_auto_off_weekday=max(0, min(6, _env_int("AI_AUTO_OFF_WEEKDAY", 4))),
-        ai_auto_off_hour=max(0, min(23, _env_int("AI_AUTO_OFF_HOUR", 19))),
-        ai_auto_off_minute=max(0, min(59, _env_int("AI_AUTO_OFF_MINUTE", 0))),
-        ai_auto_on_weekday=max(0, min(6, _env_int("AI_AUTO_ON_WEEKDAY", 0))),
-        ai_auto_on_hour=max(0, min(23, _env_int("AI_AUTO_ON_HOUR", 6))),
-        ai_auto_on_minute=max(0, min(59, _env_int("AI_AUTO_ON_MINUTE", 0))),
-        panel_attendants=_env_csv("PANEL_ATTENDANTS") or ("Lu",),
-    )
+    return AppSettings()

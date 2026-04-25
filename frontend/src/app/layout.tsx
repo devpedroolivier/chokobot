@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Chokodelícia Admin",
-  description: "Painel operacional e monitoramento de pedidos da Chokodelícia."
+  title: "Trufinha — Admin",
+  description: "Painel operacional Trufinha — atendimento WhatsApp e gestão de pedidos."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

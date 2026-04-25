@@ -1,8 +1,17 @@
-# CLAUDE.md — Chokobot
+# CLAUDE.md — Trufinha (ex-Chokobot)
 
 ## Visão Geral
 
-**Chokobot** é um bot de WhatsApp para a **Chokodelícia**, uma confeitaria artesanal. O sistema automatiza o atendimento via WhatsApp usando um agente de IA com múltiplos sub-agentes especializados por tipo de pedido.
+**Trufinha** é uma plataforma de atendimento automatizado via WhatsApp
+para confeitarias. Primeiro tenant em produção: **Chokodelícia**.
+Em evolução para SaaS multi-tenant (ver `docs/PIVOT_TODO.md`).
+
+> Nota: o nome técnico do package Python (`app/`) e dos containers
+> (`chokobot_container`, `chokobot-redis`, etc.) continua como
+> "chokobot" — o rename técnico acontece no cutover Postgres (Fase B).
+
+O sistema automatiza o atendimento via WhatsApp usando um agente de IA
+com múltiplos sub-agentes especializados por tipo de pedido.
 
 ---
 
