@@ -80,14 +80,16 @@ class ConversationGatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake_client.calls[1][0], "http://conversation.test/internal/messages/reply")
 
     async def test_service_registry_uses_http_gateway_when_url_is_configured(self):
-        get_conversation_gateway.cache_clear()
+        from app.application.service_registry import reset_registry
+        reset_registry()
         with patch.dict(os.environ, {"CONVERSATION_SERVICE_URL": "http://conversation.test"}, clear=False):
             gateway = get_conversation_gateway()
 
         self.assertIsInstance(gateway, HttpConversationGateway)
 
     async def test_service_registry_uses_local_gateway_without_remote_url(self):
-        get_conversation_gateway.cache_clear()
+        from app.application.service_registry import reset_registry
+        reset_registry()
         with patch.dict(os.environ, {"CONVERSATION_SERVICE_URL": ""}, clear=False):
             gateway = get_conversation_gateway()
 

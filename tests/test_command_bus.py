@@ -29,7 +29,8 @@ class CommandBusTests(unittest.IsolatedAsyncioTestCase):
         handler.assert_awaited_once()
 
     async def test_service_registry_bus_dispatches_inbound_message_command(self):
-        get_command_bus.cache_clear()
+        from app.application.service_registry import reset_registry
+        reset_registry()
         bus = get_command_bus()
 
         with patch("app.application.handlers.handle_inbound_message.process_inbound_message", AsyncMock()) as mocked:
