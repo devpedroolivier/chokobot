@@ -5,7 +5,14 @@ from app.domain.repositories.order_repository import OrderPanelItem, OrderReposi
 
 
 class SQLiteOrderRepository(OrderRepository):
-    def list_for_main_panel(self) -> list[OrderPanelItem]:
+    """SQLite implementation. ``tenant_id`` is accepted for forward
+    compatibility (Phase B) and ignored — Postgres takes over at
+    cutover and enforces filtering."""
+
+    def list_for_main_panel(
+        self, *, tenant_id: str | None = None
+    ) -> list[OrderPanelItem]:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -47,7 +54,8 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
-    def list_for_orders_page(self) -> list[tuple]:
+    def list_for_orders_page(self, *, tenant_id: str | None = None) -> list[tuple]:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -80,7 +88,8 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
-    def export_rows(self) -> list[tuple]:
+    def export_rows(self, *, tenant_id: str | None = None) -> list[tuple]:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -117,7 +126,9 @@ class SQLiteOrderRepository(OrderRepository):
         horario: str | None = None,
         valor_total: str,
         data_entrega: str,
+        tenant_id: str | None = None,
     ) -> int:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -166,7 +177,8 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
-    def delete_order(self, order_id: int) -> None:
+    def delete_order(self, order_id: int, *, tenant_id: str | None = None) -> None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -181,7 +193,10 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
-    def get_order_details(self, order_id: int) -> dict | None:
+    def get_order_details(
+        self, order_id: int, *, tenant_id: str | None = None
+    ) -> dict | None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -205,7 +220,10 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
-    def list_by_phone(self, phone: str, *, limit: int = 10) -> list[dict]:
+    def list_by_phone(
+        self, phone: str, *, limit: int = 10, tenant_id: str | None = None
+    ) -> list[dict]:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -235,7 +253,10 @@ class SQLiteOrderRepository(OrderRepository):
         finally:
             conn.close()
 
-    def upsert_delivery_status(self, order_id: int, status: str) -> None:
+    def upsert_delivery_status(
+        self, order_id: int, status: str, *, tenant_id: str | None = None
+    ) -> None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()

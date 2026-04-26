@@ -11,6 +11,7 @@ class OrderWriteRepository(Protocol):
         dados: dict,
         nome_cliente: str,
         cliente_id: int | None = None,
+        tenant_id: str | None = None,
     ) -> int: ...
 
     def save_cafeteria_items(
@@ -19,6 +20,7 @@ class OrderWriteRepository(Protocol):
         phone: str,
         itens: list[str],
         nome_cliente: str = "Nome não informado",
+        tenant_id: str | None = None,
     ) -> None: ...
 
     def save_order_bundle(
@@ -31,4 +33,5 @@ class OrderWriteRepository(Protocol):
         delivery_data: dict | None = None,
         process_data: dict | None = None,
         sweet_items: list[dict] | None = None,
+        tenant_id: str | None = None,
     ) -> int: ...

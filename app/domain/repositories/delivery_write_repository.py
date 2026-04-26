@@ -12,4 +12,5 @@ class DeliveryWriteRepository(Protocol):
         endereco: str | None = None,
         data_agendada: str | None = None,
         status: str = "pendente",
+        tenant_id: str | None = None,
     ) -> None: ...

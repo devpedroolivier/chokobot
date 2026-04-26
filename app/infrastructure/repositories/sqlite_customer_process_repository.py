@@ -30,6 +30,10 @@ def _map_process(row) -> CustomerProcessRecord | None:
 
 
 class SQLiteCustomerProcessRepository(CustomerProcessRepository):
+    """SQLite implementation. ``tenant_id`` is accepted for forward
+    compatibility (Phase B) and ignored — the SQLite schema does not
+    have a tenant_id column yet."""
+
     def upsert_process(
         self,
         *,
@@ -41,7 +45,9 @@ class SQLiteCustomerProcessRepository(CustomerProcessRepository):
         status: str = "active",
         source: str | None = None,
         order_id: int | None = None,
+        tenant_id: str | None = None,
     ) -> int:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -98,7 +104,14 @@ class SQLiteCustomerProcessRepository(CustomerProcessRepository):
         row = self.get_process(phone, process_type)
         return 0 if row is None else row.id
 
-    def get_process(self, phone: str, process_type: str) -> CustomerProcessRecord | None:
+    def get_process(
+        self,
+        phone: str,
+        process_type: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> CustomerProcessRecord | None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -114,7 +127,10 @@ class SQLiteCustomerProcessRepository(CustomerProcessRepository):
         finally:
             conn.close()
 
-    def list_active_processes(self) -> list[CustomerProcessRecord]:
+    def list_active_processes(
+        self, *, tenant_id: str | None = None
+    ) -> list[CustomerProcessRecord]:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()

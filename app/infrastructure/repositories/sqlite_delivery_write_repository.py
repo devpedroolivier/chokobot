@@ -17,7 +17,9 @@ class SQLiteDeliveryWriteRepository(DeliveryWriteRepository):
         endereco: str | None = None,
         data_agendada: str | None = None,
         status: str = "pendente",
+        tenant_id: str | None = None,
     ) -> None:
+        del tenant_id
         conn = get_connection()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()

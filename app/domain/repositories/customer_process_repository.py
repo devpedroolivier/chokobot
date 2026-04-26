@@ -31,8 +31,17 @@ class CustomerProcessRepository(Protocol):
         status: str = "active",
         source: str | None = None,
         order_id: int | None = None,
+        tenant_id: str | None = None,
     ) -> int: ...
 
-    def get_process(self, phone: str, process_type: str) -> CustomerProcessRecord | None: ...
+    def get_process(
+        self,
+        phone: str,
+        process_type: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> CustomerProcessRecord | None: ...
 
-    def list_active_processes(self) -> list[CustomerProcessRecord]: ...
+    def list_active_processes(
+        self, *, tenant_id: str | None = None
+    ) -> list[CustomerProcessRecord]: ...

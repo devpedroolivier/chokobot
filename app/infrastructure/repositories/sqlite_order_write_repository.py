@@ -211,7 +211,9 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
         phone: str,
         itens: list[str],
         nome_cliente: str = "Nome não informado",
+        tenant_id: str | None = None,
     ) -> None:
+        del tenant_id
         conn = get_connection()
         conn.row_factory = sqlite3.Row
         try:
@@ -248,12 +250,14 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
         dados: dict,
         nome_cliente: str,
         cliente_id: int | None = None,
+        tenant_id: str | None = None,
     ) -> int:
         return self.save_order_bundle(
             phone=phone,
             dados=dados,
             nome_cliente=nome_cliente,
             cliente_id=cliente_id,
+            tenant_id=tenant_id,
         )
 
     def save_order_bundle(
@@ -266,7 +270,9 @@ class SQLiteOrderWriteRepository(OrderWriteRepository):
         delivery_data: dict | None = None,
         process_data: dict | None = None,
         sweet_items: list[dict] | None = None,
+        tenant_id: str | None = None,
     ) -> int:
+        del tenant_id
         conn = get_connection()
         conn.row_factory = sqlite3.Row
         try:

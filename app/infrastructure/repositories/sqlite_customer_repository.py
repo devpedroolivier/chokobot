@@ -20,7 +20,17 @@ def _map_customer(row) -> CustomerRecord | None:
 
 
 class SQLiteCustomerRepository(CustomerRepository):
-    def list_customers(self) -> list[CustomerRecord]:
+    """SQLite implementation of CustomerRepository.
+
+    The ``tenant_id`` keyword is part of every method signature for
+    forward compatibility with Phase B's Postgres implementation. While
+    the SQLite schema does not yet have a ``tenant_id`` column, the
+    parameter is silently ignored — the cutover migration adds the
+    column and the Postgres implementation enforces filtering.
+    """
+
+    def list_customers(self, *, tenant_id: str | None = None) -> list[CustomerRecord]:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -29,7 +39,10 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def get_customer(self, customer_id: int) -> CustomerRecord | None:
+    def get_customer(
+        self, customer_id: int, *, tenant_id: str | None = None
+    ) -> CustomerRecord | None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -38,7 +51,10 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def get_customer_by_phone(self, telefone: str) -> CustomerRecord | None:
+    def get_customer_by_phone(
+        self, telefone: str, *, tenant_id: str | None = None
+    ) -> CustomerRecord | None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -52,7 +68,10 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def get_customers_by_phones(self, phones: Iterable[str]) -> dict[str, CustomerRecord]:
+    def get_customers_by_phones(
+        self, phones: Iterable[str], *, tenant_id: str | None = None
+    ) -> dict[str, CustomerRecord]:
+        del tenant_id
         unique_phones = tuple(dict.fromkeys(phone for phone in phones if phone))
         if not unique_phones:
             return {}
@@ -73,7 +92,10 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def create_customer(self, nome: str, telefone: str) -> None:
+    def create_customer(
+        self, nome: str, telefone: str, *, tenant_id: str | None = None
+    ) -> None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -86,7 +108,10 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def upsert_customer(self, nome: str, telefone: str) -> int:
+    def upsert_customer(
+        self, nome: str, telefone: str, *, tenant_id: str | None = None
+    ) -> int:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -107,7 +132,15 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def update_customer(self, customer_id: int, nome: str, telefone: str) -> None:
+    def update_customer(
+        self,
+        customer_id: int,
+        nome: str,
+        telefone: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
@@ -119,7 +152,10 @@ class SQLiteCustomerRepository(CustomerRepository):
         finally:
             conn.close()
 
-    def delete_customer(self, customer_id: int) -> None:
+    def delete_customer(
+        self, customer_id: int, *, tenant_id: str | None = None
+    ) -> None:
+        del tenant_id
         conn = get_connection()
         try:
             cursor = conn.cursor()
