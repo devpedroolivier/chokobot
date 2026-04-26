@@ -12,4 +12,5 @@ async def generate_ai_reply(command: GenerateAiReplyCommand) -> str:
         nome_cliente=command.nome_cliente,
         cliente_id=command.cliente_id,
         now=command.now,
+        tenant_id=command.tenant_id,
     )

@@ -5,4 +5,4 @@ from app.application.use_cases.process_inbound_message import process_inbound_me
 
 
 async def handle_inbound_message(command: HandleInboundMessageCommand) -> None:
-    await process_inbound_message(command.payload)
+    await process_inbound_message(command.payload, tenant_id=command.tenant_id)

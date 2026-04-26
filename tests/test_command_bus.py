@@ -36,7 +36,7 @@ class CommandBusTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.application.handlers.handle_inbound_message.process_inbound_message", AsyncMock()) as mocked:
             await bus.dispatch(HandleInboundMessageCommand(payload={"message": "oi"}))
 
-        mocked.assert_awaited_once_with({"message": "oi"})
+        mocked.assert_awaited_once_with({"message": "oi"}, tenant_id=None)
 
 
 if __name__ == "__main__":

@@ -767,9 +767,18 @@ async def process_message_with_ai(
     ai_client=None,
     runtime: AIRuntime | None = None,
     order_support_service: OrderSupportService | None = None,
+    *,
+    tenant_id: str | None = None,
 ) -> str:
     """Função principal que o handler vai chamar para processar a mensagem pela IA.
-    A camada de suporte transacional pode ser substituída via `order_support_service` para testes ou adapters."""
+    A camada de suporte transacional pode ser substituída via `order_support_service` para testes ou adapters.
+
+    ``tenant_id`` is plumbed through Phase B's command bus. Today the
+    runner's downstream calls still default to the implicit tenant
+    (Chokodelícia); B.5 only guarantees the value reaches here so the
+    cutover code path can switch behaviour without further refactor.
+    """
+    del tenant_id  # Reserved for Phase B downstream consumers.
     start_time = time.time()
     session = get_or_create_session(telefone)
     runtime = runtime or get_default_ai_runtime()

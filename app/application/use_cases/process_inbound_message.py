@@ -35,19 +35,31 @@ REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot", "at
 MESSAGE_IDEMPOTENCY_TTL_SECONDS = 60
 
 
-async def generate_ai_reply(telefone: str, texto: str, nome_cliente: str, cliente_id: int) -> str:
+async def generate_ai_reply(
+    telefone: str,
+    texto: str,
+    nome_cliente: str,
+    cliente_id: int,
+    *,
+    tenant_id: str | None = None,
+) -> str:
     return await get_command_bus().dispatch(
         GenerateAiReplyCommand(
             telefone=telefone,
             text=texto,
             nome_cliente=nome_cliente,
             cliente_id=cliente_id,
+            tenant_id=tenant_id,
         )
     )
 
 
-def save_customer_contact(telefone: str, nome_cliente: str) -> int:
-    return get_customer_repository().upsert_customer(nome_cliente, telefone)
+def save_customer_contact(
+    telefone: str, nome_cliente: str, *, tenant_id: str | None = None
+) -> int:
+    return get_customer_repository(tenant_id).upsert_customer(
+        nome_cliente, telefone, tenant_id=tenant_id
+    )
 
 
 async def _send_message(
@@ -74,6 +86,7 @@ async def process_inbound_message(
     responder_usuario_fn: Callable[[str, str], Awaitable[bool]] = responder_usuario_com_contexto,
     gerar_resposta_ia_fn: Callable[[str, str, str, int], Awaitable[str]] = generate_ai_reply,
     save_customer_fn: Callable[[str, str], int] = save_customer_contact,
+    tenant_id: str | None = None,
 ) -> None:
     norm = normalize_incoming(mensagem)
     texto = norm["text"]
@@ -82,6 +95,14 @@ async def process_inbound_message(
     telefone = norm["phone"]
     nome_cliente = norm["chat_name"] or "Nome não informado"
     msg_id = norm["message_id"]
+    if tenant_id is None:
+        tenant_id = norm.get("tenant_id")
+    # tenant_id flows through but is not yet consumed by the legacy
+    # state-store / repo calls below — it lands at the runner via
+    # GenerateAiReplyCommand and at save_customer_contact via the
+    # caller. The single-tenant Chokodelícia path still works because
+    # tenant_id=None triggers the default behaviour everywhere.
+    del tenant_id
 
     if telefone in get_admin_phones():
         cmd = texto.lower()

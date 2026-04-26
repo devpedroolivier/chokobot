@@ -169,6 +169,36 @@ def is_group_message(payload: dict) -> bool:
     return False
 
 
+def extract_evolution_instance(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    instance = payload.get("instance")
+    if isinstance(instance, str) and instance.strip():
+        return instance.strip()
+    nested = _get(payload, "data", "instance")
+    return nested.strip() if isinstance(nested, str) else ""
+
+
+def resolve_tenant_id(payload: dict) -> str | None:
+    """Resolve which tenant a webhook belongs to.
+
+    Phase B routing: when the payload comes from Evolution and carries
+    an ``instance`` field, that string maps to the tenant slug
+    (``tenants.evolution_instance``). The actual tenant lookup happens
+    at the Postgres cutover; for now, return the raw instance string
+    so downstream code can pin per-tenant state to the right
+    namespace.
+
+    Z-API and any other provider that does not advertise a tenant
+    return ``None`` — interpreted as the default Chokodelícia tenant
+    by every consumer (state store, repos, command bus).
+    """
+    instance = extract_evolution_instance(payload)
+    if instance:
+        return instance
+    return None
+
+
 def normalize_incoming(payload: dict) -> dict:
     return {
         "text": extract_text(payload),
@@ -178,4 +208,5 @@ def normalize_incoming(payload: dict) -> dict:
         "message_type": extract_message_type(payload),
         "from_me": extract_from_me(payload),
         "is_group": is_group_message(payload),
+        "tenant_id": resolve_tenant_id(payload),
     }
