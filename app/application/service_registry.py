@@ -37,6 +37,10 @@ from app.application.ports.order_gateway import OrderGateway
 from app.domain.repositories.customer_process_repository import CustomerProcessRepository
 from app.domain.repositories.customer_repository import CustomerRepository
 from app.domain.repositories.order_repository import OrderRepository
+from app.infrastructure.state.conversation_state_store import (
+    ConversationStateStore,
+    build_conversation_state_store,
+)
 from app.settings import get_settings
 
 
@@ -82,6 +86,7 @@ class ServiceRegistry:
             self._build_customer_process_repository
         )
         self._order_repositories = _PerTenantCache(self._build_order_repository)
+        self._state_stores = _PerTenantCache(self._build_state_store)
         # Buses are global today (one CommandBus / EventBus shared across
         # tenants). They stay tenant-agnostic for now; tenant routing
         # happens inside command/event handlers.
@@ -121,6 +126,9 @@ class ServiceRegistry:
     def get_order_repository(self, tenant_id: TenantId = None) -> OrderRepository:
         return self._order_repositories.get(tenant_id)
 
+    def get_state_store(self, tenant_id: TenantId = None) -> ConversationStateStore:
+        return self._state_stores.get(tenant_id)
+
     def get_command_bus(self) -> LocalCommandBus:
         if self._command_bus is None:
             self._command_bus = self._build_command_bus()
@@ -145,6 +153,7 @@ class ServiceRegistry:
         self._customer_repositories.clear()
         self._customer_process_repositories.clear()
         self._order_repositories.clear()
+        self._state_stores.clear()
         self._command_bus = None
         self._event_bus = None
 
@@ -222,6 +231,9 @@ class ServiceRegistry:
         )
 
         return SQLiteOrderRepository()
+
+    def _build_state_store(self, tenant_id: TenantId) -> ConversationStateStore:
+        return build_conversation_state_store(tenant_id=tenant_id)
 
     def _build_command_bus(self) -> LocalCommandBus:
         from app.application.handlers.generate_ai_reply import generate_ai_reply
@@ -304,6 +316,10 @@ def get_customer_process_repository(tenant_id: TenantId = None) -> CustomerProce
 
 def get_order_repository(tenant_id: TenantId = None) -> OrderRepository:
     return get_registry().get_order_repository(tenant_id)
+
+
+def get_state_store(tenant_id: TenantId = None) -> ConversationStateStore:
+    return get_registry().get_state_store(tenant_id)
 
 
 def get_command_bus() -> LocalCommandBus:

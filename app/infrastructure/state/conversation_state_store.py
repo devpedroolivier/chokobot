@@ -245,18 +245,37 @@ class StateMap(MutableMapping[str, dict]):
 
 
 class ConversationStateStore:
-    def __init__(self, backend: StateBackend):
+    """Per-tenant runtime state store.
+
+    The same backend (Redis / SQLite / memory) is shared across all
+    tenants. Isolation happens at the namespace level — when
+    ``tenant_id`` is provided, every namespace is prefixed with
+    ``tenant:{tenant_id}:``, so keys for tenant A never collide with
+    tenant B even though they share the underlying storage.
+
+    ``tenant_id=None`` keeps the legacy un-prefixed namespaces in place
+    so existing Chokodelícia keys are not orphaned at cutover.
+    """
+
+    def __init__(self, backend: StateBackend, *, tenant_id: str | None = None):
         self.backend = backend
-        self.estados_encomenda = StateMap("encomenda", backend)
-        self.estados_cafeteria = StateMap("cafeteria", backend)
-        self.estados_entrega = StateMap("entrega", backend)
-        self.estados_cestas_box = StateMap("cestas_box", backend)
-        self.estados_atendimento = StateMap("atendimento", backend)
-        self.ai_sessions = StateMap("ai_session", backend)
-        self.conversation_threads = StateMap("conversation_thread", backend)
-        self.processed_messages = StateMap("processed_message", backend)
-        self.recent_messages = StateMap("recent_message", backend)
-        self.phone_opt_out = StateMap("phone_opt_out", backend)
+        self.tenant_id = tenant_id
+        ns = self._scoped_namespace
+        self.estados_encomenda = StateMap(ns("encomenda"), backend)
+        self.estados_cafeteria = StateMap(ns("cafeteria"), backend)
+        self.estados_entrega = StateMap(ns("entrega"), backend)
+        self.estados_cestas_box = StateMap(ns("cestas_box"), backend)
+        self.estados_atendimento = StateMap(ns("atendimento"), backend)
+        self.ai_sessions = StateMap(ns("ai_session"), backend)
+        self.conversation_threads = StateMap(ns("conversation_thread"), backend)
+        self.processed_messages = StateMap(ns("processed_message"), backend)
+        self.recent_messages = StateMap(ns("recent_message"), backend)
+        self.phone_opt_out = StateMap(ns("phone_opt_out"), backend)
+
+    def _scoped_namespace(self, name: str) -> str:
+        if self.tenant_id is None:
+            return name
+        return f"tenant:{self.tenant_id}:{name}"
 
     def is_bot_ativo(self) -> bool:
         return self.backend.get_flag("bot_ativo", True)
@@ -432,18 +451,24 @@ class ConversationStateStore:
             state_map.pop(key, None)
 
 
-def build_conversation_state_store() -> ConversationStateStore:
+# Backends are heavy (Redis pool, SQLite file). Build once per process
+# and share across per-tenant ConversationStateStore instances.
+_shared_backend: StateBackend | None = None
+_shared_backend_lock = threading.Lock()
+
+
+def _build_shared_backend() -> StateBackend:
     settings = get_settings()
     redis_url = settings.redis_url
     if not redis_url:
         try:
-            return ConversationStateStore(SQLiteStateBackend(settings.state_sqlite_path))
+            return SQLiteStateBackend(settings.state_sqlite_path)
         except Exception as exc:
             log_event("state_backend_fallback", backend="memory", reason=type(exc).__name__)
-            return ConversationStateStore(InMemoryStateBackend())
+            return InMemoryStateBackend()
 
     try:
-        return ConversationStateStore(RedisStateBackend(redis_url))
+        return RedisStateBackend(redis_url)
     except Exception as exc:
         if not settings.state_backend_fallback_enabled:
             raise RuntimeError(
@@ -451,7 +476,30 @@ def build_conversation_state_store() -> ConversationStateStore:
             ) from exc
         log_event("state_backend_fallback", backend="sqlite", reason=type(exc).__name__)
         try:
-            return ConversationStateStore(SQLiteStateBackend(settings.state_sqlite_path))
+            return SQLiteStateBackend(settings.state_sqlite_path)
         except Exception as sqlite_exc:
             log_event("state_backend_fallback", backend="memory", reason=type(sqlite_exc).__name__)
-            return ConversationStateStore(InMemoryStateBackend())
+            return InMemoryStateBackend()
+
+
+def _get_shared_backend() -> StateBackend:
+    global _shared_backend
+    if _shared_backend is None:
+        with _shared_backend_lock:
+            if _shared_backend is None:
+                _shared_backend = _build_shared_backend()
+    return _shared_backend
+
+
+def reset_shared_backend() -> None:
+    """Drop the cached backend. Tests that mutate REDIS_URL /
+    STATE_SQLITE_PATH between runs call this to avoid stale handles."""
+    global _shared_backend
+    with _shared_backend_lock:
+        _shared_backend = None
+
+
+def build_conversation_state_store(
+    tenant_id: str | None = None,
+) -> ConversationStateStore:
+    return ConversationStateStore(_get_shared_backend(), tenant_id=tenant_id)

@@ -12,6 +12,7 @@ from app.infrastructure.state.conversation_state_store import (
     InMemoryStateBackend,
     SQLiteStateBackend,
     build_conversation_state_store,
+    reset_shared_backend,
 )
 from app.services.estados import (
     ai_sessions,
@@ -72,6 +73,7 @@ class RuntimeStateStoreTests(unittest.TestCase):
         self.assertNotIn("5511999999999", ai_sessions)
 
     def test_state_store_falls_back_to_sqlite_when_redis_is_unavailable(self):
+        reset_shared_backend()
         with tempfile.TemporaryDirectory() as tmpdir:
             fake_settings = type(
                 "Settings",
@@ -97,6 +99,7 @@ class RuntimeStateStoreTests(unittest.TestCase):
         self.assertIsInstance(store.backend, SQLiteStateBackend)
 
     def test_state_store_raises_when_fallback_is_disabled(self):
+        reset_shared_backend()
         with tempfile.TemporaryDirectory() as tmpdir:
             fake_settings = type(
                 "Settings",
@@ -122,6 +125,7 @@ class RuntimeStateStoreTests(unittest.TestCase):
         self.assertIn("fallback is disabled", str(ctx.exception))
 
     def test_state_store_falls_back_to_memory_when_sqlite_is_unavailable(self):
+        reset_shared_backend()
         with tempfile.TemporaryDirectory() as tmpdir:
             fake_settings = type(
                 "Settings",
