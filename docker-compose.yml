@@ -117,6 +117,30 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  # Trufinha — multi-tenant database. Lives under the "postgres" profile
+  # so existing Chokodelícia deployments (still on SQLite) are not
+  # affected. Bring it up explicitly during the cutover with:
+  #   docker compose --profile postgres up -d chokobot-postgres
+  chokobot-postgres:
+    profiles: ["postgres"]
+    container_name: chokobot_postgres_container
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${CHOKOBOT_DB_USER:-trufinha}
+      - POSTGRES_PASSWORD=${CHOKOBOT_DB_PASS}
+      - POSTGRES_DB=${CHOKOBOT_DB_NAME:-trufinha}
+    ports:
+      - "5433:5432"
+    volumes:
+      - chokobot_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
   evolution-postgres:
     container_name: evolution_postgres_container
     image: postgres:15-alpine
@@ -193,6 +217,7 @@ services:
 
 volumes:
   chokobot_redis_data:
+  chokobot_postgres_data:
   evolution_postgres_data:
   evolution_redis_data:
   evolution_instances:

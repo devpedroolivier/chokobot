@@ -1,10 +1,26 @@
-# Decisões pendentes — Fase B (cutover Postgres + multi-tenant)
+# Decisões — Fase B (cutover Postgres + multi-tenant)
 
-**Status:** aguardando suas respostas. Bloqueia o início da Fase B.
+**Status:** ✅ aprovadas em 2026-04-26 — todas as recomendações aceitas.
 **Data:** 2026-04-26
 **Contexto:** consolidação das decisões espalhadas em `docs/PIVOT_TODO.md`
-e `docs/MULTI_TENANT.md`. Cada item tem **recomendação técnica** —
-você responde 👍 ou propõe alternativa.
+e `docs/MULTI_TENANT.md`.
+
+## Resumo das respostas
+
+| # | Decisão | Resposta |
+|---|---|---|
+| 1 | Postgres separado vs compartilhado | **A — separado (`chokobot-postgres`)** |
+| 2 | Driver | **A — psycopg3 async + SQL raw** |
+| 3 | Segundo tenant | Em aberto — bloqueia Fase D, **não** bloqueia B |
+| 4 | Janela de downtime | **A — terça 09:00** |
+| 5 | Header platform admin | **A — "Trufinha" no admin global** |
+| 6 | Tabela `atendimentos` | **A — manter com `tenant_id`** |
+| 7 | Outbox JSONL | **A — migrar para tabela Postgres com `tenant_id`** |
+| 8 | Branding | **C (piloto)** — paleta default + `display_name` + `logo_url` |
+| 9 | Onboarding concierge | **B — assistente executa via instruções** |
+| 10 | Telemetria por tenant | **A — `tenant_id` em logs/métricas desde Fase B.4** |
+
+**Próximo passo:** B.1 (subir Postgres no compose) + B.2 (migrations).
 
 ---
 
