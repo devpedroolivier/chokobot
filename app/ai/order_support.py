@@ -121,4 +121,68 @@ class SQLiteOrderSupportAdapter:
         )
 
 
-DEFAULT_ORDER_SUPPORT = OrderSupportService(SQLiteOrderSupportAdapter())
+class PostgresOrderSupportAdapter:
+    """Phase B.8a equivalent that reads from the cutover Postgres
+    database. Queries are scoped to the default Chokodelícia tenant —
+    multi-tenant wiring requires the runner to pass tenant_id through
+    ``OrderSupportService.handle``, which is a follow-up."""
+
+    def __init__(self, *, invoice_email: str | None = None):
+        settings = get_settings()
+        self._invoice_email = invoice_email or settings.order_support_invoice_email
+
+    def fetch_orders(self, phone: str) -> Iterable[OrderRecord]:
+        from app.db.database import open_postgres_connection, resolve_tenant_pk
+
+        normalized = normalize_tracking_phone(phone)
+        if not normalized:
+            return
+        try:
+            tenant_pk = resolve_tenant_pk(None)
+            with open_postgres_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            e.id AS order_id,
+                            COALESCE(d.status, 'pendente') AS status
+                        FROM clientes c
+                        JOIN encomendas e
+                            ON e.cliente_id = c.id AND e.tenant_id = c.tenant_id
+                        LEFT JOIN entregas d
+                            ON d.encomenda_id = e.id AND d.tenant_id = e.tenant_id
+                        WHERE c.telefone = %s AND c.tenant_id = %s
+                        ORDER BY e.id DESC
+                        LIMIT 1
+                        """,
+                        (normalized, tenant_pk),
+                    )
+                    row = cur.fetchone()
+        except Exception:
+            return
+
+        if not row:
+            return
+
+        status = (row[1] or "pendente").lower()
+        pix_confirmed = status not in {"pendente", "agendada"}
+        cancelable = status in {"pendente", "agendada"}
+        yield OrderRecord(
+            phone=normalized,
+            order_id=str(row[0]),
+            status=status,
+            pix_confirmed=pix_confirmed,
+            cancelable=cancelable,
+            invoice_email=self._invoice_email,
+        )
+
+
+def _build_default_adapter() -> OrderSupportAdapter:
+    from app.db.database import is_postgres
+
+    if is_postgres():
+        return PostgresOrderSupportAdapter()
+    return SQLiteOrderSupportAdapter()
+
+
+DEFAULT_ORDER_SUPPORT = OrderSupportService(_build_default_adapter())

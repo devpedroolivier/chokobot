@@ -12,9 +12,15 @@ Two APIs coexist while the codebase migrates:
   query_all()`` accept an optional ``tenant_id`` that is a no-op today
   but is the placeholder for Phase B (Postgres + tenant filtering).
 
-Phase B will swap the SQLite-backed ``Database`` for a Postgres
-implementation; legacy ``get_connection()`` callers will be migrated
-in the same cutover.
+Phase B.8a additions:
+
+* ``is_postgres()`` — checks the configured ``DATABASE_URL`` so the
+  rest of the codebase can branch on backend.
+* ``open_postgres_connection()`` — opens a fresh psycopg connection,
+  used by the Postgres repository implementations.
+
+The SQLite path stays the default until cutover (B.8b) flips
+``DATABASE_URL`` to Postgres in production.
 """
 from __future__ import annotations
 
@@ -22,7 +28,7 @@ import os
 import sqlite3
 import threading
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Any, Iterator
 
 from app.observability import increment_counter, log_event
 from app.settings import get_settings
@@ -153,3 +159,64 @@ def reset_database() -> None:
         if _database is not None:
             _database.close()
         _database = None
+
+
+# ----------------------------------------------------------------------
+#  Phase B.8a — Postgres backend helpers
+# ----------------------------------------------------------------------
+
+def _normalised_database_url() -> str:
+    return get_settings().database_url or ""
+
+
+def is_postgres() -> bool:
+    """True when DATABASE_URL points at Postgres (any psycopg variant)."""
+    url = _normalised_database_url()
+    return url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://"))
+
+
+def _strip_sqlalchemy_driver(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
+def open_postgres_connection() -> Any:
+    """Open a fresh psycopg connection. ``psycopg`` is imported lazily
+    so the SQLite-only Chokodelícia container keeps starting even when
+    the package isn't installed."""
+    import psycopg  # type: ignore[import-not-found]
+
+    url = _strip_sqlalchemy_driver(_normalised_database_url())
+    increment_counter("db_connections_total", db_path=url)
+    log_event("pg_connect")
+    return psycopg.connect(url)
+
+
+_DEFAULT_TENANT_SLUG = "chokodelicia"
+_tenant_pk_cache: dict[str, int] = {}
+_tenant_pk_cache_lock = threading.Lock()
+
+
+def resolve_tenant_pk(tenant_slug: str | None) -> int:
+    """Translate the application-level tenant slug into the BIGINT
+    primary key used by the Postgres schema. Cached in-process; the
+    map is tiny (one row per tenant) and slugs are immutable."""
+    slug = tenant_slug or _DEFAULT_TENANT_SLUG
+    with _tenant_pk_cache_lock:
+        cached = _tenant_pk_cache.get(slug)
+        if cached is not None:
+            return cached
+    with open_postgres_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM tenants WHERE slug = %s", (slug,))
+            row = cur.fetchone()
+    if row is None:
+        raise RuntimeError(f"Unknown tenant slug: {slug!r}")
+    pk = int(row[0])
+    with _tenant_pk_cache_lock:
+        _tenant_pk_cache[slug] = pk
+    return pk
+
+
+def reset_tenant_pk_cache() -> None:
+    with _tenant_pk_cache_lock:
+        _tenant_pk_cache.clear()

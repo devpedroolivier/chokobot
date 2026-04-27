@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from app.db.database import get_connection
+from app.db.database import get_connection, is_postgres
 
 
 class SchemaValidationError(RuntimeError):
@@ -41,6 +41,10 @@ def _existing_columns(conn: sqlite3.Connection, table: str) -> set[str]:
 
 
 def validate_runtime_schema() -> None:
+    # On Postgres the schema is owned by Alembic; the SQLite PRAGMA
+    # introspection here would fail anyway. Trust ``alembic upgrade head``.
+    if is_postgres():
+        return
     conn = get_connection()
     try:
         for table, required_columns in _REQUIRED_TABLE_COLUMNS.items():

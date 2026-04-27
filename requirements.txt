@@ -10,6 +10,4 @@ redis>=5.0
 openai>=1.0.0
 pydantic>=2.0
 pydantic-settings>=2.0
-# psycopg[binary]>=3.2 — uncomment at the Phase B cutover (Postgres swap).
-# Left commented for now to keep the SQLite-only Chokodelícia container
-# image small.
+psycopg[binary]>=3.2
