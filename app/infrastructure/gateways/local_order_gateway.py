@@ -3,12 +3,28 @@ from __future__ import annotations
 from app.application.use_cases.persist_cafeteria_order import PersistCafeteriaOrder
 from app.application.use_cases.persist_order_bundle import PersistOrderBundle
 from app.application.use_cases.persist_order_payload import PersistOrderPayload
-from app.infrastructure.repositories.sqlite_order_write_repository import SQLiteOrderWriteRepository
+
+
+def _build_order_write_repository():
+    from app.db.database import is_postgres
+
+    if is_postgres():
+        from app.infrastructure.repositories.postgres_order_write_repository import (
+            PostgresOrderWriteRepository,
+        )
+
+        return PostgresOrderWriteRepository()
+
+    from app.infrastructure.repositories.sqlite_order_write_repository import (
+        SQLiteOrderWriteRepository,
+    )
+
+    return SQLiteOrderWriteRepository()
 
 
 class LocalOrderGateway:
     def __init__(self):
-        repository = SQLiteOrderWriteRepository()
+        repository = _build_order_write_repository()
         self._persist_order = PersistOrderPayload(repository=repository)
         self._persist_cafeteria = PersistCafeteriaOrder(repository=repository)
         self._persist_bundle = PersistOrderBundle(repository=repository)

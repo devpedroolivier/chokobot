@@ -1,12 +1,28 @@
 from __future__ import annotations
 
 from app.application.use_cases.persist_delivery import PersistDelivery
-from app.infrastructure.repositories.sqlite_delivery_write_repository import SQLiteDeliveryWriteRepository
+
+
+def _build_delivery_write_repository():
+    from app.db.database import is_postgres
+
+    if is_postgres():
+        from app.infrastructure.repositories.postgres_delivery_write_repository import (
+            PostgresDeliveryWriteRepository,
+        )
+
+        return PostgresDeliveryWriteRepository()
+
+    from app.infrastructure.repositories.sqlite_delivery_write_repository import (
+        SQLiteDeliveryWriteRepository,
+    )
+
+    return SQLiteDeliveryWriteRepository()
 
 
 class LocalDeliveryGateway:
     def __init__(self):
-        self._persist_delivery = PersistDelivery(repository=SQLiteDeliveryWriteRepository())
+        self._persist_delivery = PersistDelivery(repository=_build_delivery_write_repository())
 
     def create_delivery(
         self,

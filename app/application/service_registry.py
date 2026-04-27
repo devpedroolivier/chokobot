@@ -210,6 +210,15 @@ class ServiceRegistry:
         return LocalConversationGateway()
 
     def _build_customer_repository(self, tenant_id: TenantId) -> CustomerRepository:
+        from app.db.database import is_postgres
+
+        if is_postgres():
+            from app.infrastructure.repositories.postgres_customer_repository import (
+                PostgresCustomerRepository,
+            )
+
+            return PostgresCustomerRepository()
+
         from app.infrastructure.repositories.sqlite_customer_repository import (
             SQLiteCustomerRepository,
         )
@@ -219,6 +228,15 @@ class ServiceRegistry:
     def _build_customer_process_repository(
         self, tenant_id: TenantId
     ) -> CustomerProcessRepository:
+        from app.db.database import is_postgres
+
+        if is_postgres():
+            from app.infrastructure.repositories.postgres_customer_process_repository import (
+                PostgresCustomerProcessRepository,
+            )
+
+            return PostgresCustomerProcessRepository()
+
         from app.infrastructure.repositories.sqlite_customer_process_repository import (
             SQLiteCustomerProcessRepository,
         )
@@ -226,6 +244,15 @@ class ServiceRegistry:
         return SQLiteCustomerProcessRepository()
 
     def _build_order_repository(self, tenant_id: TenantId) -> OrderRepository:
+        from app.db.database import is_postgres
+
+        if is_postgres():
+            from app.infrastructure.repositories.postgres_order_repository import (
+                PostgresOrderRepository,
+            )
+
+            return PostgresOrderRepository()
+
         from app.infrastructure.repositories.sqlite_order_repository import (
             SQLiteOrderRepository,
         )
