@@ -21,6 +21,7 @@ class PersistOrderBundle:
         delivery_data: dict | None = None,
         process_data: dict | None = None,
         sweet_items: list[dict] | None = None,
+        tenant_id: str | None = None,
     ) -> int:
         order_id = self.repository.save_order_bundle(
             phone=phone,
@@ -39,6 +40,7 @@ class PersistOrderBundle:
                     nome_cliente=nome_cliente,
                     categoria=str(dados.get("categoria") or dados.get("linha") or "tradicional"),
                     source="order_bundle",
+                    tenant_id=tenant_id,
                 )
             )
         return order_id

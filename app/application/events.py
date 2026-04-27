@@ -12,6 +12,7 @@ def _event_time() -> str:
 @dataclass(frozen=True)
 class MessageReceivedEvent:
     payload: dict[str, Any]
+    tenant_id: str | None = None
     occurred_at: str = field(default_factory=_event_time)
 
 
@@ -20,6 +21,7 @@ class AiReplyGeneratedEvent:
     telefone: str
     nome_cliente: str
     reply: str
+    tenant_id: str | None = None
     occurred_at: str = field(default_factory=_event_time)
 
 
@@ -30,6 +32,7 @@ class OrderCreatedEvent:
     nome_cliente: str
     categoria: str
     source: str
+    tenant_id: str | None = None
     occurred_at: str = field(default_factory=_event_time)
 
 
@@ -40,6 +43,7 @@ class OrderClosedByBotEvent:
     ferramenta: str
     order_id: int | None
     protocolo: str | None
+    tenant_id: str | None = None
     occurred_at: str = field(default_factory=_event_time)
 
 
@@ -50,4 +54,5 @@ class HumanHandoffEscalatedEvent:
     motivo: str
     categoria: str
     origem: str
+    tenant_id: str | None = None
     occurred_at: str = field(default_factory=_event_time)

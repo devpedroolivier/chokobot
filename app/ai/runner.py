@@ -773,12 +773,10 @@ async def process_message_with_ai(
     """Função principal que o handler vai chamar para processar a mensagem pela IA.
     A camada de suporte transacional pode ser substituída via `order_support_service` para testes ou adapters.
 
-    ``tenant_id`` is plumbed through Phase B's command bus. Today the
-    runner's downstream calls still default to the implicit tenant
-    (Chokodelícia); B.5 only guarantees the value reaches here so the
-    cutover code path can switch behaviour without further refactor.
+    ``tenant_id`` flows from the webhook through the command bus and is
+    forwarded to ``handle_tool_call`` so domain events emitted from
+    autonomous order closures carry the right tenant.
     """
-    del tenant_id  # Reserved for Phase B downstream consumers.
     start_time = time.time()
     session = get_or_create_session(telefone)
     runtime = runtime or get_default_ai_runtime()
@@ -1298,6 +1296,7 @@ async def process_message_with_ai(
                 session=session,
                 save_session_fn=save_session,
                 now=now,
+                tenant_id=tenant_id,
             )
             if should_return:
                 if function_name == "transfer_to_agent":

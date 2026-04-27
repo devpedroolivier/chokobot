@@ -182,6 +182,7 @@ def _record_autonomous_order_closure(
     tool_name: str,
     tool_result: str,
     now: datetime | None = None,
+    tenant_id: str | None = None,
 ) -> None:
     reference = normalize_to_bot_timezone(now) if now is not None else now_in_bot_timezone()
     day = reference.strftime("%Y-%m-%d")
@@ -201,6 +202,7 @@ def _record_autonomous_order_closure(
             ferramenta=tool_name,
             order_id=order_id,
             protocolo=protocol,
+            tenant_id=tenant_id,
         )
     )
 
@@ -297,6 +299,7 @@ def handle_tool_call(
     session: dict,
     save_session_fn,
     now: datetime | None = None,
+    tenant_id: str | None = None,
 ) -> tuple[bool, str]:
     tool_result = ""
 
@@ -372,6 +375,7 @@ def handle_tool_call(
                         tool_name=function_name,
                         tool_result=str(tool_result),
                         now=now,
+                        tenant_id=tenant_id,
                     )
                     _reset_session(session)
                     save_session_fn(telefone, session)
@@ -405,6 +409,7 @@ def handle_tool_call(
                         tool_name=function_name,
                         tool_result=str(tool_result),
                         now=now,
+                        tenant_id=tenant_id,
                     )
                     _reset_session(session)
                     save_session_fn(telefone, session)
@@ -442,6 +447,7 @@ def handle_tool_call(
                             tool_name=function_name,
                             tool_result=str(tool_result),
                             now=now,
+                            tenant_id=tenant_id,
                         )
                         _reset_session(session)
                         save_session_fn(telefone, session)
@@ -479,6 +485,7 @@ def handle_tool_call(
                             tool_name=function_name,
                             tool_result=str(tool_result),
                             now=now,
+                            tenant_id=tenant_id,
                         )
                         _reset_session(session)
                         save_session_fn(telefone, session)

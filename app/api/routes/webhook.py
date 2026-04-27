@@ -124,7 +124,9 @@ async def receber_webhook(request: Request):
 
     if track_phone:
         print_painel(body)
-    get_event_bus().publish(MessageReceivedEvent(payload=norm))
+    get_event_bus().publish(
+        MessageReceivedEvent(payload=norm, tenant_id=norm.get("tenant_id")),
+    )
 
     try:
         phone_key = phone or "anon"

@@ -18,6 +18,7 @@ class PersistOrderPayload:
         dados: dict,
         nome_cliente: str,
         cliente_id: int | None = None,
+        tenant_id: str | None = None,
     ) -> int:
         order_id = self.repository.save_order_payload(
             phone=phone,
@@ -33,6 +34,7 @@ class PersistOrderPayload:
                     nome_cliente=nome_cliente,
                     categoria=str(dados.get("categoria") or dados.get("linha") or "tradicional"),
                     source="order_payload",
+                    tenant_id=tenant_id,
                 )
             )
         return order_id

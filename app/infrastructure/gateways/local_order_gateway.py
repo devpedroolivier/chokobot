@@ -20,12 +20,14 @@ class LocalOrderGateway:
         dados: dict,
         nome_cliente: str,
         cliente_id: int,
+        tenant_id: str | None = None,
     ) -> int:
         return self._persist_order.execute(
             phone=phone,
             dados=dados,
             nome_cliente=nome_cliente,
             cliente_id=cliente_id,
+            tenant_id=tenant_id,
         )
 
     def save_cafeteria_order(
@@ -34,7 +36,9 @@ class LocalOrderGateway:
         phone: str,
         itens: list[str],
         nome_cliente: str,
+        tenant_id: str | None = None,
     ) -> None:
+        del tenant_id  # PersistCafeteriaOrder doesn't emit events today.
         self._persist_cafeteria.execute(
             phone=phone,
             itens=itens,
@@ -51,6 +55,7 @@ class LocalOrderGateway:
         delivery_data: dict | None = None,
         process_data: dict | None = None,
         sweet_items: list[dict] | None = None,
+        tenant_id: str | None = None,
     ) -> int:
         return self._persist_bundle.execute(
             phone=phone,
@@ -60,4 +65,5 @@ class LocalOrderGateway:
             delivery_data=delivery_data,
             process_data=process_data,
             sweet_items=sweet_items,
+            tenant_id=tenant_id,
         )

@@ -435,6 +435,7 @@ def activate_human_handoff(
     audit_writer=register_handoff_audit,
     process_repository=None,
     now: datetime | None = None,
+    tenant_id: str | None = None,
 ) -> str:
     handoff_started_at = normalize_to_bot_timezone(now)
     categoria = _classify_escalation_category(motivo)
@@ -489,6 +490,7 @@ def activate_human_handoff(
                 motivo=motivo,
                 categoria=categoria,
                 origem=origem,
+                tenant_id=tenant_id,
             )
         )
     log_event(

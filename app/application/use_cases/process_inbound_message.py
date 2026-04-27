@@ -97,12 +97,6 @@ async def process_inbound_message(
     msg_id = norm["message_id"]
     if tenant_id is None:
         tenant_id = norm.get("tenant_id")
-    # tenant_id flows through but is not yet consumed by the legacy
-    # state-store / repo calls below — it lands at the runner via
-    # GenerateAiReplyCommand and at save_customer_contact via the
-    # caller. The single-tenant Chokodelícia path still works because
-    # tenant_id=None triggers the default behaviour everywhere.
-    del tenant_id
 
     if telefone in get_admin_phones():
         cmd = texto.lower()
@@ -341,6 +335,7 @@ async def process_inbound_message(
             telefone=telefone,
             nome_cliente=nome_cliente,
             reply=resposta_ia,
+            tenant_id=tenant_id,
         )
     )
     await _send_message(

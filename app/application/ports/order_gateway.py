@@ -11,6 +11,7 @@ class OrderGateway(Protocol):
         dados: dict,
         nome_cliente: str,
         cliente_id: int,
+        tenant_id: str | None = None,
     ) -> int: ...
 
     def save_cafeteria_order(
@@ -19,6 +20,7 @@ class OrderGateway(Protocol):
         phone: str,
         itens: list[str],
         nome_cliente: str,
+        tenant_id: str | None = None,
     ) -> None: ...
 
     def create_order_bundle(
@@ -31,4 +33,5 @@ class OrderGateway(Protocol):
         delivery_data: dict | None = None,
         process_data: dict | None = None,
         sweet_items: list[dict] | None = None,
+        tenant_id: str | None = None,
     ) -> int: ...
