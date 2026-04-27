@@ -84,9 +84,9 @@ CREATE TABLE IF NOT EXISTS encomenda_doces (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     encomenda_id INTEGER NOT NULL,
     nome TEXT NOT NULL,
-    quantidade INTEGER NOT NULL,
-    preco_unitario REAL,
-    preco_total REAL,
+    qtd INTEGER NOT NULL,
+    preco REAL,
+    unit REAL,
     FOREIGN KEY (encomenda_id) REFERENCES encomendas (id)
 );
 """
@@ -94,11 +94,10 @@ CREATE TABLE IF NOT EXISTS encomenda_doces (
 CREATE_ATENDIMENTOS = """
 CREATE TABLE IF NOT EXISTS atendimentos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telefone TEXT NOT NULL,
-    nome TEXT,
-    mensagem TEXT,
-    direcao TEXT,
-    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    cliente_id INTEGER NOT NULL,
+    mensagem TEXT NOT NULL,
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cliente_id) REFERENCES clientes (id)
 );
 """
 
@@ -109,13 +108,15 @@ CREATE TABLE IF NOT EXISTS customer_processes (
     customer_id INTEGER,
     process_type TEXT NOT NULL,
     stage TEXT NOT NULL,
-    status TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
     source TEXT,
-    draft_payload TEXT,
+    draft_payload TEXT NOT NULL DEFAULT '{}',
     order_id INTEGER,
-    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (phone, process_type)
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (phone, process_type),
+    FOREIGN KEY (customer_id) REFERENCES clientes (id),
+    FOREIGN KEY (order_id) REFERENCES encomendas (id)
 );
 """
 
