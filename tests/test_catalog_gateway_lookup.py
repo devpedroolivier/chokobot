@@ -13,13 +13,6 @@ class CatalogGatewayLookupTests(unittest.TestCase):
         self.assertIn("Croissant", result)
         self.assertIn("Chocolate", result)
 
-    def test_lookup_catalog_items_matches_easter_variant_and_weight(self):
-        result = self.gateway.lookup_catalog_items("trufado 400g", "pascoa")
-
-        self.assertIn("Ovos Trufados", result)
-        self.assertIn("400g", result)
-        self.assertIn("Trufado Brigadeiro", result)
-
     def test_lookup_catalog_items_matches_caseirinho_alias_for_linea_simples(self):
         result = self.gateway.lookup_catalog_items("caseirinho de cenoura vulcao", "auto")
 

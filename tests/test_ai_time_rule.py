@@ -380,7 +380,7 @@ class AIRunnerTimeRuleTests(unittest.IsolatedAsyncioTestCase):
         fake_client.chat.completions.create.assert_not_awaited()
         self.assertEqual(runner.CONVERSATIONS["5516997777777"]["messages"], [])
 
-    async def test_process_message_after_easter_link_honors_opt_out(self):
+    async def test_process_message_with_legacy_seasonal_context_honors_opt_out(self):
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
         )

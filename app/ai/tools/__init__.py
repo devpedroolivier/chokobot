@@ -206,12 +206,12 @@ from app.ai.tools._schemas import (
 # ============================================================
 
 def get_menu(category: str = "todas") -> str:
-    """Retorna o cardapio completo ou filtrado entre pronta entrega, encomendas, Pascoa e presentes regulares."""
+    """Retorna o cardapio completo ou filtrado entre pronta entrega, encomendas e presentes regulares."""
     return get_catalog_gateway().get_menu(category)
 
 
 def lookup_catalog_items(query: str, catalog: str = "auto") -> str:
-    """Busca itens exatos ou aproximados no catalogo estruturado de cafeteria, Pascoa e presentes regulares."""
+    """Busca itens exatos ou aproximados no catalogo estruturado de cafeteria e presentes regulares."""
     return get_catalog_gateway().lookup_catalog_items(query, catalog)
 
 

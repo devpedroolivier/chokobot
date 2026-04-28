@@ -29,14 +29,10 @@ class AIAgentPromptsTests(unittest.TestCase):
 
     def test_prompts_cover_sunday_rule_and_ready_delivery_disambiguation(self):
         self.assertIn("domingo", TRIAGE_PROMPT.lower())
-        self.assertIn("Excecao operacional cadastrada", TRIAGE_PROMPT)
-        self.assertIn("das 8h as 12h", TRIAGE_PROMPT)
         self.assertIn("GiftOrderAgent", TRIAGE_PROMPT)
         self.assertIn("bolo pronta entrega ou cafeteria", CAFETERIA_PROMPT)
-        self.assertIn("OVO DE PÁSCOA PRONTA ENTREGA", CAFETERIA_PROMPT)
+        self.assertIn("OVO DE PÁSCOA — FORA DE ÉPOCA", CAFETERIA_PROMPT)
         self.assertIn("domingo", CAFETERIA_PROMPT.lower())
-        self.assertIn("Excecao operacional cadastrada", CAFETERIA_PROMPT)
-        self.assertIn("das 8h as 12h", CAFETERIA_PROMPT)
 
     def test_prompts_differentiate_menu_from_specific_options(self):
         self.assertIn("DIFERENCIE INTENÇÃO", KNOWLEDGE_PROMPT)
@@ -47,7 +43,7 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Item específico, sabor, preço, opções → `lookup_catalog_items`", CAFETERIA_PROMPT)
         self.assertIn("Pedido e reserva podem ser feitos pelo WhatsApp", KNOWLEDGE_PROMPT)
         self.assertIn("Chave PIX oficial:", KNOWLEDGE_PROMPT)
-        self.assertIn("Responda SOMENTE com o link oficial", KNOWLEDGE_PROMPT)
+        self.assertIn("Encaminhe IMEDIATAMENTE para atendente humano", KNOWLEDGE_PROMPT)
 
     def test_prompts_cover_cash_change_rule_and_croissant_prep_time(self):
         self.assertIn("Troco: somente para Dinheiro", KNOWLEDGE_PROMPT)
@@ -105,10 +101,11 @@ class AIAgentPromptsTests(unittest.TestCase):
 
     def test_gift_prompt_separates_regular_gifts_from_easter_and_uses_structured_tool(self):
         self.assertIn("cestas box, caixinha de chocolate", TRIAGE_PROMPT)
-        self.assertIn("PÁSCOA (OVOS/TRIOS/TABLETES/MIMOS)", GIFT_ORDER_PROMPT)
+        self.assertIn("PÁSCOA (OVOS/TRIOS/TABLETES/MIMOS) — FORA DE ÉPOCA", GIFT_ORDER_PROMPT)
         self.assertIn('get_menu` com category="presentes"', GIFT_ORDER_PROMPT)
         self.assertIn('lookup_catalog_items` com catalog="presentes"', GIFT_ORDER_PROMPT)
-        self.assertIn("responda SOMENTE com https://pascoachoko.goomer.app", GIFT_ORDER_PROMPT)
+        self.assertIn("escalate_to_human", GIFT_ORDER_PROMPT)
+        self.assertNotIn("pascoachoko.goomer.app", GIFT_ORDER_PROMPT)
         self.assertIn("create_gift_order", GIFT_ORDER_PROMPT)
         self.assertIn("caixinha de chocolate", TRIAGE_PROMPT)
 

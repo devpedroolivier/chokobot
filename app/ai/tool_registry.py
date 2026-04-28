@@ -16,8 +16,6 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                         "Busca os cardapios, produtos e precos da Chokodelicia. "
                         'Use `category="pronta_entrega"` para a visao geral de pronta entrega, '
                         '`category="cafeteria"` para o cardapio detalhado da cafeteria, '
-                        '`category="pascoa"` para o cardapio de Pascoa, '
-                        '`category="pascoa_presentes"` para mimos e presentes de Pascoa e '
                         '`category="presentes"` para cestas box, caixinha de chocolate e flores do catalogo regular, '
                         'e `category="encomendas"` para bolos personalizados e tortas.'
                     ),
@@ -26,7 +24,7 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                         "properties": {
                             "category": {
                                 "type": "string",
-                                "description": "Categoria do menu: pronta_entrega, cafeteria, pascoa, pascoa_presentes, presentes, encomendas ou todas",
+                                "description": "Categoria do menu: pronta_entrega, cafeteria, presentes, encomendas ou todas",
                             }
                         },
                         "required": [],
@@ -42,7 +40,7 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                 "function": {
                     "name": "lookup_catalog_items",
                     "description": (
-                        "Busca itens especificos no catalogo estruturado da cafeteria, da Pascoa e dos presentes regulares. "
+                        "Busca itens especificos no catalogo estruturado da cafeteria e dos presentes regulares. "
                         "Use quando o cliente perguntar se tem um item, quais opcoes/sabores ele possui, "
                         "qual o preco, peso ou composicao. Nao use para cardapio geral."
                     ),
@@ -55,7 +53,7 @@ def build_openai_tools(agent, runtime) -> list[dict]:
                             },
                             "catalog": {
                                 "type": "string",
-                                "enum": ["auto", "pronta_entrega", "cafeteria", "pascoa", "pascoa_presentes", "presentes"],
+                                "enum": ["auto", "pronta_entrega", "cafeteria", "presentes"],
                                 "description": "Escopo do catalogo a consultar",
                             },
                         },

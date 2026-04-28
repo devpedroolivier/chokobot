@@ -13,7 +13,7 @@ from app.services.encomendas_utils import _parse_hora
 from app.settings import get_settings
 from app.utils.datetime_utils import now_in_bot_timezone
 
-READY_DELIVERY_SUMMARY = "bolo pronta entrega, cafeteria ou ovos pronta entrega"
+READY_DELIVERY_SUMMARY = "bolo pronta entrega ou cafeteria"
 GIFT_CATALOG_SUMMARY = "presentes regulares: cestas box, caixinha de chocolate e flores"
 
 _DAY_LABELS = {
@@ -378,21 +378,6 @@ def seasonal_date_entry(name: str, *, reference: date | datetime | None = None) 
         return future[0][1]
     parsed.sort(key=lambda item: item[0], reverse=True)
     return parsed[0][1]
-
-
-def easter_date_message(reference: date | datetime | None = None) -> str:
-    entry = seasonal_date_entry("pascoa", reference=reference)
-    if entry is None:
-        return "A data da Páscoa varia por ano. Posso confirmar para você com a equipe em instantes."
-
-    target = _calendar_date(entry)
-    if target is None:
-        return "A data da Páscoa varia por ano. Posso confirmar para você com a equipe em instantes."
-    label = str(entry.get("label") or "Páscoa").strip()
-    return (
-        f"{label}: {format_service_date_with_weekday(target)}. "
-        "Se quiser, eu já te ajudo a escolher os itens do pedido."
-    )
 
 
 def _slot_time_bounds(entry: dict) -> tuple[str | None, str | None]:
@@ -783,7 +768,6 @@ __all__ = [
     "build_calendar_reference_context",
     "build_operational_calendar_context",
     "build_store_pulse",
-    "easter_date_message",
     "format_service_date",
     "format_service_date_with_weekday",
     "is_ai_within_schedule",

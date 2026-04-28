@@ -16,277 +16,84 @@ sys.modules.setdefault("openai", SimpleNamespace(AsyncOpenAI=_AsyncOpenAIStub))
 
 from app.ai import runner
 from app.observability import clear_metrics
-from app.welcome_message import EASTER_CATALOG_MESSAGE
+from app.welcome_message import HUMAN_HANDOFF_MESSAGE
 
 
-def _message(content: str):
-    return SimpleNamespace(content=content, tool_calls=[])
+class AIEasterHandoffTests(unittest.IsolatedAsyncioTestCase):
+    """A campanha de Páscoa encerrou. Qualquer menção deve disparar handoff humano."""
 
-
-def _response(message):
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=message)],
-        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
-    )
-
-
-class AIEasterFlowTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         runner.CONVERSATIONS.clear()
         clear_metrics()
 
-    async def test_process_message_returns_easter_link_without_calling_ai(self):
+    async def _run(self, mensagem: str) -> tuple[str, AsyncMock]:
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
         )
 
-        with patch.object(runner, "client", fake_client):
+        with patch.object(runner, "client", fake_client), patch.object(
+            runner, "escalate_to_human", return_value="ok"
+        ) as mocked_escalate:
             reply = await runner.process_message_with_ai(
                 "5516999999999",
-                "Quero ver o cardápio de Páscoa",
+                mensagem,
                 "Teste",
                 99,
             )
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         fake_client.chat.completions.create.assert_not_awaited()
+        return reply, mocked_escalate
 
-    async def test_process_message_handles_pascoa_without_accent_for_catalog_request(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
-        )
+    async def test_pedido_de_cardapio_de_pascoa_dispara_handoff(self):
+        reply, escalate = await self._run("Quero ver o cardápio de Páscoa")
+        self.assertEqual(reply, HUMAN_HANDOFF_MESSAGE)
+        escalate.assert_called_once()
 
-        with patch.object(runner, "client", fake_client):
-            reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "Manda o cardapio de pascoa",
-                "Teste",
-                99,
-            )
+    async def test_menciona_ovo_de_chocolate_dispara_handoff(self):
+        reply, escalate = await self._run("Quero um ovo de chocolate recheado de prestigio")
+        self.assertEqual(reply, HUMAN_HANDOFF_MESSAGE)
+        escalate.assert_called_once()
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
+    async def test_pergunta_quando_e_a_pascoa_dispara_handoff(self):
+        reply, escalate = await self._run("Quando é a Páscoa?")
+        self.assertEqual(reply, HUMAN_HANDOFF_MESSAGE)
+        escalate.assert_called_once()
 
-    async def test_process_message_handles_ovo_recheado_de_prestigio_with_link_only(self):
+    async def test_pascoa_sem_acento_dispara_handoff(self):
+        reply, escalate = await self._run("Manda o cardapio de pascoa")
+        self.assertEqual(reply, HUMAN_HANDOFF_MESSAGE)
+        escalate.assert_called_once()
+
+    async def test_lanche_com_ovo_nao_dispara_handoff(self):
+        """Ovo em contexto de cafeteria (lanche/sanduíche) NÃO é Páscoa."""
         fake_client = SimpleNamespace(
             chat=SimpleNamespace(
-                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Resposta catalogada"))))
+                completions=SimpleNamespace(
+                    create=AsyncMock(
+                        return_value=SimpleNamespace(
+                            choices=[
+                                SimpleNamespace(
+                                    message=SimpleNamespace(content="Resposta", tool_calls=[])
+                                )
+                            ],
+                            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+                        )
+                    )
+                )
             )
         )
 
-        with patch.object(runner, "client", fake_client):
-            reply = await runner.process_message_with_ai(
+        with patch.object(runner, "client", fake_client), patch.object(
+            runner, "escalate_to_human", return_value="ok"
+        ) as mocked_escalate:
+            await runner.process_message_with_ai(
                 "5516999999999",
-                "Quero um ovo de chocolate recheado de prestigio",
+                "Quero um misto com ovo",
                 "Teste",
                 99,
             )
 
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_routes_generic_ovo_request_to_link_only(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Fluxo de encomenda de Páscoa"))))
-            )
-        )
-
-        with patch.object(runner, "client", fake_client):
-            reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "Eu gostaria de encomendar um ovo",
-                "Teste",
-                99,
-            )
-
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_handles_ovo_pronta_entrega_with_link_only(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
-        )
-
-        with patch.object(runner, "client", fake_client):
-            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
-                reply = await runner.process_message_with_ai(
-                    "5516999999999",
-                    "Oi tem ovo pronta entrega?",
-                    "Teste",
-                    99,
-                )
-
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
         mocked_escalate.assert_not_called()
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_handles_quero_pronta_entrega_de_ovo_with_link_only(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
-        )
-
-        with patch.object(runner, "client", fake_client):
-            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
-                reply = await runner.process_message_with_ai(
-                    "5516999999999",
-                    "Quero pronta entrega de ovo",
-                    "Teste",
-                    99,
-                )
-
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        mocked_escalate.assert_not_called()
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_keeps_specific_easter_item_query_in_link_only(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Consulta específica")))))
-        )
-
-        with patch.object(runner, "client", fake_client):
-            reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "Tem ovo cookie nutella?",
-                "Teste",
-                99,
-            )
-
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_handles_ovo_pacoca_with_link_only(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Consulta específica"))))
-            )
-        )
-
-        with patch.object(runner, "client", fake_client):
-            reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "Tem ovo de pacoca?",
-                "Teste",
-                99,
-            )
-
-        self.assertEqual(reply, EASTER_CATALOG_MESSAGE)
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_returns_link_after_easter_link_follow_up(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Temos consulta específica"))))
-            )
-        )
-
-        with patch.object(runner, "client", fake_client):
-            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
-                first_reply = await runner.process_message_with_ai(
-                    "5516999999999",
-                    "Quero ver o cardapio de pascoa",
-                    "Teste",
-                    99,
-                )
-                second_reply = await runner.process_message_with_ai(
-                    "5516999999999",
-                    "tem de prestigio?",
-                    "Teste",
-                    99,
-                )
-
-        self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
-        self.assertEqual(second_reply, EASTER_CATALOG_MESSAGE)
-        mocked_escalate.assert_not_called()
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_repeats_easter_link_without_handoff_when_customer_only_asks_link_again(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
-        )
-
-        with patch.object(runner, "client", fake_client):
-            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
-                first_reply = await runner.process_message_with_ai(
-                    "5516999999900",
-                    "Quero ver o cardapio de pascoa",
-                    "Teste",
-                    99,
-                )
-                second_reply = await runner.process_message_with_ai(
-                    "5516999999900",
-                    "manda o link da pascoa de novo",
-                    "Teste",
-                    99,
-                )
-
-        self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
-        self.assertEqual(second_reply, EASTER_CATALOG_MESSAGE)
-        mocked_escalate.assert_not_called()
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_releases_easter_context_when_customer_changes_topic(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(create=AsyncMock(return_value=_response(_message("Vamos seguir com cafeteria."))))
-            )
-        )
-
-        with patch.object(runner, "client", fake_client):
-            with patch.object(runner, "escalate_to_human", return_value="ok") as mocked_escalate:
-                first_reply = await runner.process_message_with_ai(
-                    "5516999999901",
-                    "Quero ver o cardapio de pascoa",
-                    "Teste",
-                    99,
-                )
-                second_reply = await runner.process_message_with_ai(
-                    "5516999999901",
-                    "Agora quero 1 croissant de frango",
-                    "Teste",
-                    99,
-                )
-
-        self.assertEqual(first_reply, EASTER_CATALOG_MESSAGE)
-        self.assertEqual(second_reply, "Vamos seguir com cafeteria.")
-        self.assertEqual(runner.CONVERSATIONS["5516999999901"]["current_agent"], "CafeteriaAgent")
-        self.assertNotIn("seasonal_context", runner.CONVERSATIONS["5516999999901"])
-        mocked_escalate.assert_not_called()
-        fake_client.chat.completions.create.assert_awaited_once()
-
-    async def test_process_message_answers_easter_date_from_operational_calendar(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
-        )
-
-        with patch.object(runner, "client", fake_client):
-            reply = await runner.process_message_with_ai(
-                "5516999999999",
-                "Quando é a Páscoa?",
-                "Teste",
-                99,
-            )
-
-        self.assertIn("Páscoa 2026", reply)
-        self.assertIn("05/04/2026", reply)
-        fake_client.chat.completions.create.assert_not_awaited()
-
-    async def test_process_message_returns_catalog_link_for_photo_requests(self):
-        fake_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock()))
-        )
-
-        with patch.dict(os.environ, {"CATALOG_LINK": "https://catalogo.exemplo"}, clear=False):
-            with patch.object(runner, "client", fake_client):
-                reply = await runner.process_message_with_ai(
-                    "5516999999999",
-                    "Tem foto dos produtos?",
-                    "Teste",
-                    99,
-                )
-
-        self.assertIn("https://catalogo.exemplo", reply)
-        fake_client.chat.completions.create.assert_not_awaited()
 
 
 if __name__ == "__main__":

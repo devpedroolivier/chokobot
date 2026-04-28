@@ -2,18 +2,11 @@ WELCOME_MESSAGE = (
     "Olá! Que bom ter você aqui na *Choko*! 🍫\n"
     "Sou a *Trufinha*, sua atendente virtual.\n\n"
     "Hoje posso te ajudar com:\n"
-    "🎂🍫 Pronta entrega para hoje (bolos e ovos)\n"
+    "🎂 Pronta entrega para hoje (bolos)\n"
     "🍰🍬 Encomendas de bolos e docinhos\n"
     "☕🥐 Itens da cafeteria (croissant, cappuccino, salgados e bolos de fatia)\n"
-    "🎁 Presentes especiais (cestas box, caixinha de chocolate e flores)\n"
-    "🐇 Cardápio Páscoa Inesquecível\n\n"
+    "🎁 Presentes especiais (cestas box, caixinha de chocolate e flores)\n\n"
     "Me conta o que você está procurando 😊"
-)
-
-EASTER_CATALOG_MESSAGE = (
-    "Olá! 😊\n"
-    "Para fazer seu pedido de Páscoa, é só acessar o link abaixo e escolher seu ovo ou mimos e presentes:\n\n"
-    "🔗 https://pascoachoko.goomer.app"
 )
 
 VOICE_GUIDELINES = """

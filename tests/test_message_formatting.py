@@ -13,7 +13,6 @@ from app.ai.agents import CAFETERIA_PROMPT, CAKE_ORDER_PROMPT, KNOWLEDGE_PROMPT,
 from app.utils.mensagens import _sanitize_internal_agent_payload, formatar_mensagem_saida
 from app.welcome_message import (
     BOT_REACTIVATED_MESSAGE,
-    EASTER_CATALOG_MESSAGE,
     HUMAN_HANDOFF_MESSAGE,
     VOICE_GUIDELINES,
     WELCOME_MESSAGE,
@@ -43,7 +42,7 @@ class MessageFormattingTests(unittest.TestCase):
 
         self.assertIn("🎂 Bolos Pronta Entrega", menu)
         self.assertIn("🎉 Kit Festou", menu)
-        self.assertIn("🥚 Ovos Pronta Entrega", menu)
+        self.assertNotIn("Ovos Pronta Entrega", menu)
         self.assertIn("☕ Cafeteria e Vitrine", menu)
         self.assertNotIn("DOCES AVULSOS", menu)
         self.assertNotIn("doceschoko", menu)
@@ -129,15 +128,10 @@ class MessageFormattingTests(unittest.TestCase):
     def test_triage_prompt_reutiliza_mensagem_de_boas_vindas(self):
         self.assertIn(WELCOME_MESSAGE, TRIAGE_PROMPT)
         self.assertIn("Me conta o que você está procurando", WELCOME_MESSAGE)
-        self.assertIn("Páscoa Inesquecível", WELCOME_MESSAGE)
-        self.assertIn("bolos e ovos", WELCOME_MESSAGE)
-        self.assertNotIn("Kit Festou e ovos", WELCOME_MESSAGE)
+        self.assertNotIn("Páscoa", WELCOME_MESSAGE)
+        self.assertNotIn("ovos", WELCOME_MESSAGE)
         self.assertNotIn("combos", WELCOME_MESSAGE.casefold())
         self.assertIn("caixinha de chocolate e flores", WELCOME_MESSAGE)
-
-    def test_mensagem_de_pascoa_expoe_link_direto(self):
-        self.assertIn("pedido de Páscoa", EASTER_CATALOG_MESSAGE)
-        self.assertIn("https://pascoachoko.goomer.app", EASTER_CATALOG_MESSAGE)
 
     def test_prompts_reutilizam_o_tom_da_trufinha(self):
         self.assertIn(VOICE_GUIDELINES.strip(), TRIAGE_PROMPT)

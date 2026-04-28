@@ -23,8 +23,6 @@ CATALOG_LABELS = {
     "cafeteria": "Cafeteria",
     "encomendas": "Encomendas",
     "presentes": "Presentes Especiais",
-    "pascoa": "Páscoa",
-    "pascoa_presentes": "Mimos e Presentes de Páscoa",
 }
 
 SECTION_LABELS = {
@@ -191,18 +189,6 @@ class LocalCatalogGateway:
             "cafeteria_detalhada": "cafeteria",
             "cafeteria_detalhado": "cafeteria",
             "cafeteria_menu": "cafeteria",
-            "páscoa": "pascoa",
-            "pascoa": "pascoa",
-            "ovos de pascoa": "pascoa",
-            "cardapio de pascoa": "pascoa",
-            "menu de pascoa": "pascoa",
-            "pascoa_presentes": "pascoa_presentes",
-            "mimos pascoa": "pascoa_presentes",
-            "presentes pascoa": "pascoa_presentes",
-            "presente pascoa": "pascoa_presentes",
-            "mimos": "pascoa_presentes",
-            "presente de pascoa": "pascoa_presentes",
-            "presentes de pascoa": "pascoa_presentes",
             "presentes especiais": "presentes",
             "encomenda": "encomendas",
             "encomendas": "encomendas",
@@ -232,20 +218,16 @@ class LocalCatalogGateway:
     def _catalog_scope(self, catalog: str) -> tuple[str, ...]:
         normalized = _normalize_text(catalog or "auto")
         aliases = {
-            "auto": ("cafeteria", "pascoa", "pascoa_presentes"),
-            "todos": ("cafeteria", "pascoa", "pascoa_presentes", "presentes"),
-            "todas": ("cafeteria", "pascoa", "pascoa_presentes", "presentes"),
-            "pronta_entrega": ("cafeteria", "pascoa"),
-            "pronta entrega": ("cafeteria", "pascoa"),
+            "auto": ("cafeteria",),
+            "todos": ("cafeteria", "presentes"),
+            "todas": ("cafeteria", "presentes"),
+            "pronta_entrega": ("cafeteria",),
+            "pronta entrega": ("cafeteria",),
             "cafeteria": ("cafeteria",),
-            "pascoa": ("pascoa",),
-            "pascoa_presentes": ("pascoa_presentes",),
-            "mimos pascoa": ("pascoa_presentes",),
-            "presentes pascoa": ("pascoa_presentes",),
             "presentes": ("presentes",),
             "encomendas": ("encomendas",),
         }
-        return aliases.get(normalized, ("cafeteria", "pascoa", "pascoa_presentes", "presentes"))
+        return aliases.get(normalized, ("cafeteria", "presentes"))
 
     def _looks_like_simple_cake_lookup(self, query: str) -> bool:
         normalized = _normalize_text(query)
@@ -304,10 +286,6 @@ class LocalCatalogGateway:
             f"- 25 brigadeiros + 1 balao personalizado: +R${KIT_FESTOU_PRECO:.2f}\n"
             "- So mencionar quando o contexto for bolo pronta entrega ou encomenda de bolo.\n"
             "- Se houver bolo, confirme se o cliente quer bolo com Kit Festou.\n\n"
-            "🥚 Ovos Pronta Entrega\n"
-            "- Identifique primeiro se o cliente quer ovos pronta entrega.\n"
-            "- Sabores e disponibilidade variam no dia.\n"
-            "- Catalogo oficial de Pascoa: https://pascoachoko.goomer.app\n\n"
             "☕ Cafeteria e Vitrine\n"
             f"- Cardapio Cafeteria: {cafeteria_url}\n"
             "- A vitrine pode variar no dia.\n"
@@ -395,28 +373,6 @@ class LocalCatalogGateway:
                         "Use este retorno quando o cliente pedir cardápio/menu da cafeteria. "
                         "Se ele pedir opcoes, sabores, gramagem ou perguntar por um item especifico, "
                         "consulte lookup_catalog_items."
-                    ),
-                )
-
-            if normalized == "pascoa":
-                return self._build_structured_menu(
-                    catalogs=("pascoa",),
-                    title="🐇 Cardápio de Páscoa",
-                    intro=(
-                        "Use este retorno para mostrar as linhas de Páscoa de forma geral. "
-                        "Para sabores/opcoes de um item especifico, consulte lookup_catalog_items. "
-                        "Link oficial: https://pascoachoko.goomer.app"
-                    ),
-                )
-
-            if normalized == "pascoa_presentes":
-                return self._build_structured_menu(
-                    catalogs=("pascoa_presentes",),
-                    title="🎁 Mimos e Presentes de Páscoa",
-                    intro=(
-                        "Use este retorno quando o cliente pedir presentes ou mimos de Páscoa. "
-                        "Para composicao detalhada de um item especifico, consulte lookup_catalog_items. "
-                        "Link oficial: https://pascoachoko.goomer.app"
                     ),
                 )
 
@@ -512,8 +468,7 @@ class LocalCatalogGateway:
         if not matches:
             return (
                 "Nao encontrei esse item no catalogo estruturado consultado. "
-                "Nao invente resposta. Se for Pascoa, ofereca o link oficial "
-                "https://pascoachoko.goomer.app ou diga que vai confirmar."
+                "Nao invente resposta. Diga que vai confirmar com a equipe."
             )
 
         matches.sort(key=lambda entry: (-entry[0], entry[1].get("catalog", ""), entry[1].get("name", "")))

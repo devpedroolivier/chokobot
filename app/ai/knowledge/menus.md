@@ -4,7 +4,7 @@
 - Quando o cliente perguntar por **pronta entrega**, mostre somente itens de vitrine, cafeteria, doces avulsos e bolo pronta entrega do dia.
 - Quando o cliente perguntar por **encomenda**, mostre bolos personalizados, linhas gourmet, mesversario, baby cake, tortas e linha simples.
 - Quando o cliente perguntar por **presentes regulares**, mostre somente cestas box, caixinha de chocolate e flores do catalogo regular.
-- Quando o cliente perguntar por **Pascoa, ovos, trios ou mimos de Pascoa**, envie SOMENTE o link: https://pascoachoko.goomer.app — nunca responda com precos ou sabores.
+- Quando o cliente perguntar por **Pascoa, ovos de chocolate, trios ou mimos de Pascoa**, encaminhe para atendente humano (`escalate_to_human`). A campanha de Pascoa ja encerrou — nao responda com precos, sabores, link ou disponibilidade.
 - Nao misture pronta entrega com encomenda na mesma resposta, a menos que o cliente pergunte explicitamente pelos dois.
 - Regra anti-alucinacao: responda somente com categorias, regras, links e produtos cadastrados neste arquivo. Se um sabor, preco ou disponibilidade nao estiver aqui, diga que vai confirmar e nao invente.
 - Pedidos e reservas podem ser feitos pelo WhatsApp: coletar produto, data/horario, retirada/entrega e pagamento.
@@ -25,12 +25,7 @@
 - So mencionar ou oferecer Kit Festou quando o contexto for **bolo** (encomenda de bolo ou bolo pronta entrega).
 - Se houver bolo, confirme se o cliente quer bolo com Kit Festou.
 
-### 3. Ovos Pronta Entrega
-- Existe categoria de **ovos pronta entrega**
-- **Nao inventar sabores ou disponibilidade**
-- Para detalhes atualizados de sabores e disponibilidade, use o catalogo oficial: **https://pascoachoko.goomer.app**
-
-### 4. Cafeteria e Itens de Vitrine
+### 3. Cafeteria e Itens de Vitrine
 - **Suco de Laranja: R$8,00**
 - **Cardapio Cafeteria completo:** http://bit.ly/44ZlKlZ
 - A vitrine pode variar no dia. Se o cliente pedir sabores disponiveis agora, informar somente o que estiver na pronta entrega/cafeteria.
@@ -238,10 +233,11 @@
 - **Caixinha de chocolate e flores:** consultar modelos, montagem e valor final no catalogo regular
 - **Catalogo de presentes regulares:** https://bit.ly/presenteschoko
 
-## Pascoa
-- **Todos os pedidos de Pascoa sao feitos pelo site:** https://pascoachoko.goomer.app
-- Nao inventar precos, sabores ou disponibilidade de ovos.
-- Nao responder sobre produtos de Pascoa — apenas enviar o link acima.
+## Pascoa (fora de epoca)
+- A campanha de Pascoa ja encerrou.
+- Se o cliente perguntar sobre Pascoa, ovo de Pascoa, ovos de chocolate, trios, tabletes ou mimos de Pascoa: encaminhar para atendente humano via `escalate_to_human`.
+- Nao oferecer link, nao inventar precos, sabores ou disponibilidade.
+- "Ovo com bacon" e "ovo" em lanches/sanduiches/tapioca seguem o fluxo normal de cafeteria.
 
 ## Entregas e Pagamento
 - **Horario de funcionamento:** consulte sempre o calendario operacional ativo (`operational_calendar.json`)

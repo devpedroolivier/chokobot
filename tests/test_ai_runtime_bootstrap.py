@@ -228,13 +228,12 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply, "Ola Maria! Como posso ajudar hoje? 😊")
         fake_client.chat.completions.create.assert_not_awaited()
 
-    async def test_process_message_with_ai_replies_pix_key_deterministically_and_releases_easter_context(self):
+    async def test_process_message_with_ai_replies_pix_key_deterministically(self):
         telefone = "5511888555777"
         fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock())))
         runner.CONVERSATIONS[telefone] = {
             "current_agent": "TriageAgent",
             "messages": [{"role": "system", "content": "prompt"}],
-            "seasonal_context": "easter",
         }
 
         with patch.object(runner, "client", fake_client):
@@ -247,7 +246,6 @@ class AIRuntimeBootstrapTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertIn("Pix 16847366000130", reply)
-        self.assertNotIn("seasonal_context", runner.CONVERSATIONS[telefone])
         fake_client.chat.completions.create.assert_not_awaited()
 
     async def test_process_message_with_ai_retries_when_cafeteria_total_is_claimed_without_tool(self):
