@@ -833,6 +833,110 @@
         "trufas",
         "trufinha"
       ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Brownie 65% Cacau",
+      "price_brl": 10.0,
+      "unit": "unidade",
+      "aliases": [
+        "brownie 65",
+        "brownie cacau",
+        "brownie 65 por cento",
+        "brownie amargo"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Brownie Ferreiro",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "aliases": [
+        "brownie ferreiro",
+        "brownie ferrero",
+        "brownie ferrero rocher"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Nutella",
+      "price_brl": 10.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie nutella",
+        "cookie de nutella"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Ninho Nutella",
+      "price_brl": 10.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie ninho nutella",
+        "cookie ninho com nutella",
+        "cookie ninho"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Red",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie red",
+        "cookie red velvet"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Ovomaltine",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie ovomaltine",
+        "cookie ovo"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Pacoca",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie pacoca",
+        "cookie de pacoca",
+        "cookie paçoca"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Pistache",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie pistache",
+        "cookie de pistache"
+      ]
+    },
+    {
+      "catalog": "cafeteria",
+      "section": "doceria",
+      "name": "Cookie Black",
+      "price_brl": 12.0,
+      "unit": "unidade",
+      "aliases": [
+        "cookie black",
+        "cookie preto"
+      ]
     }
   ]
 }

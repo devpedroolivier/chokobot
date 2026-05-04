@@ -175,7 +175,10 @@ def _build_store_hours_summary(store_windows: dict[int, tuple[str, str]], sunday
 
 
 def _build_sunday_rule(sunday_exceptions: list[dict]) -> str:
-    base = "Nao fazemos pedidos, retiradas ou encomendas para domingo regular."
+    base = (
+        "A loja fica fechada aos domingos. "
+        "Nao fazemos pedidos, retiradas, entregas ou encomendas neste dia."
+    )
     if not sunday_exceptions:
         return base
 
@@ -199,9 +202,24 @@ STORE_OPERATION_RULE_LINE = f"Horario de funcionamento: {STORE_HOURS_SUMMARY}"
 SUNDAY_RULE_LINE = _build_sunday_rule(_SUNDAY_EXCEPTIONS)
 SUNDAY_UNAVAILABLE_MESSAGE = f"{SUNDAY_RULE_LINE} Horario de funcionamento: {STORE_HOURS_SUMMARY}"
 DELIVERY_RULE_LINE = (
-    f"A Chokodelícia FAZ entregas! Taxa para bolos/encomendas/presentes: {DELIVERY_FEE_STANDARD_LABEL}. "
-    f"Taxa para itens da cafeteria: {DELIVERY_FEE_CAFETERIA_LABEL}. "
+    "A Chokodelícia FAZ entregas. "
+    f"Taxa SOMENTE para entregas em Pitangueiras: {DELIVERY_FEE_STANDARD_LABEL} "
+    f"(bolos/encomendas/presentes) ou {DELIVERY_FEE_CAFETERIA_LABEL} (itens de cafeteria). "
+    "Para entregas FORA de Pitangueiras (ex.: Bituva e demais bairros), o valor varia "
+    "conforme a distância e precisa ser confirmado com a equipe — escale para humano "
+    "com o endereço informado pelo cliente. "
     f"Horário limite: até {DELIVERY_CUTOFF_LABEL}."
+)
+DELIVERY_NEIGHBORHOOD_RULE_LINE = (
+    "REGRA DE TAXA DE ENTREGA POR BAIRRO (OBRIGATÓRIA):\n"
+    "Quando o cliente escolher entrega, pergunte o bairro junto com o endereço.\n"
+    f"- Se for Pitangueiras: aplicar taxa padrão ({DELIVERY_FEE_STANDARD_LABEL} "
+    f"bolos/encomendas/presentes; {DELIVERY_FEE_CAFETERIA_LABEL} cafeteria).\n"
+    "- Se for QUALQUER outro bairro (Bituva, Centro, Vila X, etc.): NÃO cote valor. "
+    "Avise o cliente: \"Pra entregas fora de Pitangueiras a taxa varia conforme a "
+    "distância. Vou te conectar com a equipe pra confirmar o valor certinho 😊\" "
+    "Em seguida, use `escalate_to_human` com o bairro/endereço no contexto.\n"
+    "❌ NUNCA invente taxa para bairros desconhecidos."
 )
 PAYMENT_CHANGE_RULE_LINE = (
     "Regras de pagamento: troco so existe para Dinheiro. "

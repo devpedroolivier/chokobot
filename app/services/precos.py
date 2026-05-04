@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 # app/services/precos.py
-from typing import Tuple, List, Dict, Any
+import logging
 import re
 import unicodedata
+from typing import Any, Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 # =========================
 #  PREÇOS - BOLOS
@@ -99,7 +102,16 @@ def preco_tradicional(tamanho: str, fruta_ou_nozes: str | None) -> Tuple[float, 
     fruta_ou_nozes = _alias_fruta(fruta_ou_nozes)
     serve = TRADICIONAL_BASE[t]["serve"]
     if fruta_ou_nozes:
-        preco = TRADICIONAL_ADICIONAIS[t].get(fruta_ou_nozes, TRADICIONAL_BASE[t]["preco"])
+        adicional_table = TRADICIONAL_ADICIONAIS[t]
+        if fruta_ou_nozes not in adicional_table:
+            logger.warning(
+                "preco_tradicional: adicional desconhecido %r para tamanho %s — "
+                "caindo no preço base sem o adicional. Adicionais válidos: %s",
+                fruta_ou_nozes, t, sorted(adicional_table.keys()),
+            )
+            preco = TRADICIONAL_BASE[t]["preco"]
+        else:
+            preco = adicional_table[fruta_ou_nozes]
     else:
         preco = TRADICIONAL_BASE[t]["preco"]
     return preco, serve
