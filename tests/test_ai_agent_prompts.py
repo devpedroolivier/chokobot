@@ -54,8 +54,12 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Parcelamento so no Cartao", CAKE_ORDER_PROMPT)
         self.assertIn("tempo de preparo do croissant, informe 20 minutos", CAFETERIA_PROMPT)
 
-    def test_cafeteria_prompt_declares_fixed_delivery_fee(self):
-        self.assertIn("taxa de entrega fixa: R$5,00", CAFETERIA_PROMPT)
+    def test_cafeteria_prompt_declares_neighborhood_delivery_fee(self):
+        # Taxa R$5 da cafeteria agora vale só para Pitangueiras; outros bairros
+        # devem escalar para humano. Ver DELIVERY_NEIGHBORHOOD_RULE_LINE.
+        self.assertIn("R$5,00", CAFETERIA_PROMPT)
+        self.assertIn("Pitangueiras", CAFETERIA_PROMPT)
+        self.assertIn("escale para humano", CAFETERIA_PROMPT)
 
     def test_cake_prompt_requires_canonical_pricing_tool(self):
         self.assertIn("chame `get_cake_pricing`", CAKE_ORDER_PROMPT)
@@ -65,9 +69,11 @@ class AIAgentPromptsTests(unittest.TestCase):
         self.assertIn("Recheios válidos (lista completa): Beijinho, Brigadeiro, Brigadeiro de Nutella", CAKE_ORDER_PROMPT)
         self.assertIn("Adicionais: Morango, Ameixa, Nozes, Cereja, Abacaxi.", CAKE_ORDER_PROMPT)
         self.assertIn("MOUSSE NÃO É RECHEIO", CAKE_ORDER_PROMPT)
-        self.assertIn("pedir lista de recheios", CAKE_ORDER_PROMPT)
+        # A regra agora é: chamar `get_cake_options` SOMENTE quando o cliente
+        # pedir explicitamente a lista (evita despejar cardápio inteiro).
         self.assertIn("Use `get_cake_options`", CAKE_ORDER_PROMPT)
-        self.assertIn("Reproduza a lista retornada integralmente", CAKE_ORDER_PROMPT)
+        self.assertIn("quais recheios tem?", CAKE_ORDER_PROMPT)
+        self.assertIn("reproduza integralmente", CAKE_ORDER_PROMPT)
 
     def test_prompts_treat_caseiro_and_caseirinho_as_linea_simples_aliases(self):
         self.assertIn("bolo caseiro", TRIAGE_PROMPT)
