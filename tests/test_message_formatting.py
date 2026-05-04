@@ -64,8 +64,11 @@ class MessageFormattingTests(unittest.TestCase):
         self.assertIn("20 minutos", result)
 
     def test_save_cake_order_draft_process_formata_resumo_final_claro(self):
+        # _build_payment_line chama _resolve_pix_key direto do módulo _common,
+        # não pelo re-export em app.ai.tools — patch precisa apontar para a
+        # definição original ou o mock é silenciosamente ignorado.
         with patch("app.ai.tools._sync_ai_process", return_value=None):
-            with patch.object(ai_tools, "_resolve_pix_key", return_value="Pix 16847366000130"):
+            with patch("app.ai.tools._common._resolve_pix_key", return_value="Pix 16847366000130"):
                 result = ai_tools.save_cake_order_draft_process(
                     telefone="5511999999999",
                     nome_cliente="Ana",
