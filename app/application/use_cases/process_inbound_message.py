@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Awaitable, Callable
 
 from app.application.commands import GenerateAiReplyCommand
-from app.application.events import AiReplyGeneratedEvent
+from app.application.events import AiReplyGeneratedEvent, AiReplySkippedEvent
 from app.application.service_registry import get_command_bus, get_customer_repository, get_event_bus
 from app.application.use_cases.manage_human_handoff import build_reactivation_message, deactivate_human_handoff
 from app.config import get_store_closed_notice, is_store_closed
@@ -28,11 +28,22 @@ from app.services.store_schedule import ai_auto_schedule_state
 from app.utils.mensagens import responder_usuario, responder_usuario_com_contexto
 from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 from app.utils.payload import normalize_incoming
-from app.welcome_message import OPT_OUT_MESSAGE
+from app.welcome_message import HANDOFF_PENDING_ACK_MESSAGE, OPT_OUT_MESSAGE
 
 
 REATIVAR_BOT_OPCOES = ["voltar", "menu", "bot", "reativar", "voltar ao bot", "ativar chat", "ativar bot"]
 MESSAGE_IDEMPOTENCY_TTL_SECONDS = 60
+
+
+def _publish_skip(telefone: str, motivo: str, *, tenant_id: str | None = None) -> None:
+    if not telefone:
+        return
+    try:
+        get_event_bus().publish(
+            AiReplySkippedEvent(phone=telefone, motivo=motivo, tenant_id=tenant_id)
+        )
+    except Exception:
+        log_event("ai_reply_skip_publish_failed", motivo=motivo)
 
 
 async def generate_ai_reply(
@@ -152,6 +163,7 @@ async def process_inbound_message(
 
     if not is_bot_ativo():
         log_event("handler_bot_disabled", phone_hash=hash_phone(telefone), text=preview_text(texto))
+        _publish_skip(telefone, "bot_disabled", tenant_id=tenant_id)
         return
 
     ai_window = ai_auto_schedule_state()
@@ -176,23 +188,46 @@ async def process_inbound_message(
             off_label=ai_window.get("off_label"),
             on_label=ai_window.get("on_label"),
         )
+        _publish_skip(telefone, "ai_schedule_off", tenant_id=tenant_id)
         return
 
-    if not telefone or not texto:
+    if not telefone:
         log_event(
             "handler_incomplete_message",
             phone_hash=hash_phone(telefone),
             text=preview_text(texto),
             message_type=norm["message_type"],
         )
+        _publish_skip(telefone, "incomplete_message", tenant_id=tenant_id)
+        return
+
+    if not texto:
+        log_event(
+            "handler_media_without_text",
+            phone_hash=hash_phone(telefone),
+            message_type=norm["message_type"],
+        )
+        await _send_message(
+            responder_usuario_fn,
+            telefone,
+            (
+                "Recebi sua mídia, mas ainda não consigo abrir áudios, fotos ou stickers "
+                "por aqui 😊 Me conta em texto o que você está procurando?"
+            ),
+            role="bot",
+            actor_label="Bot",
+        )
+        _publish_skip(telefone, "media_without_text_replied", tenant_id=tenant_id)
         return
 
     if is_phone_automation_disabled(telefone):
         log_event("handler_phone_automation_disabled", phone_hash=hash_phone(telefone), text=preview_text(texto))
+        _publish_skip(telefone, "phone_automation_disabled", tenant_id=tenant_id)
         return
 
     if not should_track_phone(telefone):
         log_event("handler_test_phone_ignored", phone_hash=hash_phone(telefone))
+        _publish_skip(telefone, "phone_not_tracked", tenant_id=tenant_id)
         return
 
     if is_phone_opted_out(telefone):
@@ -233,6 +268,7 @@ async def process_inbound_message(
                 return
 
             log_event("handler_phone_opt_out_active", phone_hash=hash_phone(telefone), text=preview_text(texto))
+            _publish_skip(telefone, "phone_opt_out", tenant_id=tenant_id)
             return
 
     if texto in {"desativar chat", "desativar bot", "desligar chat", "desligar bot", "pausar chat", "pausar bot"}:
@@ -263,6 +299,7 @@ async def process_inbound_message(
             duplicate_window_seconds=MESSAGE_IDEMPOTENCY_TTL_SECONDS,
             severity="warning",
         )
+        _publish_skip(telefone, "duplicate_webhook", tenant_id=tenant_id)
         return
 
     ultima = get_recent_message(telefone)
@@ -296,6 +333,7 @@ async def process_inbound_message(
             role="bot",
             actor_label="Bot",
         )
+        _publish_skip(telefone, "store_closed", tenant_id=tenant_id)
         return
 
     if telefone in estados_atendimento:
@@ -326,7 +364,33 @@ async def process_inbound_message(
                 return
 
             estados_atendimento[telefone]["inicio"] = agora.isoformat()
+            ack_sent_at_raw = estado.get("pending_ack_at")
+            ack_sent_at = None
+            if ack_sent_at_raw:
+                try:
+                    ack_sent_at = normalize_to_bot_timezone(
+                        datetime.fromisoformat(ack_sent_at_raw)
+                    )
+                except Exception:
+                    ack_sent_at = None
+            should_ack = ack_sent_at is None or (agora - ack_sent_at) > timedelta(minutes=15)
+            if should_ack:
+                estados_atendimento[telefone]["pending_ack_at"] = agora.isoformat()
+                await _send_message(
+                    responder_usuario_fn,
+                    telefone,
+                    HANDOFF_PENDING_ACK_MESSAGE,
+                    role="bot",
+                    actor_label="Bot",
+                )
+                log_event(
+                    "handler_human_attention_ack_sent",
+                    phone_hash=hash_phone(telefone),
+                )
+                _publish_skip(telefone, "handoff_active_acked", tenant_id=tenant_id)
+                return
             log_event("handler_human_attention_active", phone_hash=hash_phone(telefone))
+            _publish_skip(telefone, "handoff_active_silenced", tenant_id=tenant_id)
             return
 
     resposta_ia = await gerar_resposta_ia_fn(telefone, texto, nome_cliente, cliente_id)

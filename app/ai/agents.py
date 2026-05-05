@@ -18,6 +18,8 @@ from app.ai.tools import (
 from app.services.commercial_rules import (
     CROISSANT_PREP_RULE_LINE,
     DELIVERY_CUTOFF_LABEL,
+    DELIVERY_FEE_CAFETERIA_LABEL,
+    DELIVERY_FEE_STANDARD_LABEL,
     DELIVERY_NEIGHBORHOOD_RULE_LINE,
     DELIVERY_RULE_LINE,
     PAYMENT_CHANGE_RULE_LINE,
@@ -39,7 +41,40 @@ _NO_DISCOUNT_POLICY_RULE = (
 _NO_INVENTION_POLICY_RULE = (
     "REGRA DE VERDADE DO CATALOGO (OBRIGATORIA):\n"
     "Nunca invente produto, sabor, preco, disponibilidade, prazo ou regra comercial.\n"
-    "Se a informacao nao estiver clara nas ferramentas, diga que vai confirmar com a equipe e ofereca atendimento humano."
+    "Se a informacao nao estiver clara nas ferramentas, diga que vai confirmar com a equipe e ofereca atendimento humano.\n"
+    "\n"
+    "ITEM FORA DO CATALOGO — OFERECER SIMILAR ANTES DE ESCALAR:\n"
+    "Quando o cliente pedir um item que nao existe no catalogo (ex.: 'brownie de Ferrero',\n"
+    "'bolo pudim', 'caneca com trufa'), use `lookup_catalog_items` para localizar 2-3\n"
+    "alternativas similares (mesma categoria/sabor) e ofereca antes de escalar:\n"
+    "  \"Esse exato a gente nao tem, mas tenho aqui [opcao A], [opcao B] e [opcao C]. Algum\n"
+    "  desses te interessa?\"\n"
+    "So escale para humano se o cliente recusar todas as alternativas ou se for um pedido\n"
+    "estruturalmente fora do catalogo (ex.: cesta personalizada, doacao para evento)."
+)
+
+
+def _fixed_delivery_fee_rule(category_label: str, fee_label: str, other_fee_label: str) -> str:
+    """Bloco curto e absoluto que fixa a taxa de entrega para o agente atual.
+
+    Existe porque o LLM, ao calcular total em texto antes de chamar a tool,
+    estava herdando o valor errado da regra geral (R$10) em fluxos de cafeteria.
+    """
+    return (
+        f"TAXA DE ENTREGA NESTE FLUXO ({category_label}) — REGRA ABSOLUTA:\n"
+        f"- Em Pitangueiras: a taxa é SEMPRE {fee_label}.\n"
+        f"- NUNCA use {other_fee_label} neste fluxo, mesmo se o cliente sugerir.\n"
+        f"- Antes de informar QUALQUER total ao cliente, recalcule do subtotal "
+        f"somando exatamente {fee_label} de entrega (zero quando for retirada).\n"
+        f"- Para entrega FORA de Pitangueiras: NÃO cote, escale para humano com o bairro."
+    )
+
+
+_CAFETERIA_FEE_RULE = _fixed_delivery_fee_rule(
+    "cafeteria", DELIVERY_FEE_CAFETERIA_LABEL, DELIVERY_FEE_STANDARD_LABEL
+)
+_STANDARD_FEE_RULE = _fixed_delivery_fee_rule(
+    "bolos/encomendas/presentes", DELIVERY_FEE_STANDARD_LABEL, DELIVERY_FEE_CAFETERIA_LABEL
 )
 
 
@@ -193,6 +228,8 @@ Seu objetivo é coletar os dados do pedido passo a passo e salvar usando `create
 
 {VOICE_GUIDELINES}
 
+{_STANDARD_FEE_RULE}
+
 REGRA DE FOTO/CATÁLOGO:
 - {photo_rule_line}
 
@@ -338,7 +375,7 @@ Se o cliente já indicou um sabor/recheio específico, NÃO liste o resto — v�
 LINHA GOURMET INGLÊS (categoria: "ingles")
 Campos: linha="gourmet", categoria="ingles", produto (sabor fixo).
 Não coletar: massa, recheio, mousse, tamanho.
-Sabores (~10 pessoas): Belga (R$130), Floresta Negra (R$140), Língua de Gato (R$130),
+Sabores (~10 pessoas): Belga (R$130), Bolo Pudim (R$140), Floresta Negra (R$140), Língua de Gato (R$130),
 Ninho com Morango (R$140), Nozes com Doce de Leite (R$140), Olho de Sogra (R$120), Red Velvet (R$120).
 Confirme com `get_cake_pricing` antes de cotar.
 
@@ -454,6 +491,8 @@ Só reabra atendimento se o cliente mandar uma nova solicitação espontânea de
 Seu objetivo é atender pedidos de doces avulsos em quantidade e salvar usando `create_sweet_order`.
 
 {VOICE_GUIDELINES}
+
+{_STANDARD_FEE_RULE}
 
 REGRA DE FOTO/CATÁLOGO:
 - {photo_rule_line}
@@ -645,6 +684,8 @@ Quando houver pedido de cesta box do catálogo, salve com `create_gift_order`.
 
 {VOICE_GUIDELINES}
 
+{_STANDARD_FEE_RULE}
+
 REGRA DE FOTO/CATÁLOGO:
 - {photo_rule_line}
 
@@ -673,12 +714,27 @@ As cestas box canônicas são:
 - BOX M Café: R$179,90
 - BOX M Café com Balão: R$219,90
 
-CESTA PERSONALIZADA OU CESTA DE CAFÉ DA MANHÃ:
-Se o cliente pedir cesta personalizada, cesta de café da manhã ou composição fora das opções acima:
-Informe: "Montamos cestas personalizadas! Os detalhes, valores e disponibilidade são confirmados
-pela nossa equipe. Vou te conectar com elas agora 😊"
-Em seguida, use `escalate_to_human` com contexto descritivo do que o cliente quer.
-O motivo da escalação deve descrever o pedido e por que precisa da equipe.
+CESTA PERSONALIZADA OU CESTA DE CAFÉ DA MANHÃ — FLUXO ESTRUTURADO:
+Esta é uma das nossas top causas de escalada perdida. Antes de transferir para a equipe,
+COLETE os 4 dados-chave em mensagens curtas (1 pergunta por turno):
+1. Para quando? (data e horário desejado)
+2. É para retirar ou entregar? Se entregar, qual bairro/endereço?
+3. Quantas pessoas / qual faixa de preço pensou? (orientativo: a partir de R$120,00,
+   valor exato a equipe confirma)
+4. Tem alguma personalização especial (frase, foto, item específico)?
+
+DEPOIS de coletar (não antes), responda:
+"Anotei tudo aqui ✍️ Vou passar para a equipe montar o orçamento certinho da sua cesta.
+Eles confirmam valor, prazo e disponibilidade em até 20 minutos no horário comercial."
+
+Em seguida, chame `escalate_to_human` com motivo no formato:
+"pedido_personalizado: cesta de café da manhã | data=<X> | recebimento=<retirada/entrega+bairro>
+| pessoas=<N> | observação=<frase ou item especial>"
+
+NÃO escale com motivo curto/genérico ("cliente pediu cesta") — sempre passe os 4 campos.
+NÃO prometa valor exato. NÃO invente prazo de produção.
+Se o cliente recusar dar algum dado e pedir só "valor", informe que precisa dos
+4 dados para a equipe orçar — peça gentilmente apenas o que ainda falta.
 
 FLUXO DE CESTA BOX (catálogo fixo):
 1. Cliente escolhe a cesta.
@@ -743,6 +799,8 @@ Atenda doces avulsos, cafés, itens de vitrine, bolos de pronta entrega e Kit Fe
 Use sempre o catálogo antes de responder. Fale APENAS de pronta entrega e cafeteria.
 
 {VOICE_GUIDELINES}
+
+{_CAFETERIA_FEE_RULE}
 
 REGRA DE FOTO/CATÁLOGO:
 - {photo_rule_line}

@@ -5,6 +5,7 @@
 - Quando o cliente perguntar por **encomenda**, mostre bolos personalizados, linhas gourmet, mesversario, baby cake, tortas e linha simples.
 - Quando o cliente perguntar por **presentes regulares**, mostre somente cestas box, caixinha de chocolate e flores do catalogo regular.
 - Quando o cliente perguntar por **Pascoa, ovos de chocolate, trios ou mimos de Pascoa**, encaminhe para atendente humano (`escalate_to_human`). A campanha de Pascoa ja encerrou — nao responda com precos, sabores, link ou disponibilidade.
+- Quando o cliente perguntar por **Dia das Maes, presente para mae ou produtos de Dia das Maes**, encaminhe para atendente humano (`escalate_to_human`). A campanha de Dia das Maes e tratada manualmente pela equipe — nao responda com precos, sabores, link ou disponibilidade.
 - Nao misture pronta entrega com encomenda na mesma resposta, a menos que o cliente pergunte explicitamente pelos dois.
 - Regra anti-alucinacao: responda somente com categorias, regras, links e produtos cadastrados neste arquivo. Se um sabor, preco ou disponibilidade nao estiver aqui, diga que vai confirmar e nao invente.
 - Pedidos e reservas podem ser feitos pelo WhatsApp: coletar produto, data/horario, retirada/entrega e pagamento.
@@ -119,7 +120,13 @@
 
 ### 5. Doces Avulsos (encomenda em quantidade, preco por unidade)
 - **Cardapio completo de Doces:** https://bit.ly/doceschoko
-- Pedido minimo recomendado: 10 unidades por tipo
+- **Pedido minimo: 20 unidades por tipo**
+
+#### Combos de Brigadeiro (preco fechado)
+- 25 unidades: R$37,50
+- 50 unidades: R$75,00
+- 100 unidades: R$150,00
+- Sugestao de resposta padrao: "Temos brigadeiros a partir de 20 unidades. Nossos combos sao: 25 un por R$37,50, 50 un por R$75,00 e 100 un por R$150,00. Qual quantidade voce gostaria?"
 
 #### Tradicionais (R$1,40–R$2,00)
 - Brigadeiro Escama: R$1,50
@@ -178,7 +185,12 @@
   - B4 (ate 30 pessoas): R$180
   - B6 (ate 50 pessoas): R$300
   - B7 (ate 80 pessoas): R$380
-- **Adicionais:** Morango, Ameixa, Nozes, Cereja, Abacaxi
+- **Adicionais disponiveis:** Morango, Ameixa, Nozes, Cereja, Abacaxi
+- **Tabela de precos com adicional (substitui o preco base — nao soma):**
+  - B3 (15 pessoas): Abacaxi R$130 | Ameixa R$130 | Cereja R$135 | Morango R$135 | Nozes R$125
+  - B4 (30 pessoas): Abacaxi R$195 | Ameixa R$195 | Cereja R$210 | Morango R$210 | Nozes R$190
+  - B6 (50 pessoas): Abacaxi R$325 | Ameixa R$325 | Cereja R$350 | Morango R$350 | Nozes R$315
+  - B7 (80 pessoas): Abacaxi R$415 | Ameixa R$430 | Cereja R$450 | Morango R$450 | Nozes R$400
 
 ### Regra de tamanho por numero de pessoas (obrigatoria)
 - **Ate 8 pessoas:** P4 (mesversario), Linha Simples ou B3.
@@ -192,6 +204,7 @@
 ### 2. Linha Gourmet
 #### Ingles (serve cerca de 10 pessoas)
 - Belga: R$130
+- Bolo Pudim: R$140
 - Floresta Negra: R$140
 - Lingua de Gato: R$130
 - Ninho com Morango: R$140
@@ -250,13 +263,26 @@
 - Nao oferecer link, nao inventar precos, sabores ou disponibilidade.
 - "Ovo com bacon" e "ovo" em lanches/sanduiches/tapioca seguem o fluxo normal de cafeteria.
 
+## Dia das Maes (campanha ATIVA)
+- A campanha de Dia das Maes esta ATIVA (data alvo: 2o domingo de maio).
+- Atendimento especial no domingo 10/05/2026 das 08:00 as 12:00 (ver `operational_calendar.json`).
+- O catalogo especifico (cestas, kits, presentes especiais) e confirmado pela equipe — bot NAO inventa item, sabor, preco ou disponibilidade.
+- Antes de escalar, confirme com o cliente:
+  1. Para qual dia (sabado 09/05 ou domingo 10/05)?
+  2. Retirada ou entrega? Se entrega, qual bairro?
+  3. Faixa de preco / quantas pessoas?
+  4. Personalizacao especial (frase, item)?
+- Em seguida `escalate_to_human` com contexto rico — a categoria sera `campanha_ativa_dia_das_maes`.
+- NAO confunda com "minha mae adora seu bolo" (uso casual da palavra).
+
 ## Entregas e Pagamento
 - **Horario de funcionamento:** consulte sempre o calendario operacional ativo (`operational_calendar.json`)
 - **Domingo:** por padrao nao fazemos pedidos/retiradas/encomendas; excecoes sazonais sao definidas no calendario operacional
 - **Modo de recebimento:** retirada na loja ou entrega
 - **Horário limite para entregas:** até 17:30
 - **Taxa de entrega:** R$10,00 (bolos/encomendas/presentes) ou R$5,00 (cafeteria) **somente para entregas em Pitangueiras**. Para entregas FORA de Pitangueiras (ex.: Bituva e demais bairros), o valor varia conforme a distância — sempre encaminhar para a equipe humana confirmar o valor (`escalate_to_human`). Nunca cotar taxa para bairros desconhecidos.
-- **Formas de pagamento:** PIX, Cartao (debito/credito), Dinheiro
+- **Formas de pagamento aceitas:** PIX, Cartao (debito/credito), Dinheiro
+- **Formas de pagamento NAO aceitas:** vale-refeicao/alimentacao em geral — Pluxee, Sodexo, Alelo, Ticket, VR, Caju, Flash, Swile e similares. Se o cliente perguntar especificamente por uma dessas bandeiras, responda direto: "No momento aceitamos apenas PIX, dinheiro e cartao (debito/credito). Nao processamos vale-refeicao por aqui." Em seguida, ofereca uma das formas aceitas. NAO escale por essa duvida.
 - **Chave PIX:** usar a chave configurada em `PIX_KEY` no ambiente e informar ao cliente quando ele pedir
 - **Troco:** somente para pagamento em Dinheiro. PIX e Cartao nao usam troco
 - **Parcelamento:** somente no Cartao, acima de R$100,00, em ate 2x

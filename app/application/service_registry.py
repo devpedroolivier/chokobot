@@ -23,6 +23,7 @@ from app.application.commands import GenerateAiReplyCommand, HandleInboundMessag
 from app.application.event_bus import LocalEventBus
 from app.application.events import (
     AiReplyGeneratedEvent,
+    AiReplySkippedEvent,
     HumanHandoffEscalatedEvent,
     MessageReceivedEvent,
     OrderClosedByBotEvent,
@@ -278,6 +279,7 @@ class ServiceRegistry:
         for event_type in (
             MessageReceivedEvent,
             AiReplyGeneratedEvent,
+            AiReplySkippedEvent,
             OrderCreatedEvent,
             OrderClosedByBotEvent,
             HumanHandoffEscalatedEvent,

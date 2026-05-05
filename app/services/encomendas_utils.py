@@ -41,6 +41,8 @@ REDONDOS_ALIASES: Dict[str, str] = {
 # GOURMET_ALIASES (mapeamento de variações para nomes oficiais)
 GOURMET_ALIASES: Dict[str, str] = {
     "belga": "Belga",
+    "bolo pudim": "Bolo Pudim",
+    "pudim": "Bolo Pudim",
     "floresta negra": "Floresta Negra",
     "língua de gato": "Língua de Gato",
     "lingua de gato": "Língua de Gato",

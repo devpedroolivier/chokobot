@@ -15,7 +15,15 @@
       "affects": ["orders", "deliveries", "pickups"]
     }
   ],
-  "date_overrides": [],
+  "date_overrides": [
+    {
+      "date": "2026-05-10",
+      "open": "08:00",
+      "close": "12:00",
+      "label": "Dia das Mães",
+      "reason": "Domingo de Dia das Mães — atendimento especial 08:00–12:00"
+    }
+  ],
   "slot_capacities": [],
   "seasonal_dates": []
 }

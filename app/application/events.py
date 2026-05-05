@@ -56,3 +56,18 @@ class HumanHandoffEscalatedEvent:
     origem: str
     tenant_id: str | None = None
     occurred_at: str = field(default_factory=_event_time)
+
+
+@dataclass(frozen=True)
+class AiReplySkippedEvent:
+    """Emitido quando uma mensagem do cliente entra mas a IA decide não responder.
+
+    Reduz o "buraco preto" entre MessageReceivedEvent (8.153) e
+    AiReplyGeneratedEvent (5.395) — antes desse evento, ~35% das mensagens
+    sumiam silenciosamente sem motivo registrado.
+    """
+
+    phone: str
+    motivo: str
+    tenant_id: str | None = None
+    occurred_at: str = field(default_factory=_event_time)

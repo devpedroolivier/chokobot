@@ -428,6 +428,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
                 "🇬🇧 *Linha Gourmet – Formato Inglês*\n\n"
                 "Sabores e preços (~serve 10 pessoas):\n"
                 "• Belga — R$130\n"
+                "• Bolo Pudim — R$140\n"
                 "• Floresta Negra — R$140\n"
                 "• Língua de Gato — R$130\n"
                 "• Ninho com Morango — R$140\n"
@@ -551,7 +552,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
             await responder_usuario(
                 telefone,
                 "⚠️ Bolo não reconhecido. Tente novamente.\n"
-                "Sugestões: Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                "Sugestões: Belga, Bolo Pudim, Floresta Negra, Língua de Gato, Ninho com Morango, "
                 "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
             )
             return
@@ -586,7 +587,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
         if not produto:
             if sub_linha == "ingles":
                 msg_lista = (
-                    "Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                    "Belga, Bolo Pudim, Floresta Negra, Língua de Gato, Ninho com Morango, "
                     "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
                 )
             elif sub_linha == "redondo":
@@ -601,7 +602,7 @@ async def processar_encomenda(telefone, texto, estado, nome_cliente, cliente_id)
                 )
             else:
                 msg_lista = (
-                    "Belga, Floresta Negra, Língua de Gato, Ninho com Morango, "
+                    "Belga, Bolo Pudim, Floresta Negra, Língua de Gato, Ninho com Morango, "
                     "Nozes com Doce de Leite, Olho de Sogra, Red Velvet"
                 )
 

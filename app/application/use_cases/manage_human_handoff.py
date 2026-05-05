@@ -24,12 +24,19 @@ from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timez
 from app.welcome_message import BOT_REACTIVATED_MESSAGE, HUMAN_HANDOFF_MESSAGE
 
 _DUPLICATE_HANDOFF_AUDIT_WINDOW = timedelta(minutes=10)
+_PERSISTED_HANDOFF_DEDUPE_WINDOW = timedelta(minutes=60)
 _KNOWLEDGE_FAILURE_WINDOW_STATE: dict[str, list[datetime]] = {}
 _KNOWLEDGE_FAILURE_LAST_ALERT_AT: dict[str, datetime] = {}
 _KNOWLEDGE_FAILURE_LOCK = RLock()
 _ESCALATION_CATEGORIES = (
     "cliente_solicitou",
     "produto_fora_escopo",
+    "pedido_personalizado",
+    "pos_venda",
+    "pagamento_nao_suportado",
+    "entrega_fora_pitangueiras",
+    "campanha_encerrada",
+    "campanha_ativa_dia_das_maes",
     "falha_bot",
     "spam_fora_contexto",
     "assumido_painel",
@@ -85,6 +92,76 @@ def _classify_escalation_category(motivo: str) -> str:
         return "cliente_solicitou"
     if any(token in normalized for token in ("spam", "teste", "flood", "ruido")):
         return "spam_fora_contexto"
+    if any(
+        token in normalized
+        for token in (
+            "pluxee",
+            "sodexo",
+            "alelo",
+            "ticket",
+            "vale-refeicao",
+            "vale refeicao",
+            "vale alimentacao",
+            "caju",
+            "swile",
+        )
+    ):
+        return "pagamento_nao_suportado"
+    if any(
+        token in normalized
+        for token in (
+            "fora de pitangueiras",
+            "bituva",
+            "outro bairro",
+            "entrega fora",
+        )
+    ):
+        return "entrega_fora_pitangueiras"
+    if any(
+        token in normalized
+        for token in (
+            "dia das maes",
+            "dia das mae",
+            "dia da mae",
+            "presente para mae",
+            "presente pra mae",
+        )
+    ):
+        return "campanha_ativa_dia_das_maes"
+    if any(
+        token in normalized
+        for token in (
+            "pascoa fora de epoca",
+            "campanha encerrou",
+            "campanha encerrada",
+        )
+    ):
+        return "campanha_encerrada"
+    if any(
+        token in normalized
+        for token in (
+            "status do pedido",
+            "cancelar pedido",
+            "alterar a data",
+            "alterar data",
+            "reagendar",
+            "alterar entrega",
+        )
+    ):
+        return "pos_venda"
+    if any(
+        token in normalized
+        for token in (
+            "cesta de cafe",
+            "cesta personalizada",
+            "personalizar",
+            "frase no balao",
+            "frase ",
+            "doacao",
+            "doaçao",
+        )
+    ):
+        return "pedido_personalizado"
     if any(token in normalized for token in ("fora de contexto", "fora de escopo", "produto fora", "nao encontrado")):
         return "produto_fora_escopo"
     if any(token in normalized for token in ("ovos pronta entrega", "pronta entrega exige atendimento humano")):
@@ -184,15 +261,52 @@ def _parse_state_timestamp(raw_value: str | None) -> datetime | None:
 
 def _is_duplicate_handoff_request(telefone: str, motivo: str, *, now: datetime) -> bool:
     current_state = estados_atendimento.get(telefone)
-    if not current_state:
+    if current_state and (current_state.get("motivo") or "").strip() == (motivo or "").strip():
+        last_audit_at = _parse_state_timestamp(
+            current_state.get("audit_at") or current_state.get("inicio")
+        )
+        if last_audit_at is not None and (now - last_audit_at) <= _DUPLICATE_HANDOFF_AUDIT_WINDOW:
+            return True
+    return False
+
+
+def _is_recent_persisted_handoff(
+    telefone: str,
+    motivo: str,
+    *,
+    now: datetime,
+    process_repository,
+) -> bool:
+    """Verifica se já existe handoff registrado em customer_processes para o
+    mesmo (telefone, motivo) dentro de `_PERSISTED_HANDOFF_DEDUPE_WINDOW`.
+
+    Existe porque após o bot reativar (timeout 30min), o `estados_atendimento`
+    em memória é limpo — sem essa fonte persistente, o cliente que volta
+    repetidamente gerava uma escalada nova a cada turno.
+    """
+    if process_repository is None:
         return False
-    if (current_state.get("motivo") or "").strip() != (motivo or "").strip():
+    getter = getattr(process_repository, "get_process", None)
+    if not callable(getter):
+        return False
+    try:
+        existing = getter(telefone, "human_handoff")
+    except Exception:
+        return False
+    if existing is None:
         return False
 
-    last_audit_at = _parse_state_timestamp(current_state.get("audit_at") or current_state.get("inicio"))
-    if last_audit_at is None:
+    payload = existing.draft_payload or {}
+    persisted_motivo = (payload.get("motivo") or "").strip()
+    if persisted_motivo != (motivo or "").strip():
         return False
-    return (now - last_audit_at) <= _DUPLICATE_HANDOFF_AUDIT_WINDOW
+
+    last_at = _parse_state_timestamp(
+        payload.get("encerrado_em") or existing.updated_at or existing.created_at
+    )
+    if last_at is None:
+        return False
+    return (now - last_at) <= _PERSISTED_HANDOFF_DEDUPE_WINDOW
 
 
 def _format_full_date(raw_value: str | None) -> str:
@@ -363,20 +477,8 @@ def _handoff_expectation_message(reference: datetime) -> str:
 
 
 def _build_handoff_customer_message(handoff_context: dict, *, now: datetime) -> str:
-    summary = _truncate_summary(str(handoff_context.get("resumo") or ""))
-    if not summary:
-        summary = _truncate_summary(str(handoff_context.get("ultima_mensagem_cliente") or ""))
-
-    expected = _handoff_expectation_message(now)
-    if summary:
-        return (
-            f"Entendi que voce quer: {summary}. "
-            f"Estou transferindo voce para nossa equipe humana agora. {expected}."
-        )
-    return (
-        "Estou transferindo voce para nossa equipe humana agora. "
-        f"{expected}."
-    )
+    expected = _handoff_expectation_message(now).rstrip(".")
+    return f"Vou te conectar com a nossa equipe agora 💛 {expected}."
 
 
 def _build_handoff_context(
@@ -442,13 +544,20 @@ def activate_human_handoff(
     origem = _resolve_escalation_source(motivo)
     if categoria not in _ESCALATION_CATEGORIES:
         categoria = "falha_bot"
-    is_duplicate_request = _is_duplicate_handoff_request(telefone, motivo, now=handoff_started_at)
+    process_repository = process_repository or get_customer_process_repository()
+    is_duplicate_request = _is_duplicate_handoff_request(
+        telefone, motivo, now=handoff_started_at
+    ) or _is_recent_persisted_handoff(
+        telefone,
+        motivo,
+        now=handoff_started_at,
+        process_repository=process_repository,
+    )
 
     if audit_writer is not None and not is_duplicate_request:
         audit_writer(telefone, nome, motivo, categoria)
 
     clear_customer_active_flows(telefone)
-    process_repository = process_repository or get_customer_process_repository()
     handoff_context = _build_handoff_context(telefone, process_repository=process_repository, context=context)
     process_repository.upsert_process(
         phone=telefone,

@@ -37,6 +37,7 @@ from app.ai.policies import (
     requests_sweet_order_topic as _requests_sweet_order_topic,
     requests_knowledge_topic as _requests_knowledge_topic,
     mentions_easter as _mentions_easter,
+    mentions_mothers_day as _mentions_mothers_day,
     message_has_easter_context as _message_has_easter_context,
     should_force_basic_context_switch as _should_force_basic_context_switch,
     requests_human_handoff as _requests_human_handoff,
@@ -813,6 +814,34 @@ async def process_message_with_ai(
             previous_agent,
             "easter_off_season",
             "ai_easter_handoff",
+        )
+        return (
+            handoff_message
+            if isinstance(handoff_message, str)
+            and handoff_message.strip()
+            and handoff_message.strip().casefold() != "ok"
+            else HUMAN_HANDOFF_MESSAGE
+        )
+
+    if _mentions_mothers_day(text):
+        previous_agent = session.get("current_agent", "TriageAgent")
+        handoff_message = runtime.escalate_to_human(
+            telefone,
+            "Dia das Maes (campanha ativa): cliente perguntou sobre presentes/cestas — "
+            f"contexto: \"{(text or '').strip()[:200]}\". Equipe confirma catalogo, "
+            "valores e disponibilidade.",
+        )
+        session["messages"] = []
+        session.pop("seasonal_context", None)
+        session.pop("service_date_context", None)
+        session.pop("conversation_correction_context", None)
+        session.pop("greeting_sent", None)
+        save_session(telefone, session)
+        _record_human_handoff_metrics(
+            telefone,
+            previous_agent,
+            "mothers_day_campaign",
+            "ai_mothers_day_handoff",
         )
         return (
             handoff_message

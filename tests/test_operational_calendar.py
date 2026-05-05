@@ -97,6 +97,13 @@ class OperationalCalendarTests(unittest.TestCase):
 
         self.assertIsNone(message)
 
+    def test_mothers_day_sunday_window_is_eight_to_noon(self):
+        """O override real do calendario garante atendimento 08:00-12:00 no Dia das Maes."""
+        store_schedule._load_operational_calendar_cached.cache_clear()
+        window = store_schedule.store_window_for_date("10/05/2026")
+        self.assertEqual(window, ("08:00", "12:00"))
+        self.assertIsNone(store_schedule.validate_service_date("10/05/2026"))
+
 
 if __name__ == "__main__":
     unittest.main()

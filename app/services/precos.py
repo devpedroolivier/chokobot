@@ -34,6 +34,7 @@ EMBRULHADO = {
 
 INGLES = {
     "Belga": {"preco": 130.0, "serve": 10},
+    "Bolo Pudim": {"preco": 140.0, "serve": 10},
     "Floresta Negra": {"preco": 140.0, "serve": 10},
     "Língua de Gato": {"preco": 130.0, "serve": 10},
     "Ninho com Morango": {"preco": 140.0, "serve": 10},

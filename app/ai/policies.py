@@ -485,6 +485,21 @@ def requests_easter_date_info(text: str) -> bool:
     return bool(asks_when and asks_easter)
 
 
+def mentions_mothers_day(text: str) -> bool:
+    """Detecta menções ao Dia das Mães — campanha encaminhada para humano."""
+    normalized = normalize_intent_text(text)
+    if not normalized:
+        return False
+    patterns = (
+        r"\bdia\s+d[ao]s?\s+ma[eê]s?\b",
+        r"\bdia\s+da\s+mam[aã]e\b",
+        r"\bdia\s+das\s+mam[aã]es\b",
+        r"\bpresente\s+(?:de|para|pra)\s+(?:minha\s+|sua\s+|a\s+)?mam?[aã]es?\b",
+        r"\bpresente\s+(?:de|para|pra)\s+(?:minha\s+|sua\s+|a\s+)?ma[eê]s?\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
 def requests_easter_gift_topic(text: str) -> bool:
     normalized = normalize_intent_text(text)
     if not normalized or "pascoa" not in normalized:

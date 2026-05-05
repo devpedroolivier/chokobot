@@ -59,7 +59,7 @@ class AttentionHandoffTests(unittest.TestCase):
         )
 
         self.assertIn(telefone, estados_atendimento)
-        self.assertIn("transferindo", message.casefold())
+        self.assertIn("equipe", message.casefold())
         self.assertNotIn(telefone, estados_encomenda)
         self.assertNotIn(telefone, estados_cafeteria)
         self.assertNotIn(telefone, estados_entrega)
@@ -78,7 +78,7 @@ class AttentionHandoffTests(unittest.TestCase):
 
         self.assertIn(telefone, estados_atendimento)
         self.assertEqual(estados_atendimento[telefone]["motivo"], "cliente pediu ajuda")
-        self.assertIn("transferindo", result.casefold())
+        self.assertIn("equipe", result.casefold())
         self.assertNotIn(telefone, estados_encomenda)
 
     def test_deactivate_human_handoff_reports_previous_state(self):
