@@ -52,6 +52,14 @@ def set_recent_message(phone: str, text: str, seen_at) -> None:
     _store.set_recent_message(phone, text, seen_at)
 
 
+def get_recent_bot_reply(phone: str) -> dict | None:
+    return _store.get_recent_bot_reply(phone)
+
+
+def set_recent_bot_reply(phone: str, reply_hash: str, seen_at) -> None:
+    _store.set_recent_bot_reply(phone, reply_hash, seen_at)
+
+
 def get_conversation_messages(phone: str) -> list[dict]:
     return _store.get_conversation_messages(phone)
 

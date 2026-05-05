@@ -270,6 +270,7 @@ class ConversationStateStore:
         self.conversation_threads = StateMap(ns("conversation_thread"), backend)
         self.processed_messages = StateMap(ns("processed_message"), backend)
         self.recent_messages = StateMap(ns("recent_message"), backend)
+        self.recent_bot_replies = StateMap(ns("recent_bot_reply"), backend)
         self.phone_opt_out = StateMap(ns("phone_opt_out"), backend)
 
     def _scoped_namespace(self, name: str) -> str:
@@ -379,6 +380,17 @@ class ConversationStateStore:
         self.recent_messages[phone] = {"texto": text, "hora": seen_at.isoformat()}
         self._trim_namespace(self.recent_messages, limit=5000, sort_key="hora")
 
+    def get_recent_bot_reply(self, phone: str) -> dict | None:
+        if not phone:
+            return None
+        return self.recent_bot_replies.get(phone)
+
+    def set_recent_bot_reply(self, phone: str, reply_hash: str, seen_at: datetime) -> None:
+        if not phone:
+            return
+        self.recent_bot_replies[phone] = {"hash": reply_hash, "hora": seen_at.isoformat()}
+        self._trim_namespace(self.recent_bot_replies, limit=5000, sort_key="hora")
+
     def get_conversation_messages(self, phone: str) -> list[dict]:
         if not phone:
             return []
@@ -432,6 +444,7 @@ class ConversationStateStore:
             self.conversation_threads,
             self.processed_messages,
             self.recent_messages,
+            self.recent_bot_replies,
             self.phone_opt_out,
         ):
             state_map.clear()

@@ -50,7 +50,19 @@ _NO_INVENTION_POLICY_RULE = (
     "  \"Esse exato a gente nao tem, mas tenho aqui [opcao A], [opcao B] e [opcao C]. Algum\n"
     "  desses te interessa?\"\n"
     "So escale para humano se o cliente recusar todas as alternativas ou se for um pedido\n"
-    "estruturalmente fora do catalogo (ex.: cesta personalizada, doacao para evento)."
+    "estruturalmente fora do catalogo (ex.: cesta personalizada, doacao para evento).\n"
+    "\n"
+    "POS-VENDA (status, cancelar, reagendar) — COLETAR ANTES DE ESCALAR:\n"
+    "O bot NAO tem ferramenta para alterar pedidos. Quando o cliente perguntar sobre:\n"
+    "- status do pedido: peca o numero do pedido (se nao informou) e o nome cadastrado.\n"
+    "- cancelamento: peca numero do pedido + motivo do cancelamento.\n"
+    "- reagendamento: peca numero do pedido + nova data desejada + novo horario.\n"
+    "Depois de coletar TODOS os dados, escale com motivo no formato:\n"
+    "  \"pos_venda: <acao> | pedido=<numero ou 'nao informado'> | "
+    "<campos coletados>\"\n"
+    "Exemplo: \"pos_venda: cancelamento | pedido=482 | motivo=cliente nao podera retirar\"\n"
+    "Resposta ao cliente antes de escalar: \"Vou passar pra equipe revisar e te confirmar "
+    "em ate 20 minutos no horario comercial 💛\"."
 )
 
 

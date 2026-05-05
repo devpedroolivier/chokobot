@@ -12,6 +12,7 @@ This module keeps the orchestration layer (create_*_order /
 save_*_draft_process tools) and the catalog/learning/escalate tools.
 """
 import re
+from datetime import datetime, timedelta
 
 from app.application.service_registry import (
     get_attention_gateway,
@@ -20,9 +21,10 @@ from app.application.service_registry import (
     get_delivery_gateway,
     get_order_gateway,
 )
+from app.observability import increment_counter, log_event
 from app.security import ai_learning_enabled, security_audit
 from app.services.precos import _norm
-from app.utils.datetime_utils import now_in_bot_timezone
+from app.utils.datetime_utils import normalize_to_bot_timezone, now_in_bot_timezone
 
 # ============================================================
 #  Helpers genéricos (extraídos para app/ai/tools/_common.py)
@@ -129,6 +131,43 @@ from app.ai.tools.gift import (
 )
 
 
+_REPEAT_ORDER_WINDOW = timedelta(minutes=30)
+
+
+def _detect_repeat_confirmed_order(
+    *,
+    phone: str,
+    process_type: str,
+    now: datetime,
+) -> bool:
+    """Sinaliza quando um cliente confirma um 2º pedido em <30min.
+
+    Não bloqueia o fluxo — apenas emite métrica/log para que a equipe
+    consiga detectar pedidos que poderiam virar carrinho unificado.
+    Real auto-merge fica para um próximo ciclo (ver task #11).
+    """
+    repository = get_customer_process_repository()
+    getter = getattr(repository, "get_process", None)
+    if not callable(getter):
+        return False
+    try:
+        existing = getter(phone, process_type)
+    except Exception:
+        return False
+    if existing is None:
+        return False
+    if existing.stage != "pedido_confirmado":
+        return False
+    last_at_raw = existing.updated_at or existing.created_at
+    if not last_at_raw:
+        return False
+    try:
+        last_at = normalize_to_bot_timezone(datetime.fromisoformat(last_at_raw))
+    except Exception:
+        return False
+    return (now - last_at) <= _REPEAT_ORDER_WINDOW
+
+
 def _sync_ai_process(
     *,
     phone: str,
@@ -140,6 +179,18 @@ def _sync_ai_process(
     source: str,
     order_id: int | None = None,
 ) -> None:
+    if stage == "pedido_confirmado" and process_type == "ai_cafeteria_order":
+        now = normalize_to_bot_timezone(now_in_bot_timezone())
+        if _detect_repeat_confirmed_order(
+            phone=phone, process_type=process_type, now=now
+        ):
+            increment_counter("cafeteria_repeat_order_total")
+            log_event(
+                "cafeteria_repeat_confirmed_order_detected",
+                level="WARNING",
+                phone_suffix=str(phone)[-4:],
+                window_minutes=int(_REPEAT_ORDER_WINDOW.total_seconds() // 60),
+            )
     get_customer_process_repository().upsert_process(
         phone=phone,
         customer_id=customer_id,

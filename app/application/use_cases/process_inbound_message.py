@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from datetime import datetime, timedelta
 from typing import Awaitable, Callable
+
+REPLY_DEDUPE_WINDOW_SECONDS = 10
 
 from app.application.commands import GenerateAiReplyCommand
 from app.application.events import AiReplyGeneratedEvent, AiReplySkippedEvent
@@ -16,12 +19,14 @@ from app.services.estados import (
     append_conversation_message,
     estados_atendimento,
     get_phone_opted_out_updated_at,
+    get_recent_bot_reply,
     get_recent_message,
     is_bot_ativo,
     is_phone_opted_out,
     mark_processed_message_if_new,
     set_phone_opted_out,
     set_bot_ativo,
+    set_recent_bot_reply,
     set_recent_message,
 )
 from app.services.store_schedule import ai_auto_schedule_state
@@ -394,6 +399,28 @@ async def process_inbound_message(
             return
 
     resposta_ia = await gerar_resposta_ia_fn(telefone, texto, nome_cliente, cliente_id)
+
+    reply_hash = hashlib.sha1(
+        (resposta_ia or "").strip().encode("utf-8"), usedforsecurity=False
+    ).hexdigest()
+    last_reply = get_recent_bot_reply(telefone)
+    if last_reply and last_reply.get("hash") == reply_hash:
+        try:
+            last_at = normalize_to_bot_timezone(
+                datetime.fromisoformat(last_reply.get("hora") or "")
+            )
+        except Exception:
+            last_at = None
+        if last_at and (agora - last_at).total_seconds() <= REPLY_DEDUPE_WINDOW_SECONDS:
+            log_event(
+                "handler_duplicate_ai_reply_skipped",
+                phone_hash=hash_phone(telefone),
+                window_seconds=REPLY_DEDUPE_WINDOW_SECONDS,
+            )
+            _publish_skip(telefone, "duplicate_ai_reply", tenant_id=tenant_id)
+            return
+
+    set_recent_bot_reply(telefone, reply_hash, agora)
     get_event_bus().publish(
         AiReplyGeneratedEvent(
             telefone=telefone,
